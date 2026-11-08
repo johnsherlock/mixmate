@@ -17,6 +17,10 @@ An offline-first Soundcraft Ui24R connection and input-fader test. It displays c
 
 No Mac or internet server is required during use. All app assets are cached on each device; the device connects directly to the mixer. Revisit online for updates. Close all app windows to let a pending update activate. Clearing browser/site data can remove the offline copy. Cache-first launch keeps the installed version stable during a session; allow the update worker to finish downloading online before closing the app. Missing or damaged cached files are repaired online only when they match that installed version. If a newer deployment prevents repair, close all app windows and reopen online to finish the update; check offline readiness again.
 
+## Installation identity update
+
+The manifest now identifies MixMate specifically as `/mixmate/`, correcting an earlier origin-root app ID. Browsers can treat this as a separate installation. If an existing MixMate installation needs replacement, record its details first and uninstall/reinstall **only the identifiable MixMate app** after opening the updated site online. Uninstall can remove installation-local data. Do not clear all Chrome data or remove another app. If Chrome says installed/Open but MixMate cannot be found or opened, report the device/OS/Chrome versions and its Android app/WebAPK details before further recovery. This correction still needs phone/tablet retesting.
+
 ## Important compatibility limit
 
 Loading offline and connecting to the mixer are independent tests. This app retains its HTTPS origin when installed, while the mixer uses unencrypted `ws://`. Some browsers block this mixed-content/local-network connection. Current Chrome documents local-network permission support for local WebSockets; Android/iOS versions must be tested on actual hardware. **iPhone and iPad compatibility is unverified.** Installation does not bypass browser restrictions. This prototype does not weaken browser security or require mixer configuration changes.
