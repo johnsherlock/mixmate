@@ -1,6 +1,10 @@
 # F01 real-device checks
 
-Status: Not run. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
+Status: Physical-device checks not run. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
+
+## Current reviewed test build
+
+The [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42517375756) of commit `3f93d3308e2da63a9bd3f307a99d8cf109ec74aa` succeeded. Its offline worker/cache version is `79f112fe123a3681`. Open online, allow any waiting update to download, close all MixMate windows/tabs and reopen the home-screen app before testing. Record the verified worker version from diagnostics when available; do not assume the icon launches the latest deployment.
 
 ## Safety and setup
 
