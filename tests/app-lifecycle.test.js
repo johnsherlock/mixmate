@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { MixerConnection, OUTBOUND } from '../src/protocol.js';
 import { FaderIntent } from '../src/fader-intent.js';
+import { observeOfflineUpdates } from '../src/offline.js';
 import { faderValueToDB } from 'soundcraft-ui-connection';
 
 // Execute the actual app entry against a minimal DOM and fake socket. There is
@@ -12,7 +13,8 @@ const source = (await readFile(new URL('../src/main.js', import.meta.url), 'utf8
 class Events {
   handlers = new Map();
   addEventListener(type, callback) { this.handlers.set(type, [...(this.handlers.get(type) || []), callback]); }
-  emit(type) { for (const callback of this.handlers.get(type) || []) callback({ preventDefault() {} }); }
+  removeEventListener(type, callback) { this.handlers.set(type, (this.handlers.get(type) || []).filter(handler => handler !== callback)); }
+  emit(type) { for (const callback of [...(this.handlers.get(type) || [])]) callback({ preventDefault() {} }); }
 }
 class Element extends Events {
   value = ''; checked = false; disabled = false; hidden = false;
@@ -22,10 +24,12 @@ class Element extends Events {
   setCustomValidity(value) { this.validity = value; }
   reportValidity() {}
 }
-function app({ offline } = {}) {
-  const elements = new Map(), sockets = [], storage = new Map(), intervals = new Map();
+function app({ offline, storage = new Map(), storageAccess } = {}) {
+  const elements = new Map(), sockets = [], intervals = new Map();
   const element = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   element('address').value = '192.168.0.60';
+  element('offline-version').textContent = 'Offline version: not verified';
+  element('update-complete').hidden = element('update-waiting').hidden = true;
   class FakeSocket {
     constructor(url) { this.url = url; this.readyState = 0; this.sent = []; sockets.push(this); }
     send(message) { this.sent.push(message); }
@@ -42,9 +46,9 @@ function app({ offline } = {}) {
   const navigator = { userAgent: 'fake browser', ...(offline ? { serviceWorker: new Events() } : {}) };
   vm.runInNewContext(source, {
     document, window, navigator, location: { origin: 'https://example.test' },
-    localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
+    localStorage: storageAccess || { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
     Option: function(text, value) { this.textContent = text; this.value = String(value); },
-    MixerConnection: FakeConnection, FaderIntent, faderValueToDB, verifyOfflineCopy: offline,
+    MixerConnection: FakeConnection, FaderIntent, faderValueToDB, verifyOfflineCopy: offline, observeOfflineUpdates,
     setInterval: (callback, delay) => { const key = intervals.size; intervals.set(key, { callback, delay }); return key; },
     clearTimeout, setTimeout, URL, requestAnimationFrame: callback => callback(),
   });
@@ -178,4 +182,142 @@ test('channel selector follows all received names without replacing options, cha
     assert.ok(view.sockets.every(s => s.sent.every(message => Object.values(OUTBOUND).includes(message))));
     assert.ok(view.sockets.every(s => s.sent.every(message => !message.includes('SETD') && !message.includes('SETS'))));
   } finally { view.close(); }
+});
+
+
+const versionA = '1111111111111111', versionB = '2222222222222222';
+const versionKey = 'mixmate-offline-version';
+const settle = () => new Promise(resolve => setImmediate(resolve));
+function registration() { return Object.assign(new Events(), { active: { state: 'activated' }, installing: null, waiting: null }); }
+function offlineResult(result, reg = registration()) {
+  return async options => { options.onRegistration?.(reg); return result; };
+}
+test('first verified version seeds history silently and same-version reopen shows no update alert', async () => {
+  const storage = new Map();
+  for (let open = 0; open < 2; open++) {
+    const view = app({ storage, offline: offlineResult({ ready: true, version: versionA }) });
+    await settle();
+    assert.equal(view.element('offline-version').textContent, `Offline version: ${versionA}`);
+    assert.equal(storage.get(versionKey), versionA);
+    assert.equal(view.element('update-complete').hidden, true);
+    assert.equal(view.sockets.length, 0);
+    view.close();
+  }
+});
+test('a newly verified activated version announces an update once and records it', async () => {
+  const storage = new Map([[versionKey, versionA]]);
+  const view = app({ storage, offline: offlineResult({ ready: true, version: versionB }) });
+  await settle();
+  assert.equal(view.element('update-complete').hidden, false);
+  assert.match(view.element('update-complete').textContent, /MixMate updated/);
+  assert.equal(view.element('offline-version').textContent, `Offline version: ${versionB}`);
+  assert.equal(storage.get(versionKey), versionB);
+  assert.equal(view.sockets.length, 0);
+  view.close();
+  const reopened = app({ storage, offline: offlineResult({ ready: true, version: versionB }) });
+  await settle();
+  assert.equal(reopened.element('update-complete').hidden, true);
+  reopened.close();
+});
+test('failed verification, timeout and invalid versions never advance update history', async () => {
+  for (const offline of [offlineResult({ ready: false, version: versionB }), async () => { throw new Error('Offline preparation timed out.'); }, offlineResult({ ready: true, version: '<invalid>' })]) {
+    const storage = new Map([[versionKey, versionA]]), view = app({ storage, offline });
+    await settle();
+    assert.equal(storage.get(versionKey), versionA);
+    assert.equal(view.element('update-complete').hidden, true);
+    assert.equal(view.element('offline-version').textContent, 'Offline version: not verified');
+    assert.equal(view.sockets.length, 0);
+    view.close();
+  }
+});
+test('blocked or corrupt version storage leaves readiness usable without recurring false update alerts', async () => {
+  for (const storageAccess of [
+    { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } },
+    { getItem(key) { return key === versionKey ? versionA : null; }, setItem() { throw new Error('read only'); } },
+  ]) {
+    for (let open = 0; open < 2; open++) {
+      const view = app({ storageAccess, offline: offlineResult({ ready: true, version: versionB }) });
+      await settle();
+      assert.equal(view.element('offline-status').textContent, 'Saved for offline use');
+      assert.equal(view.element('offline-version').textContent, `Offline version: ${versionB}`);
+      assert.equal(view.element('update-complete').hidden, true);
+      view.close();
+    }
+  }
+  const storage = new Map([[versionKey, '{bad history}']]);
+  const view = app({ storage, offline: offlineResult({ ready: true, version: versionB }) });
+  await settle();
+  assert.equal(view.element('update-complete').hidden, true);
+  assert.equal(storage.get(versionKey), versionB);
+  view.close();
+});
+test('waiting updates at startup and after installation remain separate from the verified active version', async () => {
+  const reg = registration();
+  reg.waiting = Object.assign(new Events(), { state: 'installed' });
+  const view = app({ offline: offlineResult({ ready: true, version: versionA }, reg) });
+  await settle();
+  assert.equal(view.element('update-waiting').hidden, false);
+  assert.match(view.element('update-waiting').textContent, /Update downloaded/);
+  assert.match(view.element('update-waiting').textContent, /Close all MixMate windows\/tabs/);
+  assert.equal(view.element('offline-version').textContent, `Offline version: ${versionA}`);
+  assert.equal(view.element('update-complete').hidden, true);
+  reg.waiting.state = 'redundant'; reg.waiting.emit('statechange'); reg.waiting = null;
+  assert.equal(view.element('update-waiting').hidden, true);
+  reg.installing = Object.assign(new Events(), { state: 'installing' }); reg.emit('updatefound');
+  assert.equal(view.element('update-waiting').hidden, true);
+  const next = reg.installing;
+  next.state = 'installed'; next.emit('statechange');
+  assert.equal(view.element('update-waiting').hidden, true); // Not waiting yet.
+  reg.waiting = next; reg.installing = null; next.emit('statechange');
+  assert.equal(view.element('update-waiting').hidden, false);
+  assert.equal(view.element('offline-version').textContent, `Offline version: ${versionA}`);
+  assert.equal(view.element('update-complete').hidden, true);
+  assert.equal(view.sockets.length, 0);
+  view.close();
+});
+test('failed workers and superseded registrations cannot announce downloaded or activated updates', async () => {
+  const storage = new Map([[versionKey, versionA]]), attempts = [], registrations = [registration(), registration()];
+  const view = app({ storage, offline: options => { options.onRegistration?.(registrations[attempts.length]); return new Promise(resolve => attempts.push(resolve)); } });
+  const failed = Object.assign(new Events(), { state: 'installing' });
+  registrations[0].installing = failed; registrations[0].emit('updatefound');
+  failed.state = 'redundant'; failed.emit('statechange');
+  assert.equal(view.element('update-waiting').hidden, true);
+  view.serviceWorker.emit('controllerchange');
+  assert.equal(registrations[0].handlers.get('updatefound').length, 0);
+  assert.equal(failed.handlers.get('statechange').length, 0);
+  registrations[0].waiting = Object.assign(new Events(), { state: 'installed' }); registrations[0].emit('updatefound');
+  assert.equal(view.element('update-waiting').hidden, true);
+  attempts[1]({ ready: true, version: versionA }); await settle();
+  attempts[0]({ ready: true, version: versionB }); await settle();
+  assert.equal(storage.get(versionKey), versionA);
+  assert.equal(view.element('offline-version').textContent, `Offline version: ${versionA}`);
+  assert.equal(view.element('update-complete').hidden, true);
+  assert.equal(view.element('update-waiting').hidden, true);
+  assert.equal(view.sockets.length, 0);
+  view.close();
+});
+
+
+test('waiting and verified update notices never reload, activate a worker or interrupt a live fake mixer', async () => {
+  let version = versionA;
+  const reg = registration(), view = app({ offline: async options => { options.onRegistration(reg); return { ready: true, version }; } });
+  await settle();
+  view.element('connect-form').emit('submit');
+  const socket = view.sockets[0]; socket.open();
+  socket.receive('3:::SETD^i.0.mix^0.4\nSETD^i.0.stereoIndex^-1');
+  reg.waiting = Object.assign(new Events(), { state: 'installed' }); reg.emit('updatefound');
+  assert.equal(view.element('update-waiting').hidden, false);
+  assert.equal(view.element('offline-version').textContent, `Offline version: ${versionA}`);
+  assert.equal(socket.readyState, 1);
+  // Simulate browser activation after another client's lifecycle event. MixMate
+  // only observes controllerchange; it never requests activation or a reload.
+  reg.waiting.state = 'activated'; reg.waiting = null;
+  version = versionB; view.serviceWorker.emit('controllerchange'); await settle();
+  assert.equal(view.element('update-waiting').hidden, true);
+  assert.equal(view.element('update-complete').hidden, false);
+  assert.equal(view.element('offline-version').textContent, `Offline version: ${versionB}`);
+  assert.equal(socket.readyState, 1);
+  assert.equal(view.sockets.length, 1);
+  assert.deepEqual(socket.sent, [OUTBOUND.init]);
+  view.close();
 });

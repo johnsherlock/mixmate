@@ -2,7 +2,7 @@ import './style.css';
 import { faderValueToDB } from 'soundcraft-ui-connection';
 import { MixerConnection } from './protocol.js';
 import { FaderIntent } from './fader-intent.js';
-import { verifyOfflineCopy } from './offline.js';
+import { verifyOfflineCopy, observeOfflineUpdates } from './offline.js';
 
 const $ = id => document.getElementById(id);
 let state = Object.create(null);
@@ -176,22 +176,66 @@ $('install').addEventListener('click', async () => {
 window.addEventListener('appinstalled', () => { $('install').hidden = true; log('App installed'); });
 function showOfflineStatus(ready, message) {
   offlineReady = ready;
+  if (!ready) {
+    $('offline-version').textContent = 'Offline version: not verified';
+    $('update-complete').hidden = true;
+  }
   $('offline-status').textContent = ready ? 'Saved for offline use' : 'Offline copy not ready';
   $('offline-detail').textContent = message;
   $('offline-icon').textContent = ready ? '✓' : '!';
   $('install').hidden = !ready || !installPrompt;
   log(ready ? 'Offline cache verified' : message);
 }
+const offlineVersionKey = 'mixmate-offline-version';
+const isOfflineVersion = value => typeof value === 'string' && /^[a-f0-9]{16}$/.test(value);
+let lastOfflineVersion;
+try {
+  const stored = localStorage.getItem(offlineVersionKey);
+  if (isOfflineVersion(stored)) lastOfflineVersion = stored;
+} catch { /* Version history is optional. */ }
+function showVerifiedVersion(version) {
+  if (!isOfflineVersion(version)) {
+    $('offline-version').textContent = 'Offline version: not verified';
+    $('update-complete').hidden = true;
+    return;
+  }
+  $('offline-version').textContent = `Offline version: ${version}`;
+  const changed = lastOfflineVersion && lastOfflineVersion !== version;
+  lastOfflineVersion = version;
+  let saved = false;
+  try { localStorage.setItem(offlineVersionKey, version); saved = true; } catch { /* Still show the verified version. */ }
+  // A failed write must not repeat the same historical update alert on every open.
+  if (changed && saved) {
+    $('update-complete').textContent = `MixMate updated. Offline version ${version} is ready on this device.`;
+    $('update-complete').hidden = false;
+  }
+}
 let offlineAttempt = 0;
+let stopUpdateObserver = () => {};
 async function prepareOffline() {
   const attempt = ++offlineAttempt;
+  stopUpdateObserver();
+  $('update-waiting').hidden = true;
+  $('update-waiting').textContent = '';
   if (!('serviceWorker' in navigator)) {
     showOfflineStatus(false, 'This browser does not support offline saving. Try a current Chrome or Safari.'); return;
   }
   try {
-    const result = await verifyOfflineCopy({ serviceWorker: navigator.serviceWorker, baseURI: document.baseURI });
+    const result = await verifyOfflineCopy({
+      serviceWorker: navigator.serviceWorker,
+      baseURI: document.baseURI,
+      onRegistration: registration => {
+        if (attempt !== offlineAttempt) return;
+        stopUpdateObserver = observeOfflineUpdates(registration, waiting => {
+          if (attempt !== offlineAttempt) return;
+          $('update-waiting').textContent = waiting ? 'Update downloaded. Close all MixMate windows/tabs when finished to use it.' : '';
+          $('update-waiting').hidden = !waiting;
+        });
+      },
+    });
     if (attempt !== offlineAttempt) return;
     if (result.version) log(`Offline version: ${result.version}`);
+    if (result.ready) showVerifiedVersion(result.version);
     showOfflineStatus(result.ready, result.ready ? 'App files are on this device. No internet needed to open it.' : 'Some app files are missing or from another version. Reopen online to repair the copy, or close all app windows to finish an update.');
   } catch (error) {
     if (attempt === offlineAttempt) showOfflineStatus(false, `Open online to save the app. ${error.message}`);

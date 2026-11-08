@@ -24,7 +24,9 @@ For `192.168.0.60`, the seven-second window received 468 text frames and no non-
 
 ## Reviewed deployment for physical checks
 
-The current reviewed target is selector-correction merge `97d005a41feeba91fefbbee054193d63486a8888` ([PR #11](https://github.com/johnsherlock/mixmate/pull/11)), offline worker/cache version `917e3ba9d64587ec`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42524260873) succeeded and the master confirmed served worker `917e3ba9d64587ec`. No selector-fix device retest is reported.
+The latest reviewed target is update-awareness merge `7c2fd850005d108f2a0de4c77cc26cccdc2595af` ([PR #12](https://github.com/johnsherlock/mixmate/pull/12)), worker `0dbe2dd8fae4a9dd`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42536378686) succeeded. Update-notice device behavior is not yet reported. First use seeds version history; subsequent changed successfully verified versions announce an update. Waiting downloads remain separate from the active version.
+
+The prior reviewed selector target is merge `97d005a41feeba91fefbbee054193d63486a8888` ([PR #11](https://github.com/johnsherlock/mixmate/pull/11)), offline worker/cache version `917e3ba9d64587ec`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42524260873) succeeded and the master confirmed served worker `917e3ba9d64587ec`. The user subsequently confirmed the tablet reached this verified worker version and received names in the selector; this is a targeted update/name pass only.
 
 The prior identity-fix merge `e837c27fcca41dc4f44f61608510866eec8762e9` ([PR #10](https://github.com/johnsherlock/mixmate/pull/10)), worker `918ce3138bb4cf16`, was [deployed](https://github.com/johnsherlock/mixmate/actions/runs/42521695422), and the master confirmed its live manifest served `id: "mixmate/"`. That establishes deployment only, not a device compatibility verdict.
 
@@ -32,11 +34,11 @@ The earlier [S02 GitHub Pages deployment](https://github.com/johnsherlock/mixmat
 
 ## Automated evidence
 
-F01-S02's reviewed suite covers asset inventory/subpath, integrity and repair, failed/waiting updates, bounded readiness, and actual app-entry lifecycle using fake browser objects and mixer transports. It does not substitute for browser-engine or physical-device observations. Before the identity correction, this documentation draft passed 26 tests and built eight assets at worker `79f112fe123a3681`. After merging the reviewed identity correction, 26 tests and the build passed at worker `918ce3138bb4cf16`. After merging the reviewed selector correction, `npm test` passed all 27 tests and `npm run build` passed with eight precached assets and worker version `917e3ba9d64587ec`. No test command connected to a real mixer.
+F01-S02's reviewed suite covers asset inventory/subpath, integrity and repair, failed/waiting updates, bounded readiness, and actual app-entry lifecycle using fake browser objects and mixer transports. It does not substitute for browser-engine or physical-device observations. Before the identity correction, this documentation draft passed 26 tests and built eight assets at worker `79f112fe123a3681`. After merging the reviewed identity correction, 26 tests and the build passed at worker `918ce3138bb4cf16`. After merging the reviewed selector correction, `npm test` passed all 27 tests and `npm run build` passed with eight precached assets and worker version `917e3ba9d64587ec`. After integrating reviewed update awareness, all 35 tests and the build passed with eight assets and worker `0dbe2dd8fae4a9dd`. No test command connected to a real mixer.
 
 ## User-reported Android installation observations
 
-Date: 2026-11-08. Provenance: user report in the master chat; no agent-operated device check, exact OS/browser versions, device diagnostics or served app/cache version supplied yet.
+Date: 2026-11-08. Provenance: user report in the master chat; initial reports lacked exact versions/context. Later user-supplied browser diagnostics and screenshots are recorded below; no agent operated a physical device.
 
 - Available phone: Pixel 6 Pro, Chrome. Chrome says the app is already installed and offers Open. The user cannot find it in the phone's apps, and tapping Open does nothing. The user subsequently confirmed MixMate is absent from `chrome://webapks`; Android Settings Apps results are still not supplied. Record installation/launch as blocked with cause unknown. The separate manifest identity finding below is a candidate contributor, not an established explanation for the phone behavior.
 - Available tablet: an approximately 9-inch Lenovo tablet, Chrome; exact model unknown. The user reported installation succeeds before the identity correction. This does not establish the corrected identity installs or launches. Installed online launch, offline launch, local-network permission, actual mixer state and sleep/reopen behavior were not reported and remain unverified.
@@ -47,7 +49,7 @@ Date: 2026-11-08. Provenance: user report in the master chat; no agent-operated 
 
 The [W3C manifest processing algorithm](https://www.w3.org/TR/appmanifest/#id-member), steps 4–5, resolves `id` against the start URL's **origin**, not the manifest URL or application scope. Consequently the previous `id: "./"` resolved to `https://johnsherlock.github.io/`, while MixMate's launch URL and scope remain `/mixmate/`. This created an identity collision risk with other installed web apps using that origin-level ID. The previous production test resolved `id` against the application scope and therefore did not exercise the browser algorithm correctly.
 
-This was a concrete identity/test defect; it does not prove why the Pixel Open action fails. [F01-S02A](stories/F01-S02A.md) corrected the ID to `mixmate/` and fixed the regression test in [PR #10](https://github.com/johnsherlock/mixmate/pull/10), merged after passing CI and affirmative Codex review. This draft merged main without rebasing or force-pushing. Device checks must identify the updated deployment and account for the old installation identity; old results do not validate the new identity. No Pixel or Lenovo retest has been reported.
+This was a concrete identity/test defect; it does not prove why the Pixel Open action fails. [F01-S02A](stories/F01-S02A.md) corrected the ID to `mixmate/` and fixed the regression test in [PR #10](https://github.com/johnsherlock/mixmate/pull/10), merged after passing CI and affirmative Codex review. This draft merged main without rebasing or force-pushing. Device checks must identify the updated deployment and account for the old installation identity; old results do not validate the new identity. The Pixel installed launch remains blocked. The Lenovo tablet subsequently passed a targeted version/name retest on the selector-correction build; full device qualification remains outstanding.
 
 The master is providing phone installation/launch troubleshooting separately. Do not treat the tablet installation report as a pass for the complete install-online/use-offline/connect-to-desk workflow.
 
@@ -57,10 +59,34 @@ Date: 2026-11-08. Provenance: user report in the master chat. A router-reachabil
 
 The user then reported an installed “desktop app” connects and displays an actual received channel name, while the input dropdown still showed numbered placeholders. A follow-up asking whether this was the tablet home-screen app or a computer installation received an ambiguous “Yes”; platform and installation context are still unconfirmed. Mixer address, OS/browser versions, served worker version and offline conditions were not established. Retain this as reported actual state receipt on an unconfirmed context, not a mobile/offline pass. No actual received channel name is recorded.
 
-[F01-S02B](stories/F01-S02B.md) corrected selector labels using received names from the current socket, rendered through `textContent`, cleared on disconnect/new session and without changing writes. [PR #11](https://github.com/johnsherlock/mixmate/pull/11) merged at `97d005a41feeba91fefbbee054193d63486a8888` after CI passed and [Codex affirmatively reviewed](https://github.com/johnsherlock/mixmate/pull/11#issuecomment-6727210297) final head `280c708`. This draft integrates main; no new application edits or mixer access are added here. User retest of selector labels remains pending.
+[F01-S02B](stories/F01-S02B.md) corrected selector labels using received names from the current socket, rendered through `textContent`, cleared on disconnect/new session and without changing writes. [PR #11](https://github.com/johnsherlock/mixmate/pull/11) merged at `97d005a41feeba91fefbbee054193d63486a8888` after CI passed and [Codex affirmatively reviewed](https://github.com/johnsherlock/mixmate/pull/11#issuecomment-6727210297) final head `280c708`. This draft integrates main; no new application edits or mixer access are added here. The user subsequently confirmed that the tablet had the correct verified worker version and selector names appeared. OS/browser versions, cold-offline launch and sleep behavior remain unverified.
 
 ## Outstanding physical-device gate
 
 Full Android Chrome, iPhone Safari and iPad Safari compatibility verdicts remain unverified. Android installation evidence is partial; Pixel installed launch is currently blocked, while both Safari device classes are unavailable. The unconfirmed installed-app state receipt does not fill any platform-specific offline matrix cell. The user must run the linked checklist on actual devices and return versions plus results for installation, installed cold offline launch, explicit connection with actual received state, local-network permission, disconnect/sleep/reopen, and update/recovery. Record both rigs separately when available.
 
 Do not merge F01-S03 or mark F01 complete merely because this Node check succeeded or the draft PR passes review. If a browser blocks direct HTTPS-to-local-WebSocket transport, document the exact result and bring an explicit distribution/transport decision to the user. Do not weaken browser security, change mixer/router settings or silently drop a support target.
+
+## Later targeted tablet and Pixel observations
+
+User report, 2026-11-08: the tablet initially still had worker `79f11…`; after an online update/closing windows it reached the correct `917e3ba9d64587ec` version and channel names appeared. This establishes a targeted cached-version/selector retest, not a complete cold-offline/sleep acceptance result. Exact Lenovo model and OS/browser versions remain unknown.
+
+A user-supplied Pixel browser screenshot shows `Chrome/156.0.0.0`, secure origin `https://johnsherlock.github.io`, verified worker `917e3ba9d64587ec` and no mixer connection attempt. The reduced user-agent's Android token is not treated as the actual OS version. This is browser cache evidence, not successful PWA installation. The installed/Open symptom persists and MixMate is absent from `chrome://webapks`; no Android Settings app-list result has been supplied.
+
+## Installed sibling app comparison
+
+The user reports Solartracker, Cube4 and StackIt installed on the Pixel. Their supplied `chrome://webapks` screenshot confirms actual Chrome-owned WebAPK entries for Cube4 and StackIt, including these public URL identities. Repository and deployed-manifest reads agree:
+
+| App | Effective manifest identity | Start URL and scope |
+| --- | --- | --- |
+| Cube4 | `https://johnsherlock.github.io/cube4/` (explicit ID) | `/cube4/` |
+| StackIt | `https://johnsherlock.github.io/stackit/` (fallback from start URL) | `/stackit/` |
+| MixMate, corrected | `https://johnsherlock.github.io/mixmate/` | `/mixmate/` |
+
+Sources: [Cube4 manifest](https://github.com/johnsherlock/cube4/blob/main/manifest.webmanifest), [StackIt manifest](https://github.com/johnsherlock/stackit/blob/main/public/manifest.webmanifest), and their deployed manifests. Cube4's built page links a hashed manifest in `assets`; StackIt links its public manifest. StackIt registers a relative service worker. Neither examined app has a custom install hook in its entry point. MixMate uses standard `beforeinstallprompt` deferral until offline verification. The comparison did not establish another MixMate configuration defect that explains installation refusal. Existing installations do not establish that a fresh install succeeds on today's browser.
+
+[Chromium issue 572287931](https://issues.chromium.org/issues/572287931) reports an Android same-origin/different-subpath WebAPK installation refusal with the same installed/Open symptom despite distinct IDs/scopes. It is marked duplicate of 568841400; a maintainer noted a fix under review on 2026-10-12, but the applicable released fix is not established here. This is a plausible lead, not a diagnosis of the user's Pixel.
+
+A separate confirmed cross-app risk exists in [StackIt's service worker](https://github.com/johnsherlock/stackit/blob/main/public/sw.js): activation deletes every origin cache except `stack-it-v1`. Direct inspection of its deployed `sw.js` confirms this code. Since Cache Storage is origin-wide, activation can remove MixMate's offline caches even though worker URL scopes differ. This does not explain the installed/Open message by itself. No other repository or deployed app was modified. A scoped cache cleanup fix belongs in the StackIt project; isolating MixMate on its own origin is a distribution option requiring a deliberate decision, not a silent hosting change.
+
+The next Pixel diagnostic is the exact installed/Open dialog and the entry point used (Chrome menu or MixMate's install button). Do not uninstall sibling apps, clear all Chrome data or claim the browser report is proven. F01-S03 remains incomplete.

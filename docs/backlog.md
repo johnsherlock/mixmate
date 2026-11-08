@@ -6,7 +6,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 | Feature | Outcome | Stories | Status |
 | --- | --- | --- | --- |
-| [F01](features/F01.md) | Offline distribution and device compatibility | 5 | In progress — device gate pending |
+| [F01](features/F01.md) | Offline distribution and device compatibility | 6 | In progress — device gate pending |
 | [F02](features/F02.md) | Device-local settings | 3 | Planned |
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Planned |
 | [F04](features/F04.md) | Groups and navigation | 2 | Planned |
@@ -27,7 +27,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 ## Current work
 
-F01-S01, F01-S02, F01-S02A and F01-S02B merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7), [PR #8](https://github.com/johnsherlock/mixmate/pull/8), [PR #10](https://github.com/johnsherlock/mixmate/pull/10) and [PR #11](https://github.com/johnsherlock/mixmate/pull/11), each after passing CI and affirmative Codex review. F01-S03 has [bounded desktop transport evidence and user reports](f01-device-evidence.md) and is awaiting the [real-device matrix](device-checks.md). The user resolved a router-reachability incident by moving the cable to the correct desk Ethernet port and now reports an installed app receives a channel name, but the platform/installation context and offline conditions remain unconfirmed. F01-S02B fixes the reported placeholder-only input selector; a user retest is pending. Earlier Lenovo installation-only and Pixel Open/WebAPK observations are retained without claiming a new-identity or mobile/offline pass. iPhone/iPad are unavailable and untested. [Draft PR #9](https://github.com/johnsherlock/mixmate/pull/9) has merged the reviewed corrections from main and remains incomplete with F01 until the device gate is resolved; do not start F02. Eight features now contain 27 sequential stories.
+F01-S01, S02, S02A, S02B and S02C merged through PRs [#7](https://github.com/johnsherlock/mixmate/pull/7), [#8](https://github.com/johnsherlock/mixmate/pull/8), [#10](https://github.com/johnsherlock/mixmate/pull/10), [#11](https://github.com/johnsherlock/mixmate/pull/11) and [#12](https://github.com/johnsherlock/mixmate/pull/12), each after passing checks and affirmative Codex review. The tablet's targeted cache update and named-selector retest passed by user report. Pixel installation remains blocked despite a verified current browser cache. Cube4 and StackIt WebAPK details confirm separate app IDs/scopes on the shared GitHub Pages origin; investigation is recorded in [device evidence](f01-device-evidence.md). [Draft PR #9](https://github.com/johnsherlock/mixmate/pull/9) remains incomplete pending full cold-offline, sleep and platform evidence. Safari devices remain unavailable/untested. Do not start F02 before the gate is resolved or explicitly re-scoped. Eight features contain 28 sequential stories.
 
 ## Evidence rules
 
