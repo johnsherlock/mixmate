@@ -56,3 +56,7 @@ Open [the responsive IEM mockup](https://johnsherlock.github.io/mixmate/mockups/
 For local preview: `python3 -m http.server 4190 --bind 127.0.0.1 --directory mockups`, then open `http://127.0.0.1:4190/iem.html`. The build copies this same file into the Pages output and includes it in the existing offline cache.
 
 Preview faders: drag the fader cap to adjust; double-tap the track to jump to a level. A single track touch or a swipe scrolls without changing levels. Double-tap an AUX master cap to open its EQ. Group shortcuts remain available in All Channels; tapping the active group shortcut returns to the group masters. Portrait fullscreen supports vertical scrolling.
+
+## IEM implementation roadmap
+
+The accepted prototype is the target for the full IEM interface. See the [feature backlog](docs/backlog.md), [architecture decision](docs/adr/0001-offline-iem-architecture.md), [distribution audit](docs/distribution-audit.md) and [real-device checklist](docs/device-checks.md). Features and stories run sequentially, each through a PR and affirmative Codex review before merge. The first feature establishes offline distribution and actual Android/iPhone/iPad transport compatibility; it does not add AUX writes.
