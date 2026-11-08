@@ -48,3 +48,9 @@ The production build generates a content-versioned service worker and precaches 
 ## Review and release
 
 Open a PR, request `@codex review`, resolve findings, and merge only once checks pass and Codex confirms no remaining issues. The repository must be connected to Codex with code review enabled. Phone/tablet installation, offline restart and local-network permission behavior require real-device checks; desktop tests cannot certify iOS support.
+
+## IEM design preview
+
+Open [the responsive IEM mockup](https://johnsherlock.github.io/mixmate/mockups/iem.html) on a phone or tablet. This standalone page simulates five stereo AUX mixes, relative channel groups, pan and EQ controls. It cannot connect to or change the mixer (network access is blocked by its content security policy). The native-app overlay is simulated too.
+
+For local preview: `python3 -m http.server 4190 --bind 127.0.0.1 --directory mockups`, then open `http://127.0.0.1:4190/iem.html`. The build copies this same file into the Pages output and includes it in the existing offline cache.
