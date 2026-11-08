@@ -16,8 +16,8 @@ class Events {
 }
 class Element extends Events {
   value = ''; checked = false; disabled = false; hidden = false;
-  textContent = ''; dataset = {}; style = {}; attributes = {};
-  add(option) { if (!this.value) this.value = String(option.value); }
+  textContent = ''; dataset = {}; style = {}; attributes = {}; options = [];
+  add(option) { this.options.push(option); if (!this.value) this.value = String(option.value); }
   setAttribute(name, value) { this.attributes[name] = value; }
   setCustomValidity(value) { this.validity = value; }
   reportValidity() {}
@@ -43,7 +43,7 @@ function app({ offline } = {}) {
   vm.runInNewContext(source, {
     document, window, navigator, location: { origin: 'https://example.test' },
     localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
-    Option: function(text, value) { this.text = text; this.value = value; },
+    Option: function(text, value) { this.textContent = text; this.value = String(value); },
     MixerConnection: FakeConnection, FaderIntent, faderValueToDB, verifyOfflineCopy: offline,
     setInterval: (callback, delay) => { const key = intervals.size; intervals.set(key, { callback, delay }); return key; },
     clearTimeout, setTimeout, URL, requestAnimationFrame: callback => callback(),
@@ -117,5 +117,65 @@ test('late offline results cannot override a newer controller verification or co
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(view.element('offline-status').textContent, 'Offline copy not ready');
     assert.equal(view.sockets.length, 0);
+  } finally { view.close(); }
+});
+
+
+test('channel selector follows all received names without replacing options, changing selection or sending writes', () => {
+  const view = app();
+  try {
+    const select = view.element('channel'), original = [...select.options];
+    const fallbacks = Array.from({ length: 24 }, (_, i) => `Channel ${String(i + 1).padStart(2, '0')}`);
+    assert.equal(original.length, 24);
+    assert.deepEqual(original.map(option => option.value), Array.from({ length: 24 }, (_, i) => String(i + 1)));
+    assert.deepEqual(original.map(option => option.textContent), fallbacks);
+    select.value = '7'; select.emit('change');
+    const disabled = select.disabled;
+    view.element('connect-form').emit('submit');
+    const socket = view.sockets[0]; socket.open();
+    // Partial initialization names unselected channels too; absent/empty names stay fallback.
+    const special = 'Lead <img src=x onerror=alert(1)> & "Synth" ^ R';
+    socket.receive(`3:::SETS^i.0.name^Vocal A\nSETS^i.6.name^Keys\nSETS^i.23.name^${special}\nSETS^i.12.name^`);
+    assert.equal(select.options[0].textContent, 'Channel 01 — Vocal A');
+    assert.equal(select.options[6].textContent, 'Channel 07 — Keys');
+    assert.equal(select.options[23].textContent, `Channel 24 — ${special}`);
+    assert.equal(select.options[23].innerHTML, undefined);
+    assert.equal(select.options[12].textContent, 'Channel 13');
+    assert.equal(select.options[10].textContent, 'Channel 11');
+    assert.equal(view.element('enable-fader').disabled, true);
+    socket.receive('3:::SETD^i.6.mix^0.4\nSETD^i.6.stereoIndex^-1');
+    view.element('enable-fader').checked = true;
+    view.element('enable-fader').emit('change');
+    assert.equal(view.element('fader-control').disabled, false);
+    // Native-client rename of an unselected channel must refresh its option only.
+    socket.receive('3:::SETS^i.0.name^Vocal Renamed\nSETS^i.6.name^');
+    assert.equal(select.options[0].textContent, 'Channel 01 — Vocal Renamed');
+    assert.equal(select.options[6].textContent, 'Channel 07');
+    assert.equal(select.value, '7');
+    assert.equal(select.disabled, disabled);
+    assert.equal(view.element('enable-fader').checked, true);
+    assert.equal(view.element('fader-control').disabled, false);
+    for (let i = 0; i < 24; i++) {
+      assert.equal(select.options[i], original[i]);
+      assert.equal(select.options[i].value, String(i + 1));
+    }
+    socket.receive('3:::' + original.map((_, i) => `SETS^i.${i}.name^Source ${i + 1}`).join('\n'));
+    assert.deepEqual(select.options.map(option => option.textContent), fallbacks.map((label, i) => `${label} — Source ${i + 1}`));
+    assert.equal(select.value, '7');
+    view.element('disconnect').emit('click');
+    assert.deepEqual(select.options.map(option => option.textContent), fallbacks);
+    assert.equal(view.element('enable-fader').checked, false);
+    assert.equal(view.element('fader-control').disabled, true);
+    view.element('connect-form').emit('submit');
+    const fresh = view.sockets[1]; fresh.open();
+    assert.deepEqual(select.options.map(option => option.textContent), fallbacks);
+    fresh.receive('3:::SETS^i.1.name^Fresh source');
+    assert.equal(select.options[1].textContent, 'Channel 02 — Fresh source');
+    assert.equal(select.options[0].textContent, 'Channel 01');
+    view.document.hidden = true; view.document.emit('visibilitychange');
+    assert.deepEqual(select.options.map(option => option.textContent), fallbacks);
+    assert.equal(select.value, '7');
+    assert.ok(view.sockets.every(s => s.sent.every(message => Object.values(OUTBOUND).includes(message))));
+    assert.ok(view.sockets.every(s => s.sent.every(message => !message.includes('SETD') && !message.includes('SETS'))));
   } finally { view.close(); }
 });
