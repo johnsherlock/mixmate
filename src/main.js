@@ -2,6 +2,7 @@ import './style.css';
 import { faderValueToDB } from 'soundcraft-ui-connection';
 import { MixerConnection } from './protocol.js';
 import { FaderIntent } from './fader-intent.js';
+import { verifyOfflineCopy } from './offline.js';
 
 const $ = id => document.getElementById(id);
 let state = Object.create(null);
@@ -176,24 +177,20 @@ function showOfflineStatus(ready, message) {
   $('install').hidden = !ready || !installPrompt;
   log(ready ? 'Offline cache verified' : message);
 }
+let offlineAttempt = 0;
 async function prepareOffline() {
+  const attempt = ++offlineAttempt;
   if (!('serviceWorker' in navigator)) {
     showOfflineStatus(false, 'This browser does not support offline saving. Try a current Chrome or Safari.'); return;
   }
   try {
-    // Wait for verified precaching, not merely for registration or an old worker.
-    await navigator.serviceWorker.register(new URL('./sw.js', document.baseURI), { scope: './' });
-    await navigator.serviceWorker.ready;
-    const controller = navigator.serviceWorker.controller;
-    if (!controller) { showOfflineStatus(false, 'Offline worker is starting. Reopen or reload this app while online.'); return; }
-    const result = await new Promise((resolve, reject) => {
-      const channel = new MessageChannel();
-      const timeout = setTimeout(() => { channel.port1.close(); reject(new Error('Offline cache verification timed out.')); }, 8000);
-      channel.port1.onmessage = ({ data }) => { clearTimeout(timeout); channel.port1.close(); resolve(data); };
-      controller.postMessage({ type: 'VERIFY_OFFLINE' }, [channel.port2]);
-    });
-    showOfflineStatus(result.ready, result.ready ? 'App files are on this device. No internet needed to open it.' : 'Some app files are missing. Reopen online to prepare a complete copy.');
-  } catch (error) { showOfflineStatus(false, `Open online to save the app. ${error.message}`); }
+    const result = await verifyOfflineCopy({ serviceWorker: navigator.serviceWorker, baseURI: document.baseURI });
+    if (attempt !== offlineAttempt) return;
+    if (result.version) log(`Offline version: ${result.version}`);
+    showOfflineStatus(result.ready, result.ready ? 'App files are on this device. No internet needed to open it.' : 'Some app files are missing or from another version. Reopen online to repair the copy, or close all app windows to finish an update.');
+  } catch (error) {
+    if (attempt === offlineAttempt) showOfflineStatus(false, `Open online to save the app. ${error.message}`);
+  }
 }
 navigator.serviceWorker?.addEventListener('controllerchange', prepareOffline);
 log('App opened. No mixer connection started.');

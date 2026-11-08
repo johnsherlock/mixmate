@@ -27,7 +27,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 ## Current work
 
-F01-S01: planning baseline, distribution audit and device-test contract implemented; awaiting review/merge in [PR #7](https://github.com/johnsherlock/mixmate/pull/7). F01-S02 must wait for that merge. Eight features contain 25 sequential stories.
+F01-S01 merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7) after passing CI and affirmative Codex review. F01-S02 implements verified cache repair, bounded readiness and offline/lifecycle tests; awaiting its story PR review/merge. F01-S03 device evidence follows only after that merge. Eight features contain 25 sequential stories.
 
 ## Evidence rules
 

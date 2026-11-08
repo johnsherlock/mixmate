@@ -45,3 +45,11 @@ No authoritative result collected here establishes direct Safari HTTPS-to-`ws://
 3. Bound offline preparation, including registration/readiness phases, and expose recoverable failure rather than indefinite preparation.
 4. Add fake-browser/fake-transport lifecycle coverage for hide/pagehide/reopen and no implicit connection. Preserve connection-test behavior and all mockup gestures.
 5. Keep manual update/install/permission checks as S03 gates; tests cannot certify platform support.
+
+## S02 implementation evidence
+
+F01-S02 adds per-asset SHA-256 expectations to the generated worker and includes the worker template in its version hash. Installation validates all downloaded responses before caching. Fetch and offline verification validate cached bytes and attempt missing/corrupt-entry repair only with matching same-version network content, bypassing the HTTP cache. Changed HTML/manifest from a newer deployment cannot contaminate an older active cache; readiness remains false until a matching copy can be recovered or an update activates after all app windows close. Failed new installs do not delete the old active cache.
+
+Offline preparation now has one 15-second deadline covering registration, activation and cache verification. Late attempts cannot override a newer controller verification, and diagnostics record the worker/cache version. This deadline bounds the user-facing result; it cannot cancel a browser-owned registration or worker download already in progress.
+
+`npm test` passes 26 tests, including a real local Vite production build/inventory/subpath check, worker VM tests for install/repair/corruption/failure/waiting-update isolation and fake DOM/socket execution of the actual app entry for hide/pagehide/disarm/clear/reopen/no reconnect. `npm run build` passes with eight precached assets, worker version `79f112fe123a3681`. These are local automated evidence, not browser-engine or phone/tablet results. All S03 verdicts remain unverified.
