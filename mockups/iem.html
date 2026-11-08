@@ -20,7 +20,7 @@
    <div class="mm-utilities"><button data-action="save" aria-label="Save current snapshot">Save<span class="mm-long"> snapshot</span></button><button data-action="record" class="mm-record"><i></i><span class="mm-rec-text">Record<span class="mm-long"> MTK</span></span></button><button data-action="native">Native<span class="mm-long"> app</span> ↗</button><button data-action="fullscreen" aria-label="Enter full screen">⛶</button></div>
   </header>
   <div class="mm-preview"><span>DESIGN PREVIEW · NO DESK CONNECTION</span><span class="mm-feedback" role="status" aria-live="polite">Simulated signal levels</span></div>
-  <nav class="mm-navigation" aria-label="Mix navigation"><button class="mm-home" data-action="overview">All Mixes</button><div class="mm-mix-tabs" hidden></div><div class="mm-heading"><span class="mm-kicker"></span><strong class="mm-title"></strong></div><div class="mm-group-switches" aria-label="Switch group" hidden></div><div class="mm-local-tabs"><button data-mode="groups">Groups</button><button data-mode="channels">All</button><button data-mode="eq">Mix EQ</button><button data-action="edit-groups" aria-label="Edit groups">Edit</button></div><button class="mm-collapse" data-action="collapse" hidden>← Groups</button></nav>
+  <nav class="mm-navigation" aria-label="Mix navigation"><button class="mm-home" data-action="overview">All Mixes</button><div class="mm-mix-tabs" hidden></div><div class="mm-heading"><span class="mm-kicker"></span><strong class="mm-title"></strong></div><div class="mm-group-switches" aria-label="Switch group" hidden></div><div class="mm-local-tabs"><button data-mode="groups">Groups</button><button data-mode="eq">Mix EQ</button><button data-action="edit-groups" aria-label="Edit group">Edit Group</button></div><button class="mm-collapse" data-action="collapse" hidden>← Groups</button></nav>
   <section class="mm-content" aria-label="Mixer surface"></section>
   <footer class="mm-bottom"><button class="mm-desk" data-action="desks">● Desk A · 192.168.0.60</button><span class="mm-dirty">Snapshot saved</span><span class="mm-rec-state">MTK stopped</span><span class="mm-page-state"></span></footer>
   <div class="mm-layer" hidden><section class="mm-dialog" role="dialog" aria-modal="true" aria-labelledby="mm-dialog-title"><div class="mm-dialog-head"><h3 id="mm-dialog-title"></h3><button data-action="close-dialog" aria-label="Close dialog">Close ×</button></div><div class="mm-dialog-body"></div></section></div>
@@ -185,6 +185,17 @@
 #mixmate-iem-concept[data-orientation="portrait"] .mm-eq-cut-bank{grid-column:1;grid-row:2/4;display:flex;flex-direction:column;justify-content:flex-end;border:0}
 #mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{flex:1;min-width:60px}
 @media(min-width:600px){#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-scroll{grid-template-columns:repeat(auto-fit,minmax(125px,1fr))}#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-native{grid-template-rows:360px 280px}}
+
+/* Keep track gestures available to the browser's scrolling implementation. */
+#mixmate-iem-concept .mm-fader-control{position:relative;justify-self:center;min-height:0;height:100%;width:42px;touch-action:auto}
+#mixmate-iem-concept .mm-fader-control>.mm-vertical{pointer-events:none;touch-action:auto}
+#mixmate-iem-concept .mm-fader-hit{position:absolute;left:0;width:42px;height:40px;transform:translateY(-50%);touch-action:none;cursor:ns-resize}
+#mixmate-iem-concept .mm-group-switches{justify-content:flex-end}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{justify-content:flex-end}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-app{overflow:visible;height:auto;max-height:none}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-app:fullscreen{height:100dvh;max-height:100dvh;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+@media(orientation:portrait){html,body{height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}}
+@media(max-width:360px){#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation .mm-heading{flex:1}#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{flex:1 0 100%;width:100%}}
 </style>
 <script>
 (()=>{
@@ -222,7 +233,7 @@ function channelStrip(i,native=false){const m=mix();return `<article class="mm-s
 function render(){
  graphObserver?.disconnect();root.dataset.auxView=String(aux>=0);root.style.setProperty('--mm-mix-color',mixColours[aux]||'#e1d067');
  $('.mm-mix-tabs').innerHTML='';$('.mm-navigation').hidden=aux<0;
- $('.mm-group-switches').hidden=!(aux>=0&&mode==='groups'&&expanded!==null);$('.mm-group-switches').innerHTML=aux>=0&&mode==='groups'&&expanded!==null?groups().map((g,i)=>`<button data-jump-group="${i}" class="${i===expanded?'mm-active':''}">${esc(g.name)}</button>`).join(''):'';
+ $('.mm-group-switches').hidden=aux<0;$('.mm-group-switches').innerHTML=aux>=0?groups().map((g,i)=>`<button data-jump-group="${i}" class="${mode==='groups'&&i===expanded?'mm-active':''}">${esc(g.name)}</button>`).join('')+`<button data-mode="channels" class="${mode==='channels'?'mm-active':''}">All Channels</button>`:'';
  $('.mm-home').classList.toggle('mm-active',aux<0);
  $('.mm-title').textContent=aux<0?'':names[aux];
  $('.mm-kicker').textContent=aux<0?'FIVE STEREO PAIRS':`AUX ${aux*2+1}/${aux*2+2}`;
@@ -233,11 +244,12 @@ function render(){
  if(aux<0)$('.mm-content').innerHTML=`<div class="mm-strip-grid">${current().mixes.map((m,i)=>masterStrip(i)).join('')}</div>`;
  else if(mode==='eq')renderEQ();
  else {const strips=mode==='channels'?channels.map((n,i)=>channelStrip(i)).join(''):expanded===null?groups().map((g,i)=>groupStrip(i)).join(''):groupStrip(expanded)+groups()[expanded].members.map(i=>channelStrip(i)).join('');$('.mm-content').innerHTML=`<div class="mm-sends-layout ${mode==='groups'&&expanded!==null?'mm-no-master':''}"><div class="mm-sends-main"><div class="mm-strip-scroll ${expanded!==null?'mm-expanded':''}">${strips}</div></div>${mode==='groups'&&expanded!==null?'':`<aside class="mm-pinned" aria-label="Current AUX master">${masterStrip(aux)}</aside>`}</div>`;}
- applyDesign();
+ applyDesign();prepareFaders();
 }
 function applyDesign(){const portrait=matchMedia('(orientation:portrait)').matches;root.dataset.orientation=portrait?'portrait':'landscape';root.style.setProperty('--mm-height',innerHeight+'px');root.style.setProperty('--mm-travel',design.stripHeight+'px');root.dataset.compact=String(!portrait&&innerHeight<=430);root.dataset.ultraCompact=String(!portrait&&innerHeight<320);$$('.mm-meter-pair').forEach(el=>el.style.visibility=design.showMeters?'visible':'hidden');if(mode==='eq'&&aux>=0)requestAnimationFrame(paintEQ);}
 window.addEventListener('resize',applyDesign);
 window.visualViewport?.addEventListener('resize',applyDesign);
+window.addEventListener('resize',()=>requestAnimationFrame(syncFaderHandles));
 
 function openDialog(title,body,wide=false){$('.mm-group-title-name')?.remove();previousFocus=document.activeElement;$('#mm-dialog-title').textContent=title;$('.mm-dialog').classList.toggle('mm-group-dialog',wide);$('.mm-dialog-body').innerHTML=body;$('.mm-layer').hidden=false;$('.mm-dialog-head button').focus();}
 function closeDialog(){$('.mm-group-title-name')?.remove();$('.mm-layer').hidden=true;editor=null;panTarget=null;previousFocus?.isConnected&&previousFocus.focus();}
@@ -265,8 +277,8 @@ function graphMove(e){const eq=mix().eq,p=graphPoint(e);if(eqDrag?.cut){const c=
 function formatTime(s){return[Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':');}
 function paintRecord(){$('.mm-record').classList.toggle('mm-recording',recording);$('.mm-rec-text').textContent=recording?formatTime(recordSeconds):'Record';$('.mm-rec-state').textContent=recording?'● MTK '+formatTime(recordSeconds):'MTK stopped';}
 function clock(){const time=new Date().toLocaleTimeString('en-IE',{hour12:false}),segments=['abcdef','bc','abdeg','abcdg','bcfg','acdfg','acdefg','abc','abcdefg','abcdfg'];$('.mm-clock').setAttribute('aria-label','Current local time '+time);$('.mm-clock').innerHTML=[...time].map(c=>c===':'?'<span class="mm-colon" aria-hidden="true"></span>':`<span class="mm-digit" aria-hidden="true">${[...'abcdefg'].map(s=>`<i class="${s} ${segments[+c].includes(s)?'on':''}"></i>`).join('')}</span>`).join('');}
-root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.openAux!==undefined){aux=+b.dataset.openAux;mode='groups';expanded=null;render();remember();return;}if(b.dataset.jumpGroup!==undefined){expanded=+b.dataset.jumpGroup;mode='groups';render();remember();return;}if(b.dataset.toggleCut){const c=b.dataset.toggleCut;mix().eq[c+'Enabled']=!mix().eq[c+'Enabled'];renderEQ();modified();return;}if(b.dataset.editGroup!==undefined){openEditor(+b.dataset.editGroup);return;}if(b.dataset.selectBand!==undefined){selectedBand=+b.dataset.selectBand;paintEQ();return;}if(b.dataset.mode){mode=b.dataset.mode;expanded=null;render();remember();return;}if(b.dataset.expand!==undefined){expanded=expanded===+b.dataset.expand?null:+b.dataset.expand;render();remember();return;}if(b.dataset.eq!==undefined){aux=+b.dataset.eq;mode='eq';render();remember();return;}if(b.dataset.pan!==undefined){openPan(+b.dataset.pan);return;}if(b.dataset.panPreset!==undefined){setPan(+b.dataset.panPreset);return;}if(b.dataset.toggleMember!==undefined&&editor){const i=+b.dataset.toggleMember,n=editor.members.indexOf(i);if(n<0)editor.members.push(i);else editor.members.splice(n,1);renderEditor();return;}if(b.dataset.connectDesk!==undefined){connectDesk(+b.dataset.connectDesk);return;}
- switch(b.dataset.action){case'overview':aux=-1;expanded=null;render();remember();break;case'collapse':expanded=null;render();remember();break;case'close-dialog':closeDialog();break;case'snapshots':openSnapshots();break;case'save':openDialog('Save current snapshot',`<p class="mm-warning">Overwrite “${esc($('.mm-snapshot-name').textContent)}” with the current desk settings?</p><div class="mm-dialog-actions"><button data-action="close-dialog">Cancel</button><button data-action="confirm-save" class="mm-primary">Save snapshot</button></div>`);break;case'confirm-save':dirty=false;$('.mm-snapshot').dataset.dirty='false';$('.mm-dirty').textContent='Snapshot saved';feedback('Snapshot saved · preview');closeDialog();break;case'recall':$('.mm-snapshot-name').textContent=$('#mm-snapshot-select').value;dirty=false;$('.mm-snapshot').dataset.dirty='false';$('.mm-dirty').textContent='Snapshot saved';feedback('Snapshot recalled · preview');closeDialog();break;case'record':if(recording)openDialog('Stop multitrack recording?',`<p class="mm-caption">Current take · ${formatTime(recordSeconds)}</p><div class="mm-dialog-actions"><button data-action="close-dialog">Keep recording</button><button data-action="stop-record" class="mm-primary">Stop recording</button></div>`);else{recording=true;recordSeconds=0;paintRecord();}break;case'stop-record':recording=false;paintRecord();closeDialog();break;case'native':$('.mm-native-content').innerHTML=`<div class="mm-strip-scroll">${channels.slice(0,8).map((n,i)=>channelStrip(i,true)).join('')}</div>`;$('.mm-native-snapshot').textContent=$('.mm-snapshot-name').textContent;$('.mm-native-layer').hidden=false;$('.mm-native-head button').focus();break;case'close-native':$('.mm-native-layer').hidden=true;$('[data-action="native"]').focus();break;
+root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.openAux!==undefined){aux=+b.dataset.openAux;mode='groups';expanded=null;render();remember();return;}if(b.dataset.jumpGroup!==undefined){expanded=mode==='groups'&&expanded===+b.dataset.jumpGroup?null:+b.dataset.jumpGroup;mode='groups';render();remember();return;}if(b.dataset.toggleCut){const c=b.dataset.toggleCut;mix().eq[c+'Enabled']=!mix().eq[c+'Enabled'];renderEQ();modified();return;}if(b.dataset.editGroup!==undefined){openEditor(+b.dataset.editGroup);return;}if(b.dataset.selectBand!==undefined){selectedBand=+b.dataset.selectBand;paintEQ();return;}if(b.dataset.mode){mode=b.dataset.mode;expanded=null;render();remember();return;}if(b.dataset.expand!==undefined){expanded=expanded===+b.dataset.expand?null:+b.dataset.expand;render();remember();return;}if(b.dataset.eq!==undefined){aux=+b.dataset.eq;mode='eq';render();remember();return;}if(b.dataset.pan!==undefined){openPan(+b.dataset.pan);return;}if(b.dataset.panPreset!==undefined){setPan(+b.dataset.panPreset);return;}if(b.dataset.toggleMember!==undefined&&editor){const i=+b.dataset.toggleMember,n=editor.members.indexOf(i);if(n<0)editor.members.push(i);else editor.members.splice(n,1);renderEditor();return;}if(b.dataset.connectDesk!==undefined){connectDesk(+b.dataset.connectDesk);return;}
+ switch(b.dataset.action){case'overview':aux=-1;expanded=null;render();remember();break;case'collapse':expanded=null;render();remember();break;case'close-dialog':closeDialog();break;case'snapshots':openSnapshots();break;case'save':openDialog('Save current snapshot',`<p class="mm-warning">Overwrite “${esc($('.mm-snapshot-name').textContent)}” with the current desk settings?</p><div class="mm-dialog-actions"><button data-action="close-dialog">Cancel</button><button data-action="confirm-save" class="mm-primary">Save snapshot</button></div>`);break;case'confirm-save':dirty=false;$('.mm-snapshot').dataset.dirty='false';$('.mm-dirty').textContent='Snapshot saved';feedback('Snapshot saved · preview');closeDialog();break;case'recall':$('.mm-snapshot-name').textContent=$('#mm-snapshot-select').value;dirty=false;$('.mm-snapshot').dataset.dirty='false';$('.mm-dirty').textContent='Snapshot saved';feedback('Snapshot recalled · preview');closeDialog();break;case'record':if(recording)openDialog('Stop multitrack recording?',`<p class="mm-caption">Current take · ${formatTime(recordSeconds)}</p><div class="mm-dialog-actions"><button data-action="close-dialog">Keep recording</button><button data-action="stop-record" class="mm-primary">Stop recording</button></div>`);else{recording=true;recordSeconds=0;paintRecord();}break;case'stop-record':recording=false;paintRecord();closeDialog();break;case'native':$('.mm-native-content').innerHTML=`<div class="mm-strip-scroll">${channels.slice(0,8).map((n,i)=>channelStrip(i,true)).join('')}</div>`;$('.mm-native-snapshot').textContent=$('.mm-snapshot-name').textContent;$('.mm-native-layer').hidden=false;prepareFaders();$('.mm-native-head button').focus();break;case'close-native':$('.mm-native-layer').hidden=true;$('[data-action="native"]').focus();break;
  case'fullscreen':{const app=$('.mm-app');if(document.fullscreenElement)document.exitFullscreen().catch(()=>feedback('Could not exit fullscreen'));else if(app.requestFullscreen)app.requestFullscreen().catch(()=>feedback('Fullscreen unavailable in this preview · use the installed app'));else feedback('Install to Home Screen to remove browser tabs');break;}
  case'edit-groups':openEditor(mode==='groups'&&expanded!==null?expanded:0);break;case'new-group':openEditor(-1);break;case'clear-members':if(editor){editor.members=[];renderEditor();}break;
  case'save-group':if(editor){const name=$('#mm-group-name').value.trim();if(!name||!editor.members.length){$('.mm-editor-feedback').textContent='Add a name and at least one channel';return;}const item={name,members:[...editor.members]},g=editor.index<0?groups().length:editor.index;if(editor.index<0)groups().push(item);else groups()[g]=item;current().mixes.forEach(m=>m.offsets[g]=0);expanded=null;closeDialog();render();feedback('Group saved for this desk · preview');remember();}break;
@@ -276,13 +288,56 @@ root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)retur
 });
 root.addEventListener('input',e=>{const el=e.target;if(el.dataset.master!==undefined){const i=+el.dataset.master;current().mixes[i].master=+el.value;$(`[data-master-value="${i}"]`).textContent=db(+el.value);modified();}if(el.dataset.channel!==undefined&&!$('.mm-native-layer').contains(el)){const i=+el.dataset.channel;mix().levels[i]=+el.value;$$(`[data-channel-value="${i}"]`).forEach(o=>o.textContent=db(+el.value));groups().forEach((g,n)=>{if(g.members.includes(i))mix().offsets[n]=0;});modified();}if(el.dataset.group!==undefined){const g=+el.dataset.group,m=mix(),old=m.offsets[g]||0,b=bounds(g),v=clamp(+el.value,b.min,b.max),delta=v-old;groups()[g].members.forEach(i=>m.levels[i]=clamp(m.levels[i]+delta,-60,10));m.offsets[g]=v;groups().forEach((other,n)=>{if(n!==g&&other.members.some(i=>groups()[g].members.includes(i)))m.offsets[n]=0;});$(`[data-group-value="${g}"]`).textContent=db(v);$(`[data-group-limit="${g}"]`).textContent=v>=b.max-.05?'UPPER LIMIT':v<=b.min+.05?'LOWER LIMIT':'';groups()[g].members.forEach(i=>{$$(`[data-channel-value="${i}"]`).forEach(o=>o.textContent=db(m.levels[i]));const input=$(`[data-channel="${i}"]`);if(input)input.value=m.levels[i];});modified();}if(el.classList.contains('mm-pan-large'))setPan(+el.value);if(el.dataset.eqParam&&!drawMode){const b=mix().eq.bands[selectedBand],v=+el.value;if(el.dataset.eqParam==='freq')b.x=v;else if(el.dataset.eqParam==='q')b.q=.1*Math.pow(100,v);else b.gain=v;paintEQ();modified();}if(el.dataset.cutFrequency){const c=el.dataset.cutFrequency;if(el.value==='')return;mix().eq[c+'Hz']=clamp(+el.value,c==='low'?20:1000,c==='low'?400:20000);paintEQ();modified();}});
 root.addEventListener('change',e=>{const el=e.target;if(el.id==='mm-group-choice'){editor.name=$('#mm-group-name').value;const i=+el.value;editor={index:i,name:i<0?'':groups()[i].name,members:i<0?[]:[...groups()[i].members]};$('#mm-group-name').value=editor.name;renderEditor();}if(el.id==='mm-network-scenario'){availability=el.value;design.availableDesk=availability;deskDialog();}if(el.dataset.cutEnabled){const c=el.dataset.cutEnabled;mix().eq[c+'Enabled']=el.checked;$(`[data-cut-frequency="${c}"]`).disabled=!el.checked;paintEQ();modified();}if(el.dataset.cutFrequency){el.value=mix().eq[el.dataset.cutFrequency+'Hz'];}if(el.dataset.channel!==undefined||el.dataset.group!==undefined)render();});
-let masterGesture=null,lastMasterTap=null;
-function openMasterEQ(i){aux=i;mode='eq';expanded=null;masterGesture=null;lastMasterTap=null;render();remember();}
-root.addEventListener('pointerdown',e=>{const el=e.target;if(el.dataset?.master===undefined){if(!el.closest('.mm-master'))lastMasterTap=null;return;}if(e.button!==0)return;masterGesture={el,id:e.pointerId,index:+el.dataset.master,x:e.clientX,y:e.clientY,start:+el.value,time:performance.now(),moved:false};el.setPointerCapture(e.pointerId);el.focus();e.preventDefault();});
-root.addEventListener('pointermove',e=>{const g=masterGesture;if(!g||g.id!==e.pointerId)return;if(!g.moved&&Math.hypot(e.clientX-g.x,e.clientY-g.y)<6)return;g.moved=true;lastMasterTap=null;const travel=Math.max(20,g.el.getBoundingClientRect().height-29),value=Math.round(clamp(g.start+(g.y-e.clientY)/travel*70,-60,10)*2)/2;current().mixes[g.index].master=value;g.el.value=value;$(`[data-master-value="${g.index}"]`).textContent=db(value);modified();});
-root.addEventListener('pointerup',e=>{const g=masterGesture;if(!g||g.id!==e.pointerId)return;masterGesture=null;if(g.moved||performance.now()-g.time>450){lastMasterTap=null;return;}const now=performance.now();if(lastMasterTap&&lastMasterTap.index===g.index&&now-lastMasterTap.time<380)openMasterEQ(g.index);else lastMasterTap={index:g.index,time:now};});
-root.addEventListener('pointercancel',()=>{masterGesture=null;lastMasterTap=null;});
-root.addEventListener('dblclick',e=>{if(!root.contains(e.target))return;const master=e.target.closest('.mm-master');if(!master)return;const input=master.querySelector('[data-master]');if(input)openMasterEQ(+input.dataset.master);});
+// Track touches can scroll; only the cap captures a drag. Single taps never change levels.
+let faderGesture=null,lastFaderTap=null;
+function openMasterEQ(i){aux=i;mode='eq';expanded=null;faderGesture=null;lastFaderTap=null;render();remember();}
+function prepareFaders(){
+ $$('input.mm-vertical[data-channel],input.mm-vertical[data-group],input.mm-vertical[data-master]').forEach(el=>{
+  if(el.parentElement.classList.contains('mm-fader-control'))return;
+  const wrap=document.createElement('div');wrap.className='mm-fader-control';
+  el.before(wrap);wrap.append(el);
+  const cap=document.createElement('span');cap.className='mm-fader-hit';cap.setAttribute('aria-hidden','true');wrap.append(cap);
+ });
+ syncFaderHandles();
+}
+function syncFaderHandles(){
+ $$('.mm-fader-control').forEach(wrap=>{const el=wrap.querySelector('input'),cap=wrap.querySelector('.mm-fader-hit'),h=el.getBoundingClientRect().height;
+  const ratio=(+el.value-+el.min)/(+el.max-+el.min||1);
+  cap.style.top=(14.5+(1-ratio)*Math.max(0,h-29))+'px';
+ });
+}
+function setGestureValue(g,value){
+ const el=g.el,step=+el.step||1;el.value=clamp(Math.round(value/step)*step,+el.min,+el.max);
+ el.dispatchEvent(new Event('input',{bubbles:true}));syncFaderHandles();
+}
+root.addEventListener('input',syncFaderHandles);
+root.addEventListener('pointerdown',e=>{
+ const wrap=e.target.closest('.mm-fader-control');if(!wrap||e.button!==0){lastFaderTap=null;return;}
+ const el=wrap.querySelector('input');if(el.disabled)return;
+ const cap=e.target.closest('.mm-fader-hit');
+ faderGesture={el,wrap,id:e.pointerId,cap:!!cap,x:e.clientX,y:e.clientY,start:+el.value,time:performance.now(),moved:false};
+ if(cap){wrap.setPointerCapture(e.pointerId);el.focus({preventScroll:true});e.preventDefault();}
+});
+root.addEventListener('pointermove',e=>{
+ const g=faderGesture;if(!g||g.id!==e.pointerId)return;
+ if(!g.moved&&Math.hypot(e.clientX-g.x,e.clientY-g.y)<8)return;
+ g.moved=true;lastFaderTap=null;
+ if(!g.cap)return;
+ const travel=Math.max(20,g.el.getBoundingClientRect().height-29);
+ setGestureValue(g,g.start+(g.y-e.clientY)/travel*(+g.el.max-+g.el.min));
+});
+root.addEventListener('pointerup',e=>{
+ const g=faderGesture;if(!g||g.id!==e.pointerId)return;faderGesture=null;
+ if(g.moved){if(g.cap)g.el.dispatchEvent(new Event('change',{bubbles:true}));return;}
+ if(performance.now()-g.time>450){lastFaderTap=null;return;}
+ const now=performance.now(),last=lastFaderTap;
+ if(last&&last.el===g.el&&last.cap===g.cap&&now-last.time<380&&Math.hypot(e.clientX-last.x,e.clientY-last.y)<24){
+  lastFaderTap=null;
+  if(g.cap&&g.el.dataset.master!==undefined){openMasterEQ(+g.el.dataset.master);return;}
+  if(!g.cap){const rect=g.el.getBoundingClientRect(),ratio=clamp((rect.bottom-14.5-e.clientY)/Math.max(20,rect.height-29),0,1);setGestureValue(g,+g.el.min+ratio*(+g.el.max-+g.el.min));g.el.dispatchEvent(new Event('change',{bubbles:true}));}
+ }else lastFaderTap={el:g.el,cap:g.cap,time:now,x:e.clientX,y:e.clientY};
+});
+root.addEventListener('pointercancel',()=>{faderGesture=null;lastFaderTap=null;});
 root.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.dataset?.master!==undefined){e.preventDefault();openMasterEQ(+e.target.dataset.master);}});
 
 root.addEventListener('pointerdown',e=>{if(!e.target.closest('.mm-eq-svg'))return;const cut=e.target.closest('[data-cut]'),band=e.target.closest('[data-band]'),eq=mix().eq;if(cut){eqDrag={cut:cut.dataset.cut};}else if(!drawMode&&band){const i=+band.dataset.band;selectedBand=i;eqDrag={band:i};syncEQControls();}else if(drawMode){const p=graphPoint(e);drawLast={index:Math.round(p.x*160),gain:p.gain};}else return;$('.mm-eq-svg').setPointerCapture(e.pointerId);if(drawLast)graphMove(e);e.preventDefault();});
