@@ -61,3 +61,11 @@ Device checks exposed an incorrect audit/test assumption: manifest `id` does not
 [F01-S02A](stories/F01-S02A.md) sets `id: "mixmate/"` and adds a specification-based regression. It leaves the relative start URL, scope and runtime asset paths intact. This intentionally changes the installed app identity to `https://johnsherlock.github.io/mixmate/`; browsers honoring ID may treat it as a separate app. Existing MixMate installations may need a targeted uninstall/reinstall after deployment, with installation-local data considered before removal. Never clear all browser data or uninstall an unrelated app to resolve a possible identity collision.
 
 The user reports Pixel 6 Pro Chrome says already installed / Open, but no app can be found and Open does nothing; Lenovo 9-inch Chrome installs successfully. These are partial installation observations without version/offline/live results. The defect is confirmed; its connection to the Pixel failure remains a hypothesis pending retest and Android app/WebAPK identity evidence. All previous mobile support gates remain open.
+
+## S02C update awareness
+
+The offline panel now displays the verified active worker/cache hash. A guarded `mixmate-offline-version` localStorage marker records only version history, never desk state. First adoption seeds a baseline silently; a different activated and successfully verified hash produces a nonmodal updated notice. Same-version reopening does not repeat it. False/failed/timed-out verification cannot advance history; unavailable storage leaves readiness/version usable and suppresses history-based alerts that could not be saved.
+
+A registration observer separately reports an installed waiting update, including one already waiting at startup. It instructs users to close all MixMate windows/tabs when finished. Installing/failed workers are not presented as downloaded, a waiting worker is never labelled current, and no code forces activation or reloads/disconnects a session. Superseded observers/results are ignored and listeners removed.
+
+The user confirms tablet version `917e3ba9d64587ec` and named options before this story. That targeted observation does not establish offline cold launch, sleep or OS/browser compatibility. S02C's 35 fake/local tests and production build (eight assets; `0dbe2dd8fae4a9dd`) likewise leave the S03 physical-device gate open.
