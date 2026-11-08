@@ -20,7 +20,7 @@
    <div class="mm-utilities"><button data-action="save" aria-label="Save current snapshot">Save<span class="mm-long"> snapshot</span></button><button data-action="record" class="mm-record"><i></i><span class="mm-rec-text">Record<span class="mm-long"> MTK</span></span></button><button data-action="native">Native<span class="mm-long"> app</span> ↗</button><button data-action="fullscreen" aria-label="Enter full screen">⛶</button></div>
   </header>
   <div class="mm-preview"><span>DESIGN PREVIEW · NO DESK CONNECTION</span><span class="mm-feedback" role="status" aria-live="polite">Simulated signal levels</span></div>
-  <nav class="mm-navigation" aria-label="Mix navigation"><button class="mm-home" data-action="overview">All Mixes</button><div class="mm-mix-tabs" hidden></div><div class="mm-heading"><span class="mm-kicker"></span><strong class="mm-title"></strong></div><div class="mm-group-switches" aria-label="Switch group" hidden></div><div class="mm-local-tabs"><button data-mode="groups">Groups</button><button data-mode="eq">Mix EQ</button><button data-action="edit-groups" aria-label="Edit group">Edit Group</button></div><button class="mm-collapse" data-action="collapse" hidden>← Groups</button></nav>
+  <nav class="mm-navigation" aria-label="Mix navigation"><button class="mm-home" data-action="overview">All Mixes</button><div class="mm-mix-tabs" hidden></div><div class="mm-heading"><span class="mm-kicker"></span><strong class="mm-title"></strong></div><div class="mm-group-switches" aria-label="Switch group" hidden></div><div class="mm-local-tabs"><button data-mode="eq">Mix EQ</button><button data-action="edit-groups" aria-label="Edit groups">Edit Groups</button></div><button class="mm-collapse" data-action="collapse" hidden>← Groups</button></nav>
   <section class="mm-content" aria-label="Mixer surface"></section>
   <footer class="mm-bottom"><button class="mm-desk" data-action="desks">● Desk A · 192.168.0.60</button><span class="mm-dirty">Snapshot saved</span><span class="mm-rec-state">MTK stopped</span><span class="mm-page-state"></span></footer>
   <div class="mm-layer" hidden><section class="mm-dialog" role="dialog" aria-modal="true" aria-labelledby="mm-dialog-title"><div class="mm-dialog-head"><h3 id="mm-dialog-title"></h3><button data-action="close-dialog" aria-label="Close dialog">Close ×</button></div><div class="mm-dialog-body"></div></section></div>
@@ -197,14 +197,23 @@
 @media(orientation:portrait){html,body{height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}}
 @media(max-width:360px){#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation .mm-heading{flex:1}#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{flex:1 0 100%;width:100%}}
 #mixmate-iem-concept .mm-group-switches>button:first-child{margin-inline-start:auto}
+
+/* Portrait: two header rows, with every shortcut visible rather than clipped. */
+#mixmate-iem-concept[data-orientation="portrait"] .mm-top{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-utilities{flex-wrap:nowrap;gap:4px}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-utilities button{padding:6px;min-height:36px;font-size:11px}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-snapshot{width:100%;min-width:0}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{flex:1 0 100%;width:100%;min-width:0;flex-wrap:wrap;justify-content:flex-end;overflow:visible}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches>button:first-child{margin-inline-start:0}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches>button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
 </style>
 <script>
 (()=>{
 const root=document.getElementById('mixmate-iem-concept'),$=s=>root.querySelector(s),$$=s=>[...root.querySelectorAll(s)];
 const names=['GAV’S','DARA’S','JOHN’S','CARL’S','SPARE'];
 const mixColours=['#6bcbd1','#b6a2ef','#e8bb69','#7aaef0','#e494a7'];
-const channels=['KICK','SNARE','TOM 1','TOM 2','TOM 3','TOM 4','OH L','OH R','BASS L','BASS R','CARL HELIX','JOHN HELIX','CARL VOX','DARA VOX','JOHN VOX','AMBIENCE','CH 17','CH 18','CH 19','CH 20','CH 21','CH 22','CH 23','CH 24','FX 1 REVERB','FX 2 REVERB','FX 3 DELAY','FX 4 ROOM'];
-const groupDefaults=[{name:'DRUMS',members:[0,1,2,3,4,5,6,7]},{name:'GUITARS',members:[8,9,10,11]},{name:'VOCALS',members:[12,13,14]}];
+const channels=['KICK','SNARE','TOM 1','TOM 2','TOM 3','TOM 4','OH L','OH R','BASS','BASS R','CARL GUITAR','JOHN GUITAR','CARL VOX','DARA VOX','JOHN VOX','AMBIENCE','CH 17','CH 18','CH 19','CH 20','CH 21','CH 22','CH 23','CH 24','FX 1 REVERB','FX 2 REVERB','FX 3 DELAY','FX 4 ROOM'];
+const groupDefaults=[{name:'DRUMS',members:[0,1,2,3,4,5,6,7]},{name:'GUITARS',members:[8,10,11]},{name:'VOCALS',members:[12,13,14]}];
 const addresses=['192.168.0.60','192.168.1.60'];
 const clone=o=>JSON.parse(JSON.stringify(o));
 const initial=[-3,-7,-10,-12,-14,-14,-16,-16,-11,-11,-14,-9,-13,-8,-6,-22,-18,-20,-18,-18,-18,-18,-18,-18,-18,-18,-22,-20];
