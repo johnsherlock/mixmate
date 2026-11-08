@@ -1,17 +1,21 @@
 import './style.css';
 import { faderValueToDB } from 'soundcraft-ui-connection';
-import { ReadOnlyConnection } from './protocol.js';
+import { MixerConnection } from './protocol.js';
+import { FaderIntent } from './fader-intent.js';
 
 const $ = id => document.getElementById(id);
 let state = Object.create(null);
 let lastUpdate = null;
 let connectionStatus = 'idle';
 let offlineReady = false;
+let editingChannel = null;
+const faderIntent = new FaderIntent();
+let faderConfirmationTimeout;
 const logs = [];
 function log(message) {
   logs.push(`${new Date().toISOString()} ${message}`);
   if (logs.length > 35) logs.shift();
-  $('diagnostics').textContent = [`Mixmate 0.1.0`, navigator.userAgent, `Origin: ${location.origin}`, `Secure context: ${window.isSecureContext}`, ...logs].join('\n');
+  $('diagnostics').textContent = [`Mixmate 0.2.0`, navigator.userAgent, `Origin: ${location.origin}`, `Secure context: ${window.isSecureContext}`, ...logs].join('\n');
 }
 for (let n = 1; n <= 24; n++) $('channel').add(new Option(`Channel ${String(n).padStart(2, '0')}`, n));
 try { $('address').value = localStorage.getItem('mixmate-address') || '192.168.0.60'; } catch { /* Storage is optional. */ }
@@ -36,7 +40,7 @@ function setStatus(status, detail) {
   $('connect').disabled = active;
   $('disconnect').disabled = !active;
   $('address').disabled = active;
-  if (!active) state = Object.create(null);
+  if (!active) { state = Object.create(null); disarmFader(); }
   renderChannel();
   log(`${status}${detail ? `: ${detail}` : ''}`);
 }
@@ -57,13 +61,27 @@ function renderChannel() {
   const percent = mix === undefined ? 0 : mix * 100;
   $('fader-fill').style.width = `${percent}%`;
   $('fader-cap').style.left = `${percent}%`;
+  const targets = live ? connection.faderTargets(number) : [];
+  const available = targets.length > 0;
+  $('enable-fader').disabled = !available;
+  if (!available) disarmFader();
+  $('fader-control').disabled = !available || !$('enable-fader').checked;
+  if (editingChannel !== number) $('fader-control').value = faderIntent.position(number, mix ?? 0);
+  const sliderDB = faderValueToDB(Number($('fader-control').value));
+  $('fader-control').setAttribute('aria-valuetext', !available ? 'Unavailable' : `${sliderDB === -Infinity ? 'Minus infinity' : sliderDB.toFixed(1)} decibels`);
+  $('fader-target').textContent = !available ? 'Waiting for fader and stereo-link state.' : targets.length === 2 ? `Controls linked channels ${targets.map(i => i + 1).join(' & ')}.` : `Controls input channel ${number}.`;
   document.querySelector('.fader-track').setAttribute('aria-label', mix === undefined ? 'Fader position, unavailable' : `Fader position ${Math.round(percent)} percent`);
 }
 let renderPending = false;
-const connection = new ReadOnlyConnection({
+const connection = new MixerConnection({
   onStatus: setStatus,
   onUpdates: updates => {
-    for (const [key, value] of updates) state[key] = value;
+    for (const [key, value] of updates) {
+      state[key] = value;
+      const fader = /^i\.(\d+)\.mix$/.exec(key);
+      if (fader) faderIntent.confirm(Number(fader[1]) + 1, value);
+    }
+    if (!faderIntent.pending) clearTimeout(faderConfirmationTimeout);
     lastUpdate = Date.now();
     if (!renderPending) {
       renderPending = true;
@@ -86,7 +104,50 @@ $('connect-form').addEventListener('submit', event => {
 });
 $('address').addEventListener('input', () => $('address').setCustomValidity(''));
 $('disconnect').addEventListener('click', () => { connection.disconnect(); setStatus('disconnected'); });
-$('channel').addEventListener('change', renderChannel);
+function disarmFader() {
+  faderIntent.clear();
+  clearTimeout(faderConfirmationTimeout);
+  $('enable-fader').checked = false;
+  $('fader-control').disabled = true;
+  editingChannel = null;
+  $('fader-request').textContent = '';
+}
+$('channel').addEventListener('change', () => { disarmFader(); renderChannel(); });
+$('enable-fader').addEventListener('change', () => {
+  editingChannel = null;
+  faderIntent.clear();
+  clearTimeout(faderConfirmationTimeout);
+  $('fader-request').textContent = '';
+  renderChannel();
+});
+$('fader-control').addEventListener('input', () => {
+  editingChannel = Number($('channel').value);
+  const db = faderValueToDB(Number($('fader-control').value));
+  $('fader-control').setAttribute('aria-valuetext', `${db === -Infinity ? 'Minus infinity' : db.toFixed(1)} decibels`);
+  $('fader-request').textContent = `Release to set ${db === -Infinity ? '−∞' : db.toFixed(1)} dB`;
+});
+$('fader-control').addEventListener('change', () => {
+  const channel = Number($('channel').value);
+  const value = Number($('fader-control').value);
+  if (editingChannel !== channel || !$('enable-fader').checked || connectionStatus !== 'live') return;
+  editingChannel = null;
+  faderIntent.request(channel, value);
+  const sent = connection.setInputFader(channel, value);
+  clearTimeout(faderConfirmationTimeout);
+  if (!sent) disarmFader();
+  else faderConfirmationTimeout = setTimeout(() => {
+    if (!faderIntent.pending) return;
+    faderIntent.clear();
+    $('fader-request').textContent = 'The desk has not confirmed that level. Showing its last reported position.';
+    renderChannel();
+  }, 2500);
+  $('fader-request').textContent = sent ? 'Fader request sent. Readout follows the desk’s reported level.' : 'Not sent. Reconnect and enable fader control again.';
+  renderChannel();
+});
+$('fader-control').addEventListener('pointercancel', () => { editingChannel = null; renderChannel(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { connection.disconnect(); setStatus('disconnected'); }
+});
 window.addEventListener('pagehide', () => { connection.disconnect(); setStatus('disconnected'); });
 setInterval(() => {
   $('last-seen').textContent = connectionStatus === 'live' && lastUpdate
