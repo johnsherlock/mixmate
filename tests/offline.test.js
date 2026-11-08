@@ -53,3 +53,16 @@ test('missing controller, registration failure and malformed response cannot bec
   const failed = setup({ controller: { postMessage(_, ports) { ports[0].deliver({ ready: false }); } } });
   assert.deepEqual(await verifyOfflineCopy(failed.options), { ready: false });
 });
+
+
+test('registration observation happens within the deadline and late registration is ignored', async () => {
+  const registration = { waiting: null }, observed = [];
+  const success = setup({ register: async () => registration });
+  await verifyOfflineCopy({ ...success.options, onRegistration: value => observed.push(value) });
+  assert.deepEqual(observed, [registration]);
+  let resolveRegistration;
+  const late = setup({ register: () => new Promise(resolve => { resolveRegistration = resolve; }) });
+  await assert.rejects(verifyOfflineCopy({ ...late.options, onRegistration: value => observed.push(value) }), /timed out/);
+  resolveRegistration(registration); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(observed.length, 1);
+});

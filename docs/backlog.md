@@ -6,7 +6,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 | Feature | Outcome | Stories | Status |
 | --- | --- | --- | --- |
-| [F01](features/F01.md) | Offline distribution and device compatibility | 5 | In progress |
+| [F01](features/F01.md) | Offline distribution and device compatibility | 6 | In progress |
 | [F02](features/F02.md) | Device-local settings | 3 | Planned |
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Planned |
 | [F04](features/F04.md) | Groups and navigation | 2 | Planned |
@@ -27,7 +27,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 ## Current work
 
-F01-S01, F01-S02 and F01-S02A merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7), [PR #8](https://github.com/johnsherlock/mixmate/pull/8) and [PR #10](https://github.com/johnsherlock/mixmate/pull/10) after passing CI and affirmative Codex review. [F01-S02B](stories/F01-S02B.md) fixes placeholder-only selector labels discovered after the user received mixer state. The installation/device context and offline conditions are not yet established. Device evidence stays in draft [PR #9](https://github.com/johnsherlock/mixmate/pull/9); F01-S03 depends on the corrective stories and remains awaiting hardware results. Eight features now contain 27 sequential stories.
+F01-S01, F01-S02, F01-S02A and F01-S02B merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7), [PR #8](https://github.com/johnsherlock/mixmate/pull/8), [PR #10](https://github.com/johnsherlock/mixmate/pull/10) and [PR #11](https://github.com/johnsherlock/mixmate/pull/11) after passing CI and affirmative Codex review. The user confirms the tablet's verified offline version and named dropdown; [F01-S02C](stories/F01-S02C.md) adds requested version/update notices without interrupting sessions. These are targeted results, not full offline/device qualification. Device evidence stays in draft [PR #9](https://github.com/johnsherlock/mixmate/pull/9); F01-S03 depends on these additions and remains awaiting hardware results. Eight features now contain 28 sequential stories.
 
 
 ## Evidence rules
