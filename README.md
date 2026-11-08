@@ -15,7 +15,7 @@ An offline-first Soundcraft Ui24R connection and input-fader test. It displays c
 7. Changing inputs, disconnecting or hiding the app disables control. Re-enable it for each selected input. No mute, gain, master, routing or scene controls are provided.
 8. Test closing/reopening and device sleep. Reconnect explicitly if the connection drops. Keep the original UI available.
 
-No Mac or internet server is required during use. All app assets are cached on each device; the device connects directly to the mixer. Revisit online for updates. Close all app windows to let a pending update activate. Clearing browser/site data can remove the offline copy. Cache-first launch keeps the installed version stable during a session; allow the update worker to finish downloading online before closing the app.
+No Mac or internet server is required during use. All app assets are cached on each device; the device connects directly to the mixer. Revisit online for updates. Close all app windows to let a pending update activate. Clearing browser/site data can remove the offline copy. Cache-first launch keeps the installed version stable during a session; allow the update worker to finish downloading online before closing the app. Missing or damaged cached files are repaired online only when they match that installed version. If a newer deployment prevents repair, close all app windows and reopen online to finish the update; check offline readiness again.
 
 ## Important compatibility limit
 
@@ -43,7 +43,7 @@ npm run build
 npm run preview
 ```
 
-The production build generates a content-versioned service worker and precaches every emitted asset. Development mode does not generate an offline worker; use the production preview to test offline behavior. GitHub Actions runs tests/builds on PRs and deploys `main` to GitHub Pages. Configure Pages source as **GitHub Actions**.
+The production build generates a content-versioned service worker and precaches every emitted asset with SHA-256 verification. Offline preparation has a 15-second deadline, including worker activation; diagnostics identify the verified worker version. Development mode does not generate an offline worker; use the production preview to test offline behavior. GitHub Actions runs tests/builds on PRs and deploys `main` to GitHub Pages. Configure Pages source as **GitHub Actions**.
 
 ## Review and release
 

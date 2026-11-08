@@ -1,11 +1,36 @@
 const VERSION = '__VERSION__';
 const ASSETS = __ASSETS__;
+const HASHES = __HASHES__;
 const SCOPE = self.registration.scope;
 const PREFIX = `mixmate:${SCOPE}:`;
 const CACHE = `${PREFIX}${VERSION}`;
 const URLS = ASSETS.map(path => new URL(path, SCOPE).href);
+const EXPECTED = new Map(ASSETS.map((path, i) => [URLS[i], HASHES[path]]));
+async function matchesVersion(response, url) {
+  if (!response?.ok || response.redirected) return false;
+  const hash = await crypto.subtle.digest('SHA-256', await response.clone().arrayBuffer());
+  const hex = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+  return hex === EXPECTED.get(url);
+}
+async function download(url) {
+  const response = await fetch(new Request(url, { cache: 'reload', credentials: 'same-origin' }));
+  if (!await matchesVersion(response, url)) throw new Error('Asset does not match this offline version.');
+  return response;
+}
+async function verifiedAsset(cache, url) {
+  const cached = await cache.match(url);
+  if (await matchesVersion(cached, url)) return cached;
+  // Never mix a newer deployment's unversioned HTML/manifest into this cache.
+  const response = await download(url);
+  await cache.put(url, response.clone());
+  return response;
+}
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(URLS)));
+  event.waitUntil((async () => {
+    const responses = await Promise.all(URLS.map(download));
+    const cache = await caches.open(CACHE);
+    await Promise.all(URLS.map((url, i) => cache.put(url, responses[i])));
+  })());
   // Updates wait for existing app windows to close; never replace a live session.
 });
 self.addEventListener('activate', event => {
@@ -23,16 +48,16 @@ self.addEventListener('fetch', event => {
   if (!url.href.startsWith(SCOPE)) return; // Never cache or proxy mixer traffic.
   const target = request.mode === 'navigate' && (url.pathname === new URL(SCOPE).pathname || url.pathname === new URL('index.html', SCOPE).pathname)
     ? new URL('index.html', SCOPE).href : url.href;
-  if (!URLS.includes(target)) return;
-  event.respondWith(caches.open(CACHE).then(async cache => (await cache.match(target)) || fetch(request)));
+  if (!EXPECTED.has(target)) return;
+  event.respondWith(caches.open(CACHE).then(cache => verifiedAsset(cache, target)));
 });
 self.addEventListener('message', event => {
   if (event.data?.type !== 'VERIFY_OFFLINE' || !event.ports[0]) return;
   event.waitUntil((async () => {
     try {
       const cache = await caches.open(CACHE);
-      const complete = (await Promise.all(URLS.map(url => cache.match(url)))).every(Boolean);
-      event.ports[0].postMessage({ ready: complete, version: VERSION });
-    } catch { event.ports[0].postMessage({ ready: false }); }
+      await Promise.all(URLS.map(url => verifiedAsset(cache, url)));
+      event.ports[0].postMessage({ ready: true, version: VERSION });
+    } catch { event.ports[0].postMessage({ ready: false, version: VERSION }); }
   })());
 });
