@@ -190,12 +190,13 @@
 #mixmate-iem-concept .mm-fader-control{position:relative;justify-self:center;min-height:0;height:100%;width:42px;touch-action:auto}
 #mixmate-iem-concept .mm-fader-control>.mm-vertical{pointer-events:none;touch-action:auto}
 #mixmate-iem-concept .mm-fader-hit{position:absolute;left:0;width:42px;height:40px;transform:translateY(-50%);touch-action:none;cursor:ns-resize}
-#mixmate-iem-concept .mm-group-switches{justify-content:flex-end}
-#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{justify-content:flex-end}
+#mixmate-iem-concept .mm-group-switches{justify-content:flex-start}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{justify-content:flex-start}
 #mixmate-iem-concept[data-orientation="portrait"] .mm-app{overflow:visible;height:auto;max-height:none}
 #mixmate-iem-concept[data-orientation="portrait"] .mm-app:fullscreen{height:100dvh;max-height:100dvh;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
 @media(orientation:portrait){html,body{height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}}
 @media(max-width:360px){#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation .mm-heading{flex:1}#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches{flex:1 0 100%;width:100%}}
+#mixmate-iem-concept .mm-group-switches>button:first-child{margin-inline-start:auto}
 </style>
 <script>
 (()=>{
