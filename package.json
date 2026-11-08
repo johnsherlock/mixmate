@@ -6,7 +6,7 @@
   "description": "Offline, Soundcraft Ui24R connection test",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "vite build && node scripts/build-sw.js",
+    "build": "vite build && node scripts/copy-preview.js && node scripts/build-sw.js",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test"
   },
