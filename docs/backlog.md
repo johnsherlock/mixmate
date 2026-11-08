@@ -6,7 +6,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 | Feature | Outcome | Stories | Status |
 | --- | --- | --- | --- |
-| [F01](features/F01.md) | Offline distribution and device compatibility | 3 | In progress |
+| [F01](features/F01.md) | Offline distribution and device compatibility | 4 | In progress |
 | [F02](features/F02.md) | Device-local settings | 3 | Planned |
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Planned |
 | [F04](features/F04.md) | Groups and navigation | 2 | Planned |
@@ -27,7 +27,8 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 ## Current work
 
-F01-S01 merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7) after passing CI and affirmative Codex review. F01-S02 implements verified cache repair, bounded readiness and offline/lifecycle tests; awaiting its story PR review/merge. F01-S03 device evidence follows only after that merge. Eight features contain 25 sequential stories.
+F01-S01 and F01-S02 merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7) and [PR #8](https://github.com/johnsherlock/mixmate/pull/8) after passing CI and affirmative Codex review. Device evidence is in draft [PR #9](https://github.com/johnsherlock/mixmate/pull/9), awaiting user results. A manifest identity defect discovered during those checks adds [F01-S02A](stories/F01-S02A.md) before F01-S03 can complete. It corrects origin-root identity and requires targeted installation retests; the Pixel failure's cause is not yet established. Eight features now contain 26 sequential stories.
+
 
 ## Evidence rules
 
