@@ -1,6 +1,7 @@
 import './style.css';
 import { faderValueToDB } from 'soundcraft-ui-connection';
 import { MixerConnection } from './protocol.js';
+import { FaderIntent } from './fader-intent.js';
 
 const $ = id => document.getElementById(id);
 let state = Object.create(null);
@@ -8,6 +9,8 @@ let lastUpdate = null;
 let connectionStatus = 'idle';
 let offlineReady = false;
 let editingChannel = null;
+const faderIntent = new FaderIntent();
+let faderConfirmationTimeout;
 const logs = [];
 function log(message) {
   logs.push(`${new Date().toISOString()} ${message}`);
@@ -63,8 +66,9 @@ function renderChannel() {
   $('enable-fader').disabled = !available;
   if (!available) disarmFader();
   $('fader-control').disabled = !available || !$('enable-fader').checked;
-  if (editingChannel !== number) $('fader-control').value = mix ?? 0;
-  $('fader-control').setAttribute('aria-valuetext', db === undefined ? 'Unavailable' : `${db === -Infinity ? 'Minus infinity' : db.toFixed(1)} decibels`);
+  if (editingChannel !== number) $('fader-control').value = faderIntent.position(number, mix ?? 0);
+  const sliderDB = faderValueToDB(Number($('fader-control').value));
+  $('fader-control').setAttribute('aria-valuetext', !available ? 'Unavailable' : `${sliderDB === -Infinity ? 'Minus infinity' : sliderDB.toFixed(1)} decibels`);
   $('fader-target').textContent = !available ? 'Waiting for fader and stereo-link state.' : targets.length === 2 ? `Controls linked channels ${targets.map(i => i + 1).join(' & ')}.` : `Controls input channel ${number}.`;
   document.querySelector('.fader-track').setAttribute('aria-label', mix === undefined ? 'Fader position, unavailable' : `Fader position ${Math.round(percent)} percent`);
 }
@@ -72,7 +76,12 @@ let renderPending = false;
 const connection = new MixerConnection({
   onStatus: setStatus,
   onUpdates: updates => {
-    for (const [key, value] of updates) state[key] = value;
+    for (const [key, value] of updates) {
+      state[key] = value;
+      const fader = /^i\.(\d+)\.mix$/.exec(key);
+      if (fader) faderIntent.confirm(Number(fader[1]) + 1, value);
+    }
+    if (!faderIntent.pending) clearTimeout(faderConfirmationTimeout);
     lastUpdate = Date.now();
     if (!renderPending) {
       renderPending = true;
@@ -96,6 +105,8 @@ $('connect-form').addEventListener('submit', event => {
 $('address').addEventListener('input', () => $('address').setCustomValidity(''));
 $('disconnect').addEventListener('click', () => { connection.disconnect(); setStatus('disconnected'); });
 function disarmFader() {
+  faderIntent.clear();
+  clearTimeout(faderConfirmationTimeout);
   $('enable-fader').checked = false;
   $('fader-control').disabled = true;
   editingChannel = null;
@@ -104,12 +115,15 @@ function disarmFader() {
 $('channel').addEventListener('change', () => { disarmFader(); renderChannel(); });
 $('enable-fader').addEventListener('change', () => {
   editingChannel = null;
+  faderIntent.clear();
+  clearTimeout(faderConfirmationTimeout);
   $('fader-request').textContent = '';
   renderChannel();
 });
 $('fader-control').addEventListener('input', () => {
   editingChannel = Number($('channel').value);
   const db = faderValueToDB(Number($('fader-control').value));
+  $('fader-control').setAttribute('aria-valuetext', `${db === -Infinity ? 'Minus infinity' : db.toFixed(1)} decibels`);
   $('fader-request').textContent = `Release to set ${db === -Infinity ? '−∞' : db.toFixed(1)} dB`;
 });
 $('fader-control').addEventListener('change', () => {
@@ -117,9 +131,17 @@ $('fader-control').addEventListener('change', () => {
   const value = Number($('fader-control').value);
   if (editingChannel !== channel || !$('enable-fader').checked || connectionStatus !== 'live') return;
   editingChannel = null;
+  faderIntent.request(channel, value);
   const sent = connection.setInputFader(channel, value);
-  $('fader-request').textContent = sent ? 'Fader request sent. Readout follows the desk’s reported level.' : 'Not sent. Reconnect and enable fader control again.';
+  clearTimeout(faderConfirmationTimeout);
   if (!sent) disarmFader();
+  else faderConfirmationTimeout = setTimeout(() => {
+    if (!faderIntent.pending) return;
+    faderIntent.clear();
+    $('fader-request').textContent = 'The desk has not confirmed that level. Showing its last reported position.';
+    renderChannel();
+  }, 2500);
+  $('fader-request').textContent = sent ? 'Fader request sent. Readout follows the desk’s reported level.' : 'Not sent. Reconnect and enable fader control again.';
   renderChannel();
 });
 $('fader-control').addEventListener('pointercancel', () => { editingChannel = null; renderChannel(); });
