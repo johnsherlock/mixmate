@@ -1,6 +1,6 @@
 # F01 real-device checks
 
-Status: Physical-device checks not run. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
+Status: Partial user-reported Android installation observations; offline and transport checks outstanding. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
 
 ## Current reviewed test build
 
@@ -31,11 +31,14 @@ Have one Android phone/tablet with Chrome, one iPhone with Safari and one iPad w
 
 Use pass / fail / not run / not applicable, with evidence. No mobile support is claimed at baseline. Each installed device must pass offline launch and actual received state without internet; both rig transport rows remain separate.
 
-| Device / browser | Browser online | Installed offline cold launch | Rig .0.60 state | Rig .1.60 state | Hide/sleep/reopen | Permission recovery | Two-release update | Verdict |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Android / Chrome (version pending) | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Unverified |
-| iPhone / Safari (version pending) | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Unverified |
-| iPad / Safari (version pending) | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Unverified |
+| Device / browser | Browser online readiness | Installation / installed online launch | Installed offline cold launch | Rig .0.60 state | Rig .1.60 state | Hide/sleep/reopen | Permission recovery | Two-release update | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Pixel 6 Pro / Chrome (OS/browser versions pending) | Not verified | Blocked: Chrome reports installed/Open; app not found in apps and Open does nothing | Not run | Not run | Not run | Not run | Not run | Not run | Install/launch blocker; cause unknown |
+| Lenovo approximately 9-inch tablet / Chrome (exact model and versions pending) | Not verified | Installation success reported; installed launch not reported | Not run | Not run | Not run | Not run | Not run | Not run | Partial installation evidence only |
+| iPhone / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
+| iPad / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
+
+User report dated 2026-11-08. The app commit and worker version actually running on either Android device have not been confirmed. See [evidence detail](f01-device-evidence.md#user-reported-android-installation-observations). Browser display of an Open action alone does not prove a working installed app. A separate manifest identity defect and follow-up F01-S02A are documented in the [evidence record](f01-device-evidence.md#manifest-identity-follow-up); its relationship to the Pixel symptoms is unproven. Device acceptance will need the reviewed identity-fix deployment before retesting.
 
 ## Copyable evidence record
 

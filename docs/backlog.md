@@ -27,7 +27,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 ## Current work
 
-F01-S01 merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7) and F01-S02 merged in [PR #8](https://github.com/johnsherlock/mixmate/pull/8), each after passing CI and affirmative Codex review. F01-S03 has [bounded desktop transport evidence](f01-device-evidence.md) and is awaiting the [real-device matrix](device-checks.md). Its draft PR and F01 stay incomplete until that gate is resolved; do not start F02. Eight features contain 25 sequential stories.
+F01-S01 merged in [PR #7](https://github.com/johnsherlock/mixmate/pull/7) and F01-S02 merged in [PR #8](https://github.com/johnsherlock/mixmate/pull/8), each after passing CI and affirmative Codex review. F01-S03 has [bounded desktop transport evidence](f01-device-evidence.md) and is awaiting the [real-device matrix](device-checks.md). User reports a Lenovo Chrome tablet installs, while Pixel 6 Pro Chrome offers Open but does not launch; causes and versions remain unverified. iPhone/iPad are unavailable and remain untested. An origin-root manifest identity/test defect is documented separately; F01-S02A will fix it through its own reviewed PR before device acceptance resumes. The Pixel symptom cause is not established. [Draft PR #9](https://github.com/johnsherlock/mixmate/pull/9) and F01 stay incomplete until the device gate is resolved; do not start F02. Eight features contain 25 sequential stories.
 
 ## Evidence rules
 

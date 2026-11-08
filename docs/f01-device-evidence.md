@@ -30,8 +30,25 @@ For `192.168.0.60`, the seven-second window received 468 text frames and no non-
 
 F01-S02's reviewed suite covers asset inventory/subpath, integrity and repair, failed/waiting updates, bounded readiness, and actual app-entry lifecycle using fake browser objects and mixer transports. It does not substitute for browser-engine or physical-device observations. For this documentation draft, `npm test` passed all 26 tests and `npm run build` passed with eight precached assets and the unchanged worker version `79f112fe123a3681`. No test command connected to a real mixer.
 
+## User-reported Android installation observations
+
+Date: 2026-11-08. Provenance: user report in the master chat; no agent-operated device check, exact OS/browser versions, device diagnostics or served app/cache version supplied yet.
+
+- Available phone: Pixel 6 Pro, Chrome. Chrome says the app is already installed and offers Open. The user cannot find it in the phone's apps, and tapping Open does nothing. Record installation/launch as blocked with cause unknown. The separate manifest identity finding below is a candidate contributor, not an established explanation for the phone behavior.
+- Available tablet: an approximately 9-inch Lenovo tablet, Chrome; exact model unknown. The user reports that installation succeeds. Installed online launch, offline launch, local-network permission, actual mixer state and sleep/reopen behavior were not reported and remain unverified.
+- iPhone/iPad devices are unavailable for the current check. Safari rows remain not run; no support target has been removed or compatibility inferred.
+- Source inspection confirms `public/manifest.webmanifest` still has `id`, `start_url` and `scope`, each `./`. No application change is included in this evidence update.
+
+### Manifest identity follow-up
+
+The [W3C manifest processing algorithm](https://www.w3.org/TR/appmanifest/#id-member), steps 4–5, resolves `id` against the start URL's **origin**, not the manifest URL or application scope. Consequently the current `id: "./"` resolves to `https://johnsherlock.github.io/`, while MixMate's launch URL and scope remain `/mixmate/`. This creates an identity collision risk with other installed web apps using that origin-level ID. The current production test resolves `id` against the application scope and therefore does not exercise the browser algorithm correctly.
+
+This is a concrete identity/test defect; it does not prove why the Pixel Open action fails. The master will address it in a separate F01-S02A story from main, with its own PR, tests and affirmative Codex review before merge. Device checks must then identify the updated deployment and account for the old installation identity; do not silently treat old results as validation of a new identity.
+
+The master is providing phone installation/launch troubleshooting separately. Do not treat the tablet installation report as a pass for the complete install-online/use-offline/connect-to-desk workflow.
+
 ## Outstanding physical-device gate
 
-All Android Chrome, iPhone Safari and iPad Safari verdicts remain unverified. The user must run the linked checklist on actual devices and return versions plus results for installation, installed cold offline launch, explicit connection with actual received state, local-network permission, disconnect/sleep/reopen, and update/recovery. Record both rigs separately when available.
+Full Android Chrome, iPhone Safari and iPad Safari compatibility verdicts remain unverified. Android installation evidence is partial; Pixel installed launch is currently blocked, while both Safari device classes are unavailable. The user must run the linked checklist on actual devices and return versions plus results for installation, installed cold offline launch, explicit connection with actual received state, local-network permission, disconnect/sleep/reopen, and update/recovery. Record both rigs separately when available.
 
 Do not merge F01-S03 or mark F01 complete merely because this Node check succeeded or the draft PR passes review. If a browser blocks direct HTTPS-to-local-WebSocket transport, document the exact result and bring an explicit distribution/transport decision to the user. Do not weaken browser security, change mixer/router settings or silently drop a support target.
