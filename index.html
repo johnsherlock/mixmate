@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101715" />
-  <meta name="description" content="Take Mixmate offline and test a read-only connection to your Soundcraft Ui24R." />
+  <meta name="description" content="Take Mixmate offline and test a mixer connection to your Soundcraft Ui24R." />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.webmanifest" />
@@ -19,21 +19,21 @@
       <section class="intro"><p class="eyebrow">YOUR MIX. A DIFFERENT VIEW.</p><h1>Meet your desk.<br><span>Without the cables.</span></h1><p class="lede">A small first step towards your own mixer interface. Save it now. Take it to rehearsal. See what connects.</p></section>
       <div class="workspace">
         <section class="panel connection" aria-labelledby="connect-title">
-          <div class="panel-heading"><span class="step">01</span><h2 id="connect-title">Find your mixer</h2><span class="badge">READ ONLY</span></div>
+          <div class="panel-heading"><span class="step">01</span><h2 id="connect-title">Find your mixer</h2><span class="badge">FADER TEST</span></div>
           <p>Join the desk’s Wi-Fi, then connect. Allow local network access if your device asks.</p>
           <form id="connect-form"><label for="address">Mixer IP address</label><div class="address-line"><input id="address" name="address" inputmode="decimal" autocomplete="off" spellcheck="false" value="192.168.0.60" required aria-describedby="address-help" /><button id="connect" type="submit">Connect <span aria-hidden="true">↗</span></button></div><p id="address-help" class="hint">Use the LAN address shown in the mixer’s network settings.</p></form>
           <div class="status-block" role="status" aria-live="polite"><span id="status-dot" class="status-dot"></span><div><strong id="status-title">Ready when you are</strong><p id="status-detail">No connection started. Your desk stays as it is.</p></div></div>
           <div class="connection-footer"><span id="last-seen">Waiting for live state</span><button id="disconnect" class="text-button" disabled>Disconnect</button></div>
         </section>
         <section class="panel channel-panel" aria-labelledby="channel-title">
-          <div class="panel-heading"><span class="step">02</span><h2 id="channel-title">Listen to the desk</h2></div>
+          <div class="panel-heading"><span class="step">02</span><h2 id="channel-title">Your channel</h2></div>
           <div class="channel-select"><label for="channel">Input channel</label><select id="channel" aria-label="Input channel"></select></div>
           <div id="channel-display" class="channel-display" data-stale="true"><div class="channel-top"><span id="channel-number">CH 01</span><span id="mute" class="mute">MUTE —</span></div><h3 id="channel-name">Waiting for a name</h3><div class="fader-readout"><span id="fader">—</span><span class="unit">dB</span></div><div class="fader-track" role="img" aria-label="Fader position, unavailable"><div id="fader-fill"></div><div id="fader-cap"></div></div><div class="scale"><span>−∞</span><span>FADER POSITION</span><span>+10</span></div></div>
-          <p class="hint">Display only. Move a fader in the original mixer UI to check that this view follows.</p>
+          <div class="fader-controls"><label class="enable-control"><input id="enable-fader" type="checkbox" disabled /> Enable fader control</label><p id="fader-target" class="hint">Waiting for fader and stereo-link state.</p><label for="fader-control">Input fader level</label><input id="fader-control" type="range" min="0" max="1" step="0.001" value="0" disabled aria-describedby="fader-target fader-request" /><p class="hint">Release the slider to send. The readout above follows the desk. Linked inputs move together.</p><p id="fader-request" class="hint" role="status" aria-live="polite"></p></div>
         </section>
         <section class="panel offline-panel" aria-labelledby="offline-title"><div class="panel-heading"><span class="step">03</span><h2 id="offline-title">Take it offline</h2></div><div class="offline-heading"><span id="offline-icon" aria-hidden="true">↓</span><div><strong id="offline-status" role="status">Preparing offline copy…</strong><p id="offline-detail">Keep this page open while the app files are saved.</p></div></div><button id="install" class="secondary-button" hidden>Install Mixmate</button><ol class="instructions"><li><strong>Save while online.</strong> Android: browser menu → Install app. iPhone / iPad: Safari → Share → Add to Home Screen.</li><li><strong>Open the saved app once.</strong> Check it says “Saved for offline use” before leaving internet access.</li><li><strong>Join Swissonic Wi-Fi.</strong> Keep the Wi-Fi connection when your device says it has no internet, then open Mixmate.</li></ol><p class="hint">Installation saves the interface. Connection support depends on your browser; iPhone and iPad compatibility is still being tested.</p></section>
       </div>
-      <details class="panel diagnostics"><summary>Connection notes & diagnostics <span aria-hidden="true">+</span></summary><p>The mixer uses an unencrypted local WebSocket. Some browsers block this from an HTTPS app, even after installation. A failed connection does not change the mixer. Try allowing local network access; no internet or account is needed at rehearsal.</p><p>This test sends only a state request and connection keepalives. It does not send channel controls, change network settings, play audio, or recall scenes.</p><button id="copy-diagnostics" class="text-button">Copy diagnostics</button><p id="copy-result" class="hint" role="status"></p><pre id="diagnostics" aria-label="Diagnostic log"></pre></details>
+      <details class="panel diagnostics"><summary>Connection notes & diagnostics <span aria-hidden="true">+</span></summary><p>The mixer uses an unencrypted local WebSocket. Some browsers block this from an HTTPS app, even after installation. A failed connection does not change the mixer. Try allowing local network access; no internet or account is needed at rehearsal.</p><p>Fader control sends input level changes only after you enable it and release the slider. Channel selection, connecting and enabling control do not move faders. Changing channel, disconnecting or hiding the app disables control. No mute, gain, routing, scene or network changes are sent.</p><button id="copy-diagnostics" class="text-button">Copy diagnostics</button><p id="copy-result" class="hint" role="status"></p><pre id="diagnostics" aria-label="Diagnostic log"></pre></details>
     </main>
     <footer><span>MIXMATE / EARLY EXPERIMENT</span><a href="https://github.com/johnsherlock/mixmate" target="_blank" rel="noopener noreferrer">Source & feedback ↗</a></footer>
   </div>

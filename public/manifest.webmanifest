@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Mixmate — Mixer connection test",
   "short_name": "Mixmate",
-  "description": "An offline, read-only connection test for your Soundcraft Ui24R.",
+  "description": "An offline, connection and input-fader test for your Soundcraft Ui24R.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

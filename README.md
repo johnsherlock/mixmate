@@ -1,6 +1,6 @@
 # Mixmate
 
-An offline-first, **read-only** connection test for a Soundcraft Ui24R. It displays an input channel’s name, mute state and fader position. It does not control audio or change mixer settings.
+An offline-first Soundcraft Ui24R connection and input-fader test. It displays channel names, mute states and fader positions, and lets you explicitly enable level control for the selected input. Fader changes affect the real desk.
 
 **App:** https://johnsherlock.github.io/mixmate/
 
@@ -11,8 +11,9 @@ An offline-first, **read-only** connection test for a Soundcraft Ui24R. It displ
 3. Open the installed app once while online and check offline readiness there too.
 4. Close it, turn off mobile data and disconnect internet, but leave Wi-Fi enabled. Join the Swissonic router’s Wi-Fi. Keep this connection if the phone warns it has no internet.
 5. Reopen Mixmate, enter the mixer’s private LAN IPv4 address (default `192.168.0.60`), and tap Connect. Allow local network access if asked.
-6. Select an input. Change its name/fader/mute using the original Soundcraft UI and check Mixmate follows. Mixmate’s display has no controls that write to the mixer.
-7. Test closing/reopening and device sleep. Reconnect explicitly if the connection drops. Keep the original UI available.
+6. Select an input and check Mixmate follows changes from the original Soundcraft UI. To send a level, check **Enable fader control**, adjust the slider, and release it (keyboard changes also send). The readout follows the desk’s reported level; the slider sends once per committed change. Stereo-linked inputs move together.
+7. Changing inputs, disconnecting or hiding the app disables control. Re-enable it for each selected input. No mute, gain, master, routing or scene controls are provided.
+8. Test closing/reopening and device sleep. Reconnect explicitly if the connection drops. Keep the original UI available.
 
 No Mac or internet server is required during use. All app assets are cached on each device; the device connects directly to the mixer. Revisit online for updates. Close all app windows to let a pending update activate. Clearing browser/site data can remove the offline copy. Cache-first launch keeps the installed version stable during a session; allow the update worker to finish downloading online before closing the app.
 
@@ -24,7 +25,9 @@ If connection fails, expand diagnostics and copy the result. It includes the bro
 
 ## Protocol and scope
 
-`src/protocol.js` implements the small Socket.IO 0.9 text-frame subset used by the mixer. Outbound messages are hardcoded: `3:::INIT` (request current state), `3:::ALIVE` (keepalive), and `2::` (heartbeat response). It only reads `i.0`–`i.23` name/mix/mute updates. No `SETD`, `SETS`, clock-setting or control messages are sent. The third-party `soundcraft-ui-connection` library supplies the fader-to-dB conversion, not its connection or control facade.
+`src/protocol.js` implements the small Socket.IO 0.9 text-frame subset used by the mixer. Connection messages are `3:::INIT` (request current state), `3:::ALIVE` (keepalive), and `2::` (heartbeat response). The only parameter write is a validated `3:::SETD^i.<0..23>.mix^<0..1>` input fader level. Writes require the current socket to be open with received fader and stereo-link state, and are never queued or retried. Linked channels require reciprocal link metadata and both received levels; both faders are written as the standard client does.
+
+Incoming name/mix/mute/stereoIndex state never triggers a write. No mute, gain, master, routing, scene, clock or network writes exist. The third-party `soundcraft-ui-connection` library supplies the fader-to-dB conversion, not its connection or control facade. Automated write tests use fake sockets and must not move real faders.
 
 Reference: [community protocol documentation](https://fmalcher.github.io/soundcraft-ui/more/howitworks). Mixmate is an independent experiment, not a Soundcraft product.
 
