@@ -46,6 +46,11 @@ function setStatus(status, detail) {
   log(`${status}${detail ? `: ${detail}` : ''}`);
 }
 function renderChannel() {
+  for (const option of $('channel').options) {
+    const label = `Channel ${option.value.padStart(2, '0')}`;
+    const name = connectionStatus === 'live' ? state[`i.${Number(option.value) - 1}.name`] : undefined;
+    option.textContent = name ? `${label} — ${name}` : label;
+  }
   const number = Number($('channel').value);
   const prefix = `i.${number - 1}.`;
   const live = connectionStatus === 'live';

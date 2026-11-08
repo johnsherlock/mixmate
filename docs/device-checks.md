@@ -1,10 +1,10 @@
 # F01 real-device checks
 
-Status: Partial user-reported Android installation observations; offline and transport checks outstanding. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
+Status: Partial Android installation reports plus received state on an unconfirmed installed-app platform/context; full mobile/offline checks outstanding. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
 
 ## Current reviewed test build
 
-The current reviewed target is manifest identity-fix commit `e837c27fcca41dc4f44f61608510866eec8762e9` ([PR #10](https://github.com/johnsherlock/mixmate/pull/10)), offline worker/cache version `918ce3138bb4cf16`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42521695422) succeeded, and the master confirmed the live manifest serves `id: "mixmate/"`. Targeted retesting can proceed. The earlier S02 deployment used worker `79f112fe123a3681` and does not validate the new identity.
+The current reviewed target is selector-correction commit `97d005a41feeba91fefbbee054193d63486a8888` ([PR #11](https://github.com/johnsherlock/mixmate/pull/11)), offline worker/cache version `917e3ba9d64587ec`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42524260873) succeeded and the master confirmed the served worker version. Targeted selector and device retests can proceed. The identity-fix deployment used worker `918ce3138bb4cf16`, and the earlier S02 build used `79f112fe123a3681`; results do not silently transfer between these builds.
 
 Once deployed, open online, allow any waiting update to download, close all MixMate windows/tabs and reopen before testing. Follow the targeted migration/reinstall cautions in [F01-S02A](stories/F01-S02A.md#migration-and-device-gate): remove only an identifiable MixMate installation, never unrelated apps or browser data. Record the verified worker version from diagnostics when available; do not assume an existing icon uses the latest identity/build.
 
@@ -40,7 +40,13 @@ Use pass / fail / not run / not applicable, with evidence. No mobile support is 
 | iPhone / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
 | iPad / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
 
-User report dated 2026-11-08. The app commit and worker version actually running on either Android device have not been confirmed. See [evidence detail](f01-device-evidence.md#user-reported-android-installation-observations). Browser display of an Open action alone does not prove a working installed app. The manifest identity defect and merged correction F01-S02A are documented in the [evidence record](f01-device-evidence.md#manifest-identity-follow-up); its relationship to the Pixel symptoms is unproven. Device acceptance needs targeted retests against the reviewed identity-fix deployment; no such retest is reported yet.
+User report dated 2026-11-08. The app commit and worker version actually running on either Android device have not been confirmed. See [evidence detail](f01-device-evidence.md#user-reported-android-installation-observations). Browser display of an Open action alone does not prove a working installed app. The manifest identity defect and merged correction F01-S02A are documented in the [evidence record](f01-device-evidence.md#manifest-identity-follow-up); its relationship to the Pixel symptoms is unproven. Device acceptance needs targeted retests against the current reviewed deployment; no platform-specific offline or selector-fix retest is reported yet.
+
+## Additional user report with platform/context unconfirmed
+
+The user confirmed that a router-reachability incident was resolved by moving the cable to the correct Ethernet port on the desk. An installed app described as a “desktop app” now connects and displays an actual received channel name, while the input dropdown displayed placeholders. A follow-up answer did not establish whether this meant the Lenovo home-screen installation or a computer installation. Record actual received state as reported, but do not assign it to a device/rig matrix cell or infer internet was unavailable. No actual channel name is stored here.
+
+F01-S02B has corrected the selector labels from current-socket state, with `textContent`, clearing on disconnect and no write behavior. The user has not retested the correction yet. Exact device/OS/browser/context, served worker version and offline conditions still need confirmation.
 
 ## Copyable evidence record
 

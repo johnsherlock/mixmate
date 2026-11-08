@@ -24,13 +24,15 @@ For `192.168.0.60`, the seven-second window received 468 text frames and no non-
 
 ## Reviewed deployment for physical checks
 
-The current reviewed target is manifest identity-fix merge `e837c27fcca41dc4f44f61608510866eec8762e9` ([PR #10](https://github.com/johnsherlock/mixmate/pull/10)), offline worker/cache version `918ce3138bb4cf16`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42521695422) succeeded, and the master confirmed the live manifest serves `id: "mixmate/"`. No device retest against it is reported.
+The current reviewed target is selector-correction merge `97d005a41feeba91fefbbee054193d63486a8888` ([PR #11](https://github.com/johnsherlock/mixmate/pull/11)), offline worker/cache version `917e3ba9d64587ec`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42524260873) succeeded and the master confirmed served worker `917e3ba9d64587ec`. No selector-fix device retest is reported.
+
+The prior identity-fix merge `e837c27fcca41dc4f44f61608510866eec8762e9` ([PR #10](https://github.com/johnsherlock/mixmate/pull/10)), worker `918ce3138bb4cf16`, was [deployed](https://github.com/johnsherlock/mixmate/actions/runs/42521695422), and the master confirmed its live manifest served `id: "mixmate/"`. That establishes deployment only, not a device compatibility verdict.
 
 The earlier [S02 GitHub Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42517375756) succeeded for `3f93d3308e2da63a9bd3f307a99d8cf109ec74aa`, worker `79f112fe123a3681`. That historical deployment remains the source baseline for the Node observations above, not the current device acceptance target. Deployment success is not a device result.
 
 ## Automated evidence
 
-F01-S02's reviewed suite covers asset inventory/subpath, integrity and repair, failed/waiting updates, bounded readiness, and actual app-entry lifecycle using fake browser objects and mixer transports. It does not substitute for browser-engine or physical-device observations. Before the identity correction, this documentation draft passed 26 tests and built eight assets at worker `79f112fe123a3681`. After merging the reviewed identity correction, `npm test` passed all 26 tests and `npm run build` passed with eight precached assets and worker version `918ce3138bb4cf16`. No test command connected to a real mixer.
+F01-S02's reviewed suite covers asset inventory/subpath, integrity and repair, failed/waiting updates, bounded readiness, and actual app-entry lifecycle using fake browser objects and mixer transports. It does not substitute for browser-engine or physical-device observations. Before the identity correction, this documentation draft passed 26 tests and built eight assets at worker `79f112fe123a3681`. After merging the reviewed identity correction, 26 tests and the build passed at worker `918ce3138bb4cf16`. After merging the reviewed selector correction, `npm test` passed all 27 tests and `npm run build` passed with eight precached assets and worker version `917e3ba9d64587ec`. No test command connected to a real mixer.
 
 ## User-reported Android installation observations
 
@@ -49,8 +51,16 @@ This was a concrete identity/test defect; it does not prove why the Pixel Open a
 
 The master is providing phone installation/launch troubleshooting separately. Do not treat the tablet installation report as a pass for the complete install-online/use-offline/connect-to-desk workflow.
 
+## User-reported connectivity and selector follow-up
+
+Date: 2026-11-08. Provenance: user report in the master chat. A router-reachability incident was resolved by moving the cable to the correct Ethernet port on the desk; the user confirmed recovery. No mixer/router configuration change by an agent was involved.
+
+The user then reported an installed “desktop app” connects and displays an actual received channel name, while the input dropdown still showed numbered placeholders. A follow-up asking whether this was the tablet home-screen app or a computer installation received an ambiguous “Yes”; platform and installation context are still unconfirmed. Mixer address, OS/browser versions, served worker version and offline conditions were not established. Retain this as reported actual state receipt on an unconfirmed context, not a mobile/offline pass. No actual received channel name is recorded.
+
+[F01-S02B](stories/F01-S02B.md) corrected selector labels using received names from the current socket, rendered through `textContent`, cleared on disconnect/new session and without changing writes. [PR #11](https://github.com/johnsherlock/mixmate/pull/11) merged at `97d005a41feeba91fefbbee054193d63486a8888` after CI passed and [Codex affirmatively reviewed](https://github.com/johnsherlock/mixmate/pull/11#issuecomment-6727210297) final head `280c708`. This draft integrates main; no new application edits or mixer access are added here. User retest of selector labels remains pending.
+
 ## Outstanding physical-device gate
 
-Full Android Chrome, iPhone Safari and iPad Safari compatibility verdicts remain unverified. Android installation evidence is partial; Pixel installed launch is currently blocked, while both Safari device classes are unavailable. The user must run the linked checklist on actual devices and return versions plus results for installation, installed cold offline launch, explicit connection with actual received state, local-network permission, disconnect/sleep/reopen, and update/recovery. Record both rigs separately when available.
+Full Android Chrome, iPhone Safari and iPad Safari compatibility verdicts remain unverified. Android installation evidence is partial; Pixel installed launch is currently blocked, while both Safari device classes are unavailable. The unconfirmed installed-app state receipt does not fill any platform-specific offline matrix cell. The user must run the linked checklist on actual devices and return versions plus results for installation, installed cold offline launch, explicit connection with actual received state, local-network permission, disconnect/sleep/reopen, and update/recovery. Record both rigs separately when available.
 
 Do not merge F01-S03 or mark F01 complete merely because this Node check succeeded or the draft PR passes review. If a browser blocks direct HTTPS-to-local-WebSocket transport, document the exact result and bring an explicit distribution/transport decision to the user. Do not weaken browser security, change mixer/router settings or silently drop a support target.
