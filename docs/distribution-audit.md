@@ -12,7 +12,7 @@ Offline launch and mixer transport are separate acceptance gates. A cached inter
 
 | Area | Source evidence at baseline | Limit / follow-up |
 | --- | --- | --- |
-| Installation | `public/manifest.webmanifest` has relative ID/start URL/scope, standalone display, 192/512 PNG icons. `index.html` links manifest and Apple touch icon. | Real Chrome install and Safari Add to Home Screen require device checks. Verify browser and installed contexts separately. |
+| Installation | Baseline manifest has `id: "./"`, relative start URL/scope, standalone display and 192/512 PNG icons. `index.html` links manifest and Apple touch icon. | Correction discovered in S03: ID resolves against the start URL origin, so baseline ID is the origin root, not `/mixmate/`. See S02A below. Real Chrome install and Safari Add to Home Screen still require device checks. |
 | Relative deployment | Vite `base: './'`; manifest paths relative; worker registered as `./sw.js` with scope `./`. | No automated production subpath test currently proves `/mixmate/` resolution. Add in S02. |
 | Bundled assets | Build runs Vite, copies standalone mockup, then enumerates all emitted files except `sw.js`. | Current build emits eight precached assets: HTML, JS, CSS, manifest, SVG, two PNGs and mockup. Add an exact emitted-file inventory check, including future nested assets. |
 | Cache version | `scripts/build-sw.js` hashes paths and contents into a 16-character version. | Add deterministic generation/content-change tests. |
@@ -53,3 +53,11 @@ F01-S02 adds per-asset SHA-256 expectations to the generated worker and includes
 Offline preparation now has one 15-second deadline covering registration, activation and cache verification. Late attempts cannot override a newer controller verification, and diagnostics record the worker/cache version. This deadline bounds the user-facing result; it cannot cancel a browser-owned registration or worker download already in progress.
 
 `npm test` passes 26 tests, including a real local Vite production build/inventory/subpath check, worker VM tests for install/repair/corruption/failure/waiting-update isolation and fake DOM/socket execution of the actual app entry for hide/pagehide/disarm/clear/reopen/no reconnect. `npm run build` passes with eight precached assets, worker version `79f112fe123a3681`. These are local automated evidence, not browser-engine or phone/tablet results. All S03 verdicts remain unverified.
+
+## S02A manifest identity correction
+
+Device checks exposed an incorrect audit/test assumption: manifest `id` does not resolve like `start_url` and `scope`. The [W3C ID processing algorithm](https://www.w3.org/TR/appmanifest/#id-member) resolves it against the start URL's origin (steps 4–5). The old `"./"` consequently identifies `https://johnsherlock.github.io/`. The S02 test wrongly resolved it against `/mixmate/`, masking this root-identity collision risk.
+
+[F01-S02A](stories/F01-S02A.md) sets `id: "mixmate/"` and adds a specification-based regression. It leaves the relative start URL, scope and runtime asset paths intact. This intentionally changes the installed app identity to `https://johnsherlock.github.io/mixmate/`; browsers honoring ID may treat it as a separate app. Existing MixMate installations may need a targeted uninstall/reinstall after deployment, with installation-local data considered before removal. Never clear all browser data or uninstall an unrelated app to resolve a possible identity collision.
+
+The user reports Pixel 6 Pro Chrome says already installed / Open, but no app can be found and Open does nothing; Lenovo 9-inch Chrome installs successfully. These are partial installation observations without version/offline/live results. The defect is confirmed; its connection to the Pixel failure remains a hypothesis pending retest and Android app/WebAPK identity evidence. All previous mobile support gates remain open.

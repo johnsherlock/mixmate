@@ -24,26 +24,28 @@ For `192.168.0.60`, the seven-second window received 468 text frames and no non-
 
 ## Reviewed deployment for physical checks
 
-[GitHub Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42517375756) succeeded for commit `3f93d3308e2da63a9bd3f307a99d8cf109ec74aa`, offline worker/cache version `79f112fe123a3681`. This is the current reviewed target build for the user checklist. Deployment success is not a device result.
+The current reviewed target is manifest identity-fix merge `e837c27fcca41dc4f44f61608510866eec8762e9` ([PR #10](https://github.com/johnsherlock/mixmate/pull/10)), offline worker/cache version `918ce3138bb4cf16`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42521695422) succeeded, and the master confirmed the live manifest serves `id: "mixmate/"`. No device retest against it is reported.
+
+The earlier [S02 GitHub Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42517375756) succeeded for `3f93d3308e2da63a9bd3f307a99d8cf109ec74aa`, worker `79f112fe123a3681`. That historical deployment remains the source baseline for the Node observations above, not the current device acceptance target. Deployment success is not a device result.
 
 ## Automated evidence
 
-F01-S02's reviewed suite covers asset inventory/subpath, integrity and repair, failed/waiting updates, bounded readiness, and actual app-entry lifecycle using fake browser objects and mixer transports. It does not substitute for browser-engine or physical-device observations. For this documentation draft, `npm test` passed all 26 tests and `npm run build` passed with eight precached assets and the unchanged worker version `79f112fe123a3681`. No test command connected to a real mixer.
+F01-S02's reviewed suite covers asset inventory/subpath, integrity and repair, failed/waiting updates, bounded readiness, and actual app-entry lifecycle using fake browser objects and mixer transports. It does not substitute for browser-engine or physical-device observations. Before the identity correction, this documentation draft passed 26 tests and built eight assets at worker `79f112fe123a3681`. After merging the reviewed identity correction, `npm test` passed all 26 tests and `npm run build` passed with eight precached assets and worker version `918ce3138bb4cf16`. No test command connected to a real mixer.
 
 ## User-reported Android installation observations
 
 Date: 2026-11-08. Provenance: user report in the master chat; no agent-operated device check, exact OS/browser versions, device diagnostics or served app/cache version supplied yet.
 
-- Available phone: Pixel 6 Pro, Chrome. Chrome says the app is already installed and offers Open. The user cannot find it in the phone's apps, and tapping Open does nothing. Record installation/launch as blocked with cause unknown. The separate manifest identity finding below is a candidate contributor, not an established explanation for the phone behavior.
-- Available tablet: an approximately 9-inch Lenovo tablet, Chrome; exact model unknown. The user reports that installation succeeds. Installed online launch, offline launch, local-network permission, actual mixer state and sleep/reopen behavior were not reported and remain unverified.
+- Available phone: Pixel 6 Pro, Chrome. Chrome says the app is already installed and offers Open. The user cannot find it in the phone's apps, and tapping Open does nothing. The user subsequently confirmed MixMate is absent from `chrome://webapks`; Android Settings Apps results are still not supplied. Record installation/launch as blocked with cause unknown. The separate manifest identity finding below is a candidate contributor, not an established explanation for the phone behavior.
+- Available tablet: an approximately 9-inch Lenovo tablet, Chrome; exact model unknown. The user reported installation succeeds before the identity correction. This does not establish the corrected identity installs or launches. Installed online launch, offline launch, local-network permission, actual mixer state and sleep/reopen behavior were not reported and remain unverified.
 - iPhone/iPad devices are unavailable for the current check. Safari rows remain not run; no support target has been removed or compatibility inferred.
-- Source inspection confirms `public/manifest.webmanifest` still has `id`, `start_url` and `scope`, each `./`. No application change is included in this evidence update.
+- Source after the reviewed F01-S02A merge has `id: "mixmate/"`; `start_url` and `scope` remain `./`. This evidence branch only integrates reviewed main changes and documentation; it adds no new application edits.
 
 ### Manifest identity follow-up
 
-The [W3C manifest processing algorithm](https://www.w3.org/TR/appmanifest/#id-member), steps 4–5, resolves `id` against the start URL's **origin**, not the manifest URL or application scope. Consequently the current `id: "./"` resolves to `https://johnsherlock.github.io/`, while MixMate's launch URL and scope remain `/mixmate/`. This creates an identity collision risk with other installed web apps using that origin-level ID. The current production test resolves `id` against the application scope and therefore does not exercise the browser algorithm correctly.
+The [W3C manifest processing algorithm](https://www.w3.org/TR/appmanifest/#id-member), steps 4–5, resolves `id` against the start URL's **origin**, not the manifest URL or application scope. Consequently the previous `id: "./"` resolved to `https://johnsherlock.github.io/`, while MixMate's launch URL and scope remain `/mixmate/`. This created an identity collision risk with other installed web apps using that origin-level ID. The previous production test resolved `id` against the application scope and therefore did not exercise the browser algorithm correctly.
 
-This is a concrete identity/test defect; it does not prove why the Pixel Open action fails. The master will address it in a separate F01-S02A story from main, with its own PR, tests and affirmative Codex review before merge. Device checks must then identify the updated deployment and account for the old installation identity; do not silently treat old results as validation of a new identity.
+This was a concrete identity/test defect; it does not prove why the Pixel Open action fails. [F01-S02A](stories/F01-S02A.md) corrected the ID to `mixmate/` and fixed the regression test in [PR #10](https://github.com/johnsherlock/mixmate/pull/10), merged after passing CI and affirmative Codex review. This draft merged main without rebasing or force-pushing. Device checks must identify the updated deployment and account for the old installation identity; old results do not validate the new identity. No Pixel or Lenovo retest has been reported.
 
 The master is providing phone installation/launch troubleshooting separately. Do not treat the tablet installation report as a pass for the complete install-online/use-offline/connect-to-desk workflow.
 

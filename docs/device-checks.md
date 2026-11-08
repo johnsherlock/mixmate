@@ -4,7 +4,9 @@ Status: Partial user-reported Android installation observations; offline and tra
 
 ## Current reviewed test build
 
-The [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42517375756) of commit `3f93d3308e2da63a9bd3f307a99d8cf109ec74aa` succeeded. Its offline worker/cache version is `79f112fe123a3681`. Open online, allow any waiting update to download, close all MixMate windows/tabs and reopen the home-screen app before testing. Record the verified worker version from diagnostics when available; do not assume the icon launches the latest deployment.
+The current reviewed target is manifest identity-fix commit `e837c27fcca41dc4f44f61608510866eec8762e9` ([PR #10](https://github.com/johnsherlock/mixmate/pull/10)), offline worker/cache version `918ce3138bb4cf16`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42521695422) succeeded, and the master confirmed the live manifest serves `id: "mixmate/"`. Targeted retesting can proceed. The earlier S02 deployment used worker `79f112fe123a3681` and does not validate the new identity.
+
+Once deployed, open online, allow any waiting update to download, close all MixMate windows/tabs and reopen before testing. Follow the targeted migration/reinstall cautions in [F01-S02A](stories/F01-S02A.md#migration-and-device-gate): remove only an identifiable MixMate installation, never unrelated apps or browser data. Record the verified worker version from diagnostics when available; do not assume an existing icon uses the latest identity/build.
 
 ## Safety and setup
 
@@ -33,12 +35,12 @@ Use pass / fail / not run / not applicable, with evidence. No mobile support is 
 
 | Device / browser | Browser online readiness | Installation / installed online launch | Installed offline cold launch | Rig .0.60 state | Rig .1.60 state | Hide/sleep/reopen | Permission recovery | Two-release update | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Pixel 6 Pro / Chrome (OS/browser versions pending) | Not verified | Blocked: Chrome reports installed/Open; app not found in apps and Open does nothing | Not run | Not run | Not run | Not run | Not run | Not run | Install/launch blocker; cause unknown |
-| Lenovo approximately 9-inch tablet / Chrome (exact model and versions pending) | Not verified | Installation success reported; installed launch not reported | Not run | Not run | Not run | Not run | Not run | Not run | Partial installation evidence only |
+| Pixel 6 Pro / Chrome (OS/browser versions pending) | Not verified | Blocked: Chrome reports installed/Open; app not found and Open does nothing; absent from chrome://webapks; Settings Apps result pending | Not run | Not run | Not run | Not run | Not run | Not run | Install/launch blocker; cause unknown |
+| Lenovo approximately 9-inch tablet / Chrome (exact model and versions pending) | Not verified | Installation success reported before identity fix; corrected-identity install/launch not tested | Not run | Not run | Not run | Not run | Not run | Not run | Partial installation evidence only |
 | iPhone / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
 | iPad / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
 
-User report dated 2026-11-08. The app commit and worker version actually running on either Android device have not been confirmed. See [evidence detail](f01-device-evidence.md#user-reported-android-installation-observations). Browser display of an Open action alone does not prove a working installed app. A separate manifest identity defect and follow-up F01-S02A are documented in the [evidence record](f01-device-evidence.md#manifest-identity-follow-up); its relationship to the Pixel symptoms is unproven. Device acceptance will need the reviewed identity-fix deployment before retesting.
+User report dated 2026-11-08. The app commit and worker version actually running on either Android device have not been confirmed. See [evidence detail](f01-device-evidence.md#user-reported-android-installation-observations). Browser display of an Open action alone does not prove a working installed app. The manifest identity defect and merged correction F01-S02A are documented in the [evidence record](f01-device-evidence.md#manifest-identity-follow-up); its relationship to the Pixel symptoms is unproven. Device acceptance needs targeted retests against the reviewed identity-fix deployment; no such retest is reported yet.
 
 ## Copyable evidence record
 

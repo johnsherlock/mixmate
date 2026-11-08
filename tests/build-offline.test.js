@@ -32,7 +32,18 @@ test('production build precaches the exact emitted inventory and resolves instal
     }
     const scope = 'https://example.test/mixmate/';
     const manifest = JSON.parse(await readFile(join(directory, 'manifest.webmanifest'), 'utf8'));
-    for (const key of ['id', 'scope', 'start_url']) assert.equal(new URL(manifest[key], scope).href, scope);
+    const startURL = new URL(manifest.start_url, new URL('manifest.webmanifest', scope));
+    assert.equal(startURL.href, scope);
+    assert.equal(new URL(manifest.scope, new URL('manifest.webmanifest', scope)).href, scope);
+    // Manifest id is resolved against the start URL's ORIGIN, not the manifest
+    // directory. './' therefore collides with the origin-root app identity.
+    // https://www.w3.org/TR/appmanifest/#id-member (processing steps 4–5)
+    const appID = new URL(manifest.id, startURL.origin);
+    assert.equal(appID.href, scope);
+    assert.notEqual(appID.href, new URL('/', scope).href);
+    assert.notEqual(appID.href, new URL('another-app/', startURL.origin).href);
+    // Identity must survive a future start URL change within this app's scope.
+    assert.equal(new URL(manifest.id, new URL('connection-test.html', scope).origin).href, appID.href);
     for (const icon of manifest.icons) assert.ok(first.assets.includes(icon.src.replace(/^\.\//, '')));
     const html = await readFile(join(directory, 'index.html'), 'utf8');
     for (const [, reference] of html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
