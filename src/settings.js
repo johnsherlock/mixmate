@@ -147,10 +147,10 @@ function failureReason(error) {
 
 export class SettingsRepository {
   #options; #db; #initialization; #queue = Promise.resolve(); #listeners = new Set(); #closed = false;
-  #settings = emptySettings(); #baseline;
+  #settings = emptySettings(); #baseline; #hasStoredSettings = false;
   #status = { mode: 'memory', state: 'loading', reason: null };
   constructor(options = {}) { this.#options = options; }
-  snapshot() { return { settings: clone(this.#settings), status: { ...this.#status } }; }
+  snapshot() { return { settings: clone(this.#settings), status: { ...this.#status }, hasStoredSettings: this.#hasStoredSettings }; }
   subscribe(listener) {
     this.#listeners.add(listener);
     this.#notify(listener);
@@ -175,6 +175,7 @@ export class SettingsRepository {
       db.onversionchange = () => this.#fallback(new DOMException('Storage version changed.', 'VersionError'));
       db.onclose = () => { if (this.#db === db) this.#fallback(new Error('Storage closed.')); };
       const stored = await transaction(db, 'readonly', undefined, this.#options.timeoutMs ?? 3000);
+      this.#hasStoredSettings = stored !== undefined;
       if (stored !== undefined) {
         this.#settings = validateSettings(stored);
         this.#baseline = clone(this.#settings);
@@ -219,6 +220,7 @@ export class SettingsRepository {
       const db = this.#db;
       await transaction(db, 'readwrite', value, this.#options.timeoutMs ?? 3000, this.#baseline);
       this.#baseline = clone(value);
+      this.#hasStoredSettings = true;
       if (this.#db === db) this.#emit({ mode: 'persistent', state: 'saved', reason: null });
     } catch (error) { this.#fallback(error); }
     return this.snapshot();
