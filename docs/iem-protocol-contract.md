@@ -70,5 +70,5 @@ These are defensive implementation limits, not measured firmware maxima: 2 MiB U
 
 - Current firmware/model identity, complete INIT field coverage and frame maxima, mode/link semantics and source availability need a bounded read-only observation when the known rig is reachable. Native-client code may be inspected in memory to corroborate paths/constants without copying assets. No real actuation is needed for passive initialization; testing changed-control behavior must remain fake during development.
 - Actual normalized-to-dB/silence, linked pan/balance behavior, native-edit conflicts and later writer contracts remain with F05/F06. Source-backed candidates here are not a new active allowlist.
-- VU2 decoding, block counts, tap points, numeric calibration and freshness are F03-S04; no meter decoder is added here.
+- S01 did not add a meter decoder. F03-S04 now documents source-backed [VU2 decoding/counts/tap points/freshness](iem-meter-contract.md); native calibration/corroboration stays parked.
 - F03-S02 presentation/demo separation and F03-S03 receive-only transport/session store follow after this story merges. Mobile/local-network qualification remains with F08-S01 under ADR-0002.

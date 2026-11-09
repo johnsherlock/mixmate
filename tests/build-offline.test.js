@@ -74,6 +74,8 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.ok(demo.includes('KICK') && demo.includes('SNARE'));
     assert.ok(!live.includes('KICK') && !live.includes('SNARE'));
     assert.ok(live.includes('3:::INIT') && live.includes('3:::ALIVE') && live.includes('2::'));
+    assert.ok(live.includes('VU2^') && live.includes('NOT AUX send') && live.includes('vuPostFaderL'));
+    assert.ok(!demo.includes('VU2^')); // Meter decoding cannot enter the isolated simulation graph.
     assert.ok(!demo.includes('3:::INIT') && !demo.includes('3:::ALIVE'));
     assert.ok(!live.includes('setInputFader') && !live.includes('3:::SETD') && !live.includes('3:::SETS'));
     assert.ok(!live.includes('new MixerConnection') && !live.includes('faderTargets'));

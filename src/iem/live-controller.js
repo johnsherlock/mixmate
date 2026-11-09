@@ -54,11 +54,12 @@ export function mountLiveController({ session, repository, view, ui, document = 
   const handlers = [];
   const listen = (target, type, callback) => { target.addEventListener(type, callback); handlers.push([target, type, callback]); };
   const isActive = phase => ['connecting', 'connected', 'partial', 'live'].includes(phase);
-  function render(snapshot = session.snapshot()) {
+  function render(snapshot = session.snapshot(), kind) {
     if (destroyed) return;
     const model = projectLiveState(snapshot, selectedAux);
     selectedAux = model.selectedAux;
-    view.render(model);
+    if (kind === 'meters' && view.renderMeters) view.renderMeters(model);
+    else view.render(model);
     ui.connect.disabled = isActive(snapshot.phase); ui.disconnect.disabled = !isActive(snapshot.phase);
     ui.note.textContent = snapshot.detail;
   }

@@ -1,0 +1,15 @@
+{
+  "provenance": "SYNTHETIC from pinned soundcraft-ui-connection 7.1.0 source layout; not a real mixer capture or mockup meter values. Firmware calibration remains unverified.",
+  "counts": [
+    24,
+    2,
+    6,
+    4,
+    10,
+    2,
+    2
+  ],
+  "opaqueHeaderByte7": 197,
+  "bytes": 306,
+  "frame": "3:::VU2^GAIGBAoCAsUAEXgzRFUNHv9AUWIaKzxNXm8nOElaa3w0RVZneIlBUmN0hZZOX3CBkqNbbH2On7BoeYqbrL11hpeoucqCk6S1xtePoLHC0+Scrb7P4PGpusvc7f62x9jp+gvD1OX2BxjQ4fIDFCXd7v8QITLq+wwdLj/3CBkqO0wEFSY3SFkRIjNEVWYeL0BRYnMrPE1eb4AdLgBQYXIqO0xdbn86S1xtfo+gR1hpeoucrVRldoeYqbphcoOUpbbHbn+QobLD1HuMna6/0OFXaFq0m6y9ZHWGl6i5ynGCk6S1xtd+j6CxwtPkdMiWp7iBHqO0xY4AsMHSm6y9zt+oucrb7LXG1+j5wtPk9QbP4PECE9zt/g8g6foLHC2RorPE1Z6vwNHirr884fIDu8zd7v8Q"
+}
