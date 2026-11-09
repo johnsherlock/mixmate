@@ -73,7 +73,17 @@ test('production build precaches the exact emitted inventory and resolves instal
     const live = await moduleGraph('iem.html'), demo = await moduleGraph('demo.html');
     assert.ok(demo.includes('KICK') && demo.includes('SNARE'));
     assert.ok(!live.includes('KICK') && !live.includes('SNARE'));
-    assert.ok(!live.includes('3:::INIT') && !demo.includes('3:::INIT'));
+    assert.ok(live.includes('3:::INIT') && live.includes('3:::ALIVE') && live.includes('2::'));
+    assert.ok(!demo.includes('3:::INIT') && !demo.includes('3:::ALIVE'));
+    assert.ok(!live.includes('setInputFader') && !live.includes('3:::SETD') && !live.includes('3:::SETS'));
+    assert.ok(!live.includes('new MixerConnection') && !live.includes('faderTargets'));
+    const liveHTML = await readFile(join(directory, 'iem.html'), 'utf8');
+    const demoHTML = await readFile(join(directory, 'demo.html'), 'utf8');
+    assert.match(liveHTML, /connect-src ws:/);
+    assert.match(demoHTML, /connect-src 'none'/);
+    const transport = await readFile('src/iem/live-session.js', 'utf8');
+    assert.deepEqual([...transport.matchAll(/\.send\(([^)]+)\)/g)].map(match => match[1]).sort(), ["'2::'", "'3:::ALIVE'", "'3:::INIT'"].sort());
+    assert.ok(!transport.includes('../protocol.js'));
     const generated = await readFile(join(directory, 'sw.js'), 'utf8');
     assert.ok(!/__VERSION__|__ASSETS__|__HASHES__|__ENTRY_PROOFS__/.test(generated));
     assert.match(generated, /cache: 'reload'/);

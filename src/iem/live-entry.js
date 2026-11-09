@@ -1,17 +1,12 @@
-import { mountShell } from "./shell.js";
-import { createEmptyLiveProvider } from "./live-provider.js";
-import { mountReadOnlyView } from "./live-view.js";
-import { prepareEntryOffline } from "./entry-offline.js";
-const root = mountShell(document.getElementById("iem-root"), "live");
-const provider = createEmptyLiveProvider(),
-  view = mountReadOnlyView(root);
-view.render(provider.snapshot());
-const clear = () => {
-  provider.clear();
-  view.clear();
-};
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) clear();
-});
-window.addEventListener("pagehide", clear);
-prepareEntryOffline(root.querySelector(".mm-offline-state"));
+import { mountShell } from './shell.js';
+import { mountReadOnlyView } from './live-view.js';
+import { createReadOnlySession } from './live-session.js';
+import { createLiveConnectionUI, mountLiveController } from './live-controller.js';
+import { SettingsRepository } from '../settings.js';
+import { prepareEntryOffline } from './entry-offline.js';
+const root = mountShell(document.getElementById('iem-root'), 'live');
+const session = createReadOnlySession(), repository = new SettingsRepository();
+let controller;
+const view = mountReadOnlyView(root, { onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview() });
+controller = mountLiveController({ session, repository, view, ui: createLiveConnectionUI(root) });
+prepareEntryOffline(root.querySelector('.mm-offline-state'));

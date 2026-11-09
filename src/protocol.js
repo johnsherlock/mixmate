@@ -1,17 +1,8 @@
 // Socket.IO v0.9 framing. Writes are limited to validated input fader levels.
 export const OUTBOUND = Object.freeze({ init: '3:::INIT', alive: '3:::ALIVE', heartbeat: '2::' });
 
-export function mixerURL(address) {
-  const parts = address.trim().split('.');
-  if (parts.length !== 4 || parts.some(p => !/^\d{1,3}$/.test(p) || +p > 255 || String(+p) !== p)) {
-    throw new Error('Enter an IPv4 address, for example 192.168.0.60.');
-  }
-  const [a, b] = parts.map(Number);
-  if (!(a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168))) {
-    throw new Error('Use a private LAN address (10.x.x.x, 172.16–31.x.x or 192.168.x.x).');
-  }
-  return `ws://${parts.join('.')}/`;
-}
+import { mixerURL } from './mixer-address.js';
+export { mixerURL } from './mixer-address.js';
 
 export function parseStateFrame(frame) {
   if (typeof frame !== 'string' || !frame.startsWith('3:::')) return [];

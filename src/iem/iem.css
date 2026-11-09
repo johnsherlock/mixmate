@@ -2367,3 +2367,62 @@ body {
 #mixmate-iem-concept .mm-strip-grid:empty {
   display: none;
 }
+
+/* Read-only connection affordance and received metadata; accepted banks stay intact. */
+#mixmate-iem-concept[data-mode="live"] .mm-connect-toggle,
+#mixmate-iem-concept[data-mode="live"] .mm-session-disconnect {
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+#mixmate-iem-concept .mm-live-connection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+#mixmate-iem-concept .mm-live-connection label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+#mixmate-iem-concept .mm-live-connection input,
+#mixmate-iem-concept .mm-live-connection select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  background: #15222b;
+  color: #e7d4ab;
+  border: 1px solid #64737e;
+  border-radius: 3px;
+  padding: 8px;
+}
+#mixmate-iem-concept .mm-live-strip-state {
+  display: block;
+  padding: 4px 6px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #b5c0c8;
+  overflow-wrap: anywhere;
+}
+#mixmate-iem-concept[data-mode="live"] .mm-strip-detail {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#mixmate-iem-concept[data-mode="live"][data-show-meters="false"] .mm-meter-pair {
+  visibility: hidden;
+}
+#mixmate-iem-concept[data-mode="live"] [hidden] {
+  display: none !important;
+}
+#mixmate-iem-concept[data-mode="live"] .mm-strip-name {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#mixmate-iem-concept .mm-source-empty {
+  flex-shrink: 0;
+  margin: 8px 0;
+  font-size: 13px;
+  color: #b5c0c8;
+}
