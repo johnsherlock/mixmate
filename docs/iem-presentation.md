@@ -47,3 +47,7 @@ Isolated desktop Chromium QA uses only loopback requests and strict fake WebSock
 
 
 Final validation: `npm test` passes 97 tests; `npm run build` passes with 15 precached assets, worker `8d2d0548088afe29`. Browser gesture/fullscreen/root-isolation checks used the initial `4df5…` build; the final build specifically rechecked compact label/navigation visibility and cold offline query navigation to live/demo/root with matching version. At 390×844 the portrait channel bank had three columns and no horizontal page overflow. At 844×390 the horizontal bank scrolled while app height remained 390px. Portrait fullscreen native emulated swipe scrolled 0→67 without changing the touched level. The final live page had zero strips/sliders/sockets; demo had five simulated masters and zero sockets. No browser check contacted a real mixer or qualified a physical device.
+
+## Subsequent F03-S03 integration
+
+The empty-shell observations above describe the S02 baseline. [F03-S03](iem-live-session.md) adds the separate explicit receive-only session and actual observed strips while preserving demo isolation, keyed DOM, gestures and entry-specific offline proof. Unknown/matrix fields do not become synthetic AUX values; no new parameter writer or meter decoder is added.

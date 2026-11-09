@@ -41,7 +41,7 @@ If connection fails, expand diagnostics and copy the result. It includes the bro
 
 Incoming name/mix/mute/stereoIndex state never triggers a write. No mute, gain, master, routing, scene, clock or network writes exist. The third-party `soundcraft-ui-connection` library supplies the fader-to-dB conversion, not its connection or control facade. Automated write tests use fake sockets and must not move real faders.
 
-The separate [IEM receive schema contract](docs/iem-protocol-contract.md) documents source-backed AUX/source paths and unknown-state rules for the forthcoming read-only view. It is not yet wired into this connection test and adds no writer. Current-firmware corroboration remains open.
+The separate [read-only IEM view](https://johnsherlock.github.io/mixmate/iem.html) uses the [IEM receive schema](docs/iem-protocol-contract.md) and its own connection-only transport; it never calls this input writer. Current-firmware corroboration remains open.
 
 Reference: [community protocol documentation](https://fmalcher.github.io/soundcraft-ui/more/howitworks). Mixmate is an independent experiment, not a Soundcraft product.
 
@@ -80,3 +80,9 @@ Preview faders: drag the fader cap to adjust; double-tap the track to jump to a 
 ## IEM implementation roadmap
 
 The accepted prototype is the target for the full IEM interface. See the [feature backlog](docs/backlog.md), [architecture decision](docs/adr/0001-offline-iem-architecture.md), [distribution audit](docs/distribution-audit.md) and [real-device checklist](docs/device-checks.md). Features and stories run sequentially, each through a PR and affirmative Codex review before merge. The first feature records the offline-distribution implementation and device evidence checkpoint; unresolved Pixel/mobile qualification is carried to the F08 release gate under [ADR-0002](docs/adr/0002-deferred-qualification-and-authorized-controls.md), so independent implementation can continue. It does not add AUX writes. Planned control classes are authorized, while exact protocol guards still require verification and reviewed implementation. See the [follow-up log](docs/user-follow-up.md).
+
+## Read-only live IEM
+
+Open [Read-only IEM](https://johnsherlock.github.io/mixmate/iem.html), choose **Connect to desk**, select a saved local rig or enter the private mixer address, then choose **Connect read-only**. No connection starts automatically. Socket-open and received Ui24/AUX state are distinct; missing model/mode/link/name/level fields remain unavailable. All Mixes shows individual observed outputs with link indicators; tap a known AUX to browse all actually observed input/line/player/FX sends. Matrix and unknown-mode slots do not become normal AUX views. Linked readbacks stay separate, including unequal values.
+
+Levels/pan are read-only: levels use the source-backed common Soundcraft conversion, including −∞ for received zero, while pan is explicitly normalized. Meters, groups/editing, EQ, snapshots, recording and native UI access are unavailable here until their later stories; Demo remains the independent clickable simulation. Saved profiles/preferences can be edited in the existing connection test; live mixer state is never saved. Disconnect, address/rig changes, hiding/navigation and connection/timeouts clear received values. Return/reopen requires an explicit Connect. See [session details and limits](docs/iem-live-session.md).

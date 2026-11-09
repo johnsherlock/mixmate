@@ -97,7 +97,18 @@ test('read-only keyed strips render strings as text and preserve nodes through u
     view.render({ status: 'Partial', mixes: [b, { ...a, levelText: undefined, position: undefined }] });
     assert.equal(grid.children[1], first); assert.equal(first.querySelector('input'), input); assert.equal(first.querySelector('.mm-fader-hit'), cap);
     assert.equal(first.dataset.unknown, 'true'); assert.equal(first.querySelector('.mm-value').textContent, '—');
-    view.clear(); assert.equal(grid.children.length, 0);
+    const selected = { ...a, auxIndex: 0, themeIndex: 0, browsable: true };
+    const source = { id: 'i.0@0', name: '<svg onload=alert(1)>', detail: 'Input 1', position: 0.25, levelText: 'Received', panText: 'Pan 0.500 · normalized' };
+    view.render({ status: 'Live', mixes: [selected, b], selectedAux: 0, selectedMix: selected, sources: [source] });
+    const bank = root.querySelector('.mm-strip-scroll'), sourceArticle = bank.children[0], sourceInput = sourceArticle.querySelector('input'), sourceCap = sourceArticle.querySelector('.mm-fader-hit');
+    assert.equal(sourceArticle.querySelector('.mm-strip-name').textContent, source.name);
+    assert.equal(sourceArticle.querySelector('.mm-strip-name').innerHTML, undefined);
+    view.render({ status: 'Live', mixes: [selected, b], selectedAux: 0, selectedMix: selected, sources: [{ ...source, position: 0.7, levelText: 'Changed' }] });
+    assert.equal(root.querySelector('.mm-strip-scroll'), bank); assert.equal(bank.children[0], sourceArticle);
+    assert.equal(sourceArticle.querySelector('input'), sourceInput); assert.equal(sourceArticle.querySelector('.mm-fader-hit'), sourceCap); assert.equal(sourceInput.disabled, true);
+    view.render({ status: 'Partial', mixes: [selected], selectedAux: 0, selectedMix: selected, sources: [] });
+    assert.equal(root.querySelector('.mm-source-empty').hidden, false); assert.equal(root.querySelector('.mm-empty').hidden, true);
+    view.clear(); assert.equal(grid.children.length, 0); assert.equal(bank.children.length, 0);
   } finally {
     view?.destroy();
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }

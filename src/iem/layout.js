@@ -1,6 +1,7 @@
 export function observeIemLayout(root, onLayout = () => {}) {
   function apply() {
-    const portrait = matchMedia("(orientation:portrait)").matches;
+    const preference = root.dataset.preferredOrientation;
+    const portrait = preference === "portrait" || (preference !== "landscape" && matchMedia("(orientation:portrait)").matches);
     root.dataset.orientation = portrait ? "portrait" : "landscape";
     root.style.setProperty("--mm-height", innerHeight + "px");
     root.style.setProperty("--mm-travel", "220px");
