@@ -1,0 +1,2369 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #191c20;
+}
+html {
+  color-scheme: dark;
+}
+body {
+  width: 100%;
+}
+#mixmate-iem-concept .mm-app {
+  border-radius: 0;
+  border: 0;
+}
+#mixmate-iem-concept .mm-app:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+}
+
+#mixmate-iem-concept {
+  --mm-bg: #191c20;
+  --mm-panel: #2b2e32;
+  --mm-edge: #4d5258;
+  --mm-muted: #abb3ba;
+  --mm-text: #e8ecef;
+  --mm-yellow: #e1d067;
+  --mm-red: #ba5d58;
+  --mm-green: #78ed91;
+  --mm-height: 560px;
+  --mm-travel: 220px;
+  font:
+    14px/1.3 "Arial Narrow",
+    "Helvetica Neue",
+    sans-serif;
+  color: var(--mm-text);
+}
+#mixmate-iem-concept * {
+  box-sizing: border-box;
+}
+#mixmate-iem-concept [hidden] {
+  display: none !important;
+}
+#mixmate-iem-concept button,
+#mixmate-iem-concept input,
+#mixmate-iem-concept select {
+  font: inherit;
+}
+#mixmate-iem-concept button {
+  cursor: var(--cursor-interaction, pointer);
+  border: 1px solid #575e65;
+  border-radius: 3px;
+  background: linear-gradient(#424850, #292e34);
+  color: var(--mm-text);
+  padding: 7px 10px;
+  min-height: 36px;
+  white-space: nowrap;
+}
+#mixmate-iem-concept button:hover {
+  filter: brightness(1.15);
+}
+#mixmate-iem-concept button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+#mixmate-iem-concept :is(button, input, select):focus-visible {
+  outline: 2px solid var(--mm-yellow);
+  outline-offset: 2px;
+}
+#mixmate-iem-concept .mm-app {
+  position: relative;
+  background: var(--mm-bg);
+  border: 1px solid #555d64;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: var(--mm-height);
+  min-height: 280px;
+}
+#mixmate-iem-concept .mm-top {
+  display: grid;
+  grid-template-columns: 90px minmax(90px, 170px) minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(#595e64, #393e45 55%, #2b3036);
+  border-bottom: 2px solid #747b80;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-brand {
+  font-size: 23px;
+  letter-spacing: -1px;
+  color: #fff;
+  font-weight: 500;
+}
+#mixmate-iem-concept .mm-brand span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #cbd1d4;
+}
+#mixmate-iem-concept .mm-snapshot {
+  position: relative;
+  text-align: left;
+  padding: 5px 23px 5px 8px;
+  min-width: 0;
+  min-height: 42px;
+  background: #151d20;
+  border-color: #67747a;
+}
+#mixmate-iem-concept .mm-snapshot > span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #abbabe;
+}
+#mixmate-iem-concept .mm-snapshot strong {
+  display: block;
+  font: 12px monospace;
+  font-weight: 400;
+  color: #9bd1d0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#mixmate-iem-concept .mm-snapshot small {
+  position: absolute;
+  right: 7px;
+  top: 14px;
+}
+#mixmate-iem-concept .mm-utilities {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+#mixmate-iem-concept .mm-utilities button {
+  font-size: 12px;
+  min-height: 40px;
+}
+#mixmate-iem-concept .mm-record {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+#mixmate-iem-concept .mm-record i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e5867f;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-record.mm-recording {
+  background: #873a3b;
+  border-color: #c98f87;
+}
+#mixmate-iem-concept .mm-clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--mm-green);
+  font-variant-numeric: tabular-nums;
+  filter: drop-shadow(0 0 2px #70eb8830);
+}
+#mixmate-iem-concept .mm-digit {
+  width: 19px;
+  height: 33px;
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-digit i {
+  position: absolute;
+  background: #304a38;
+  opacity: 0.35;
+}
+#mixmate-iem-concept .mm-digit i.on {
+  background: var(--mm-green);
+  opacity: 1;
+}
+#mixmate-iem-concept .mm-digit .a,
+#mixmate-iem-concept .mm-digit .g,
+#mixmate-iem-concept .mm-digit .d {
+  left: 3px;
+  width: 13px;
+  height: 3px;
+  clip-path: polygon(10% 0, 90% 0, 100% 50%, 90% 100%, 10% 100%, 0 50%);
+}
+#mixmate-iem-concept .mm-digit .a {
+  top: 0;
+}
+#mixmate-iem-concept .mm-digit .g {
+  top: 15px;
+}
+#mixmate-iem-concept .mm-digit .d {
+  top: 30px;
+}
+#mixmate-iem-concept .mm-digit .b,
+#mixmate-iem-concept .mm-digit .c,
+#mixmate-iem-concept .mm-digit .e,
+#mixmate-iem-concept .mm-digit .f {
+  width: 3px;
+  height: 12px;
+  clip-path: polygon(50% 0, 100% 10%, 100% 90%, 50% 100%, 0 90%, 0 10%);
+}
+#mixmate-iem-concept .mm-digit .b {
+  right: 0;
+  top: 2px;
+}
+#mixmate-iem-concept .mm-digit .c {
+  right: 0;
+  top: 18px;
+}
+#mixmate-iem-concept .mm-digit .f {
+  left: 0;
+  top: 2px;
+}
+#mixmate-iem-concept .mm-digit .e {
+  left: 0;
+  top: 18px;
+}
+#mixmate-iem-concept .mm-colon {
+  width: 5px;
+  height: 33px;
+  position: relative;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-colon:before,
+#mixmate-iem-concept .mm-colon:after {
+  content: "";
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: var(--mm-green);
+  left: 1px;
+}
+#mixmate-iem-concept .mm-colon:before {
+  top: 10px;
+}
+#mixmate-iem-concept .mm-colon:after {
+  top: 22px;
+}
+#mixmate-iem-concept .mm-preview {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 3px 12px;
+  background: #22282d;
+  font-size: 9px;
+  color: #a6b0b6;
+  flex-shrink: 0;
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-preview .mm-feedback {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #d2d6cf;
+}
+#mixmate-iem-concept .mm-navigation {
+  display: flex;
+  gap: 5px;
+  padding: 6px 8px;
+  background: #12171b;
+  border-bottom: 1px solid var(--mm-edge);
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-mix-tabs {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-navigation button {
+  font-size: 12px;
+  min-width: 0;
+  padding: 5px 8px;
+  flex: 1;
+  min-height: 34px;
+}
+#mixmate-iem-concept .mm-navigation .mm-home {
+  flex: 0 0 auto;
+}
+#mixmate-iem-concept button.mm-active {
+  background: linear-gradient(#706b3d, #49452c);
+  border-color: #c3b86a;
+  color: #f1df85;
+}
+#mixmate-iem-concept .mm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  min-height: 41px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-kicker {
+  color: var(--mm-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+#mixmate-iem-concept .mm-title {
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+#mixmate-iem-concept .mm-local-tabs {
+  display: flex;
+  gap: 4px;
+}
+#mixmate-iem-concept .mm-toolbar button {
+  font-size: 11px;
+  padding: 5px 9px;
+  min-height: 31px;
+}
+#mixmate-iem-concept .mm-content {
+  min-height: 0;
+  flex: 1;
+  padding: 0 10px 8px;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-strip-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  height: 100%;
+  min-height: 0;
+}
+#mixmate-iem-concept .mm-strip {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(90deg, #282d31, #343a40 48%, #282d31);
+  border: 1px solid #4b545a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-strip.mm-master {
+  background: linear-gradient(90deg, #303329, #3c3f32, #2e3229);
+  border-color: #817c48;
+}
+#mixmate-iem-concept .mm-strip-head {
+  padding: 7px 7px 4px;
+  text-align: center;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-strip-name {
+  display: block;
+  width: 100%;
+  background: #151c20;
+  border-color: #5a666b;
+  padding: 5px 2px;
+  color: #e1bc9a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 32px;
+  font-size: 12px;
+}
+#mixmate-iem-concept .mm-master .mm-strip-name {
+  color: #ebd46c;
+}
+#mixmate-iem-concept .mm-group .mm-strip-name {
+  color: #d2abc8;
+}
+#mixmate-iem-concept .mm-strip-detail {
+  display: block;
+  color: #b0b8bc;
+  font-size: 10px;
+  margin-top: 4px;
+}
+#mixmate-iem-concept .mm-value {
+  font: 17px monospace;
+  color: var(--mm-yellow);
+  background: #13191b;
+  border: 1px solid #4d595a;
+  display: block;
+  text-align: center;
+  padding: 3px 1px;
+  margin: 0 7px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+#mixmate-iem-concept .mm-fader-space {
+  flex: 1;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 23px minmax(42px, 1fr) 17px;
+  gap: 3px;
+  padding: 12px 10px 10px;
+  align-items: stretch;
+}
+#mixmate-iem-concept .mm-ruler {
+  position: relative;
+  color: #aeb9be;
+  font: 9px monospace;
+  text-align: right;
+}
+#mixmate-iem-concept .mm-ruler span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+}
+#mixmate-iem-concept .mm-vertical {
+  appearance: none;
+  -webkit-appearance: none;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  display: block;
+  justify-self: center;
+  width: 42px;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  background: transparent;
+  cursor: ns-resize;
+  touch-action: none;
+}
+#mixmate-iem-concept .mm-vertical::-webkit-slider-runnable-track {
+  width: 6px;
+  border: 1px solid #596367;
+  background: linear-gradient(90deg, #070b0e, #141b20);
+  border-radius: 2px;
+}
+#mixmate-iem-concept .mm-vertical::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 36px;
+  height: 29px;
+  margin-left: -16px;
+  border: 1px solid #a5aca9;
+  border-radius: 3px;
+  box-shadow: 0 2px 4px #0008;
+  background: linear-gradient(
+    #898f90,
+    #e5e7e0 25%,
+    #909898 46%,
+    #4a5153 50%,
+    #929a99 56%,
+    #e5e7df 80%,
+    #808788
+  );
+}
+#mixmate-iem-concept .mm-master .mm-vertical::-webkit-slider-thumb {
+  background: linear-gradient(
+    #8e4140,
+    #e8b0a9 25%,
+    #ad5f58 46%,
+    #632a26 50%,
+    #b96c62 56%,
+    #f1c4b7 80%,
+    #a0564d
+  );
+  border-color: #b27b6f;
+}
+#mixmate-iem-concept .mm-group .mm-vertical::-webkit-slider-thumb {
+  background: linear-gradient(
+    #785b75,
+    #d6b9cc 25%,
+    #9b7f92 46%,
+    #574552 50%,
+    #a58a99 56%,
+    #e5ceda 80%,
+    #8f7584
+  );
+}
+#mixmate-iem-concept .mm-vertical::-moz-range-track {
+  width: 6px;
+  background: #0d151a;
+  border: 1px solid #56636b;
+}
+#mixmate-iem-concept .mm-vertical::-moz-range-thumb {
+  width: 34px;
+  height: 27px;
+  background: #b7bfbc;
+  border: 1px solid #d0d9d1;
+  border-radius: 3px;
+}
+#mixmate-iem-concept .mm-meter-pair {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  position: relative;
+  padding-top: 8px;
+  min-height: 0;
+}
+#mixmate-iem-concept .mm-meter {
+  width: 6px;
+  background: #131b20;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-meter i {
+  position: absolute;
+  width: 100%;
+  bottom: 0;
+  height: var(--level);
+  background:
+    repeating-linear-gradient(to top, transparent 0 3px, #1117 3px 4px),
+    linear-gradient(
+      to top,
+      #4b97a8 0 65%,
+      #9cba65 65% 82%,
+      #d5bf59 82% 96%,
+      #c75e53 96%
+    );
+}
+#mixmate-iem-concept .mm-clip {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 5px;
+  background: #513c39;
+}
+#mixmate-iem-concept .mm-hot {
+  background: #f57061;
+}
+#mixmate-iem-concept .mm-group .mm-strip-detail {
+  color: #c2afbd;
+}
+#mixmate-iem-concept .mm-limit {
+  font-size: 9px;
+  min-height: 20px;
+  text-align: center;
+  color: #d8c69a;
+  flex-shrink: 0;
+  padding: 3px;
+}
+#mixmate-iem-concept .mm-pan-button {
+  min-height: 33px;
+  font: 10px monospace;
+  margin: 0 7px 7px;
+  background: #1b252b;
+  padding: 5px 1px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-strip-tail {
+  display: flex;
+  justify-content: center;
+  margin: 0 6px 6px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-strip-tail button {
+  font-size: 10px;
+  min-height: 26px;
+  padding: 4px 9px;
+}
+#mixmate-iem-concept .mm-master-tag {
+  color: #e5d480;
+  background: #45472e;
+  border-top: 1px solid #87814a;
+  text-align: center;
+  font-size: 10px;
+  padding: 5px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-sends-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 9px;
+  height: 100%;
+  min-height: 0;
+}
+#mixmate-iem-concept .mm-sends-main {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+#mixmate-iem-concept .mm-strip-scroll {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 100%;
+  min-height: 0;
+  scroll-snap-type: x proximity;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #677274 #20282d;
+}
+#mixmate-iem-concept .mm-strip-scroll > .mm-strip {
+  flex: 1 0 123px;
+  max-width: 220px;
+  scroll-snap-align: start;
+}
+#mixmate-iem-concept .mm-strip-scroll.mm-expanded > .mm-group {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 4px 0 6px #0007;
+}
+#mixmate-iem-concept .mm-pinned {
+  height: 100%;
+  min-height: 0;
+}
+#mixmate-iem-concept .mm-pinned > .mm-strip {
+  height: 100%;
+}
+#mixmate-iem-concept .mm-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 10px;
+  border-top: 1px solid #4a555e;
+  color: #aebac2;
+  background: #232c32;
+  min-height: 27px;
+  font-size: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+#mixmate-iem-concept .mm-bottom .mm-desk {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  min-height: 22px;
+  font-size: 10px;
+  color: #91c5bd;
+}
+#mixmate-iem-concept .mm-dirty {
+  color: #d4bd80;
+}
+#mixmate-iem-concept .mm-layer {
+  position: absolute;
+  inset: 0;
+  background: #071017e6;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+#mixmate-iem-concept .mm-dialog {
+  background: #29333b;
+  border: 1px solid #6b7982;
+  border-radius: 6px;
+  padding: 16px;
+  width: min(650px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-shadow: 0 15px 55px #0008;
+}
+#mixmate-iem-concept .mm-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+#mixmate-iem-concept h3 {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+}
+#mixmate-iem-concept .mm-dialog-head button {
+  min-height: 35px;
+  font-size: 12px;
+}
+#mixmate-iem-concept .mm-dialog label {
+  font-size: 12px;
+  color: #c5d1d8;
+}
+#mixmate-iem-concept
+  .mm-dialog
+  :is(input:not([type="range"]):not([type="checkbox"]), select) {
+  color: #ecf3f4;
+  background: #131e25;
+  border: 1px solid #647581;
+  border-radius: 3px;
+  padding: 8px;
+  width: 100%;
+  min-height: 36px;
+}
+#mixmate-iem-concept .mm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 13px;
+  align-items: center;
+}
+#mixmate-iem-concept .mm-primary {
+  border-color: #b8ab62;
+  background: #635c31;
+  color: #f4e3a9;
+}
+#mixmate-iem-concept .mm-warning {
+  font-size: 13px;
+  color: #e0c08c;
+  margin: 10px 0;
+}
+#mixmate-iem-concept .mm-pan-large {
+  width: 100%;
+  min-height: 62px;
+  accent-color: #d8a378;
+}
+#mixmate-iem-concept .mm-pan-labels {
+  display: flex;
+  justify-content: space-between;
+  color: #bccbd4;
+  font: 12px monospace;
+}
+#mixmate-iem-concept .mm-pan-value {
+  text-align: center;
+  font: 30px monospace;
+  margin: 16px 0;
+  color: #e8c9a7;
+}
+#mixmate-iem-concept .mm-pan-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+#mixmate-iem-concept .mm-pan-presets button {
+  flex: 1;
+}
+#mixmate-iem-concept .mm-editor-top {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+#mixmate-iem-concept .mm-editor-top label > span {
+  display: block;
+  margin-bottom: 4px;
+}
+#mixmate-iem-concept .mm-order {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  min-height: 38px;
+  align-items: center;
+  margin: 10px 0;
+  padding-bottom: 3px;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+#mixmate-iem-concept .mm-order span {
+  padding: 5px 8px;
+  background: #433e49;
+  color: #e2c8da;
+  border: 1px solid #735d71;
+  border-radius: 3px;
+  font-size: 11px;
+}
+#mixmate-iem-concept .mm-order b {
+  font-weight: 500;
+  color: #e9d982;
+  margin-right: 5px;
+}
+#mixmate-iem-concept .mm-member-checks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+#mixmate-iem-concept .mm-member-checks button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 39px;
+  padding: 7px;
+  text-align: left;
+  white-space: normal;
+  font-size: 11px;
+  background: #202c35;
+  border-color: #4e606d;
+}
+#mixmate-iem-concept .mm-member-checks button.mm-picked {
+  border-color: #aa829e;
+  background: #473a49;
+  color: #efdbea;
+}
+#mixmate-iem-concept .mm-member-checks b {
+  font: 11px monospace;
+  background: #16222b;
+  min-width: 21px;
+  padding: 3px;
+  text-align: center;
+  color: #d9cc81;
+  border-radius: 2px;
+}
+#mixmate-iem-concept .mm-editor-feedback {
+  font-size: 11px;
+  color: #d6c69a;
+  margin-right: auto;
+}
+#mixmate-iem-concept .mm-eq-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #151d23;
+  border: 1px solid #52606a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-eq-head {
+  background: #703a3d;
+  padding: 6px 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+#mixmate-iem-concept .mm-draw-actions {
+  display: flex;
+  gap: 5px;
+}
+#mixmate-iem-concept .mm-eq-head button {
+  min-height: 30px;
+  font-size: 11px;
+  padding: 5px 9px;
+}
+#mixmate-iem-concept .mm-eq-plot {
+  flex: 1;
+  min-height: 80px;
+  position: relative;
+  touch-action: none;
+}
+#mixmate-iem-concept .mm-eq-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+#mixmate-iem-concept .mm-eq-svg text {
+  font: 11px monospace;
+  fill: #b3c1ca;
+}
+#mixmate-iem-concept .mm-eq-handle {
+  cursor: move;
+  touch-action: none;
+}
+#mixmate-iem-concept .mm-eq-controls {
+  display: flex;
+  gap: 14px;
+  padding: 6px 10px;
+  border-top: 1px solid #44535d;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-cut {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+#mixmate-iem-concept input[type="checkbox"] {
+  accent-color: #b49d76;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+}
+#mixmate-iem-concept .mm-cut input[type="number"] {
+  background: #17232b;
+  color: #e1d2ae;
+  border: 1px solid #5c6b75;
+  width: 64px;
+  padding: 5px;
+  min-height: 30px;
+  font: 12px monospace;
+  border-radius: 3px;
+}
+#mixmate-iem-concept .mm-cut input:disabled {
+  opacity: 0.4;
+}
+#mixmate-iem-concept .mm-point-value {
+  font: 11px monospace;
+  color: #deceb2;
+  min-width: 150px;
+  text-align: right;
+}
+#mixmate-iem-concept .mm-eq-foot {
+  padding: 3px 10px;
+  color: #adbcc5;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-native-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  background: #181c20;
+  display: flex;
+  flex-direction: column;
+}
+#mixmate-iem-concept .mm-native-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: #3d454c;
+  padding: 6px 10px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-native-head button {
+  background: #784345;
+  border-color: #bd8c83;
+  min-height: 38px;
+  font-size: 19px;
+}
+#mixmate-iem-concept .mm-native-head button span {
+  font-size: 12px;
+}
+#mixmate-iem-concept .mm-native-note {
+  font-size: 10px;
+  color: #c2cbd1;
+}
+#mixmate-iem-concept .mm-native-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: linear-gradient(#777b7d, #474b4f);
+  align-items: center;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-native-tabs button {
+  background: #343a3e;
+  font-size: 11px;
+}
+#mixmate-iem-concept .mm-native-snapshot {
+  margin-left: auto;
+  font: 12px monospace;
+  color: #8bc5c2;
+  background: #152027;
+  padding: 8px;
+}
+#mixmate-iem-concept .mm-native-content {
+  padding: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-native-content .mm-strip-scroll > .mm-strip {
+  flex-basis: 110px;
+}
+#mixmate-iem-concept .mm-native-foot {
+  padding: 5px 10px;
+  color: #b7c2c9;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-desk-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #4b5b66;
+}
+#mixmate-iem-concept .mm-desk-choice div {
+  flex: 1;
+}
+#mixmate-iem-concept .mm-desk-choice strong {
+  display: block;
+  font: 14px monospace;
+  font-weight: 400;
+  color: #c9d8ce;
+}
+#mixmate-iem-concept .mm-desk-choice span {
+  font-size: 11px;
+  color: #b6c5cf;
+}
+#mixmate-iem-concept .mm-network-label {
+  display: block;
+  margin-top: 12px;
+}
+#mixmate-iem-concept .mm-network-label select {
+  margin-top: 5px;
+}
+#mixmate-iem-concept .mm-caption {
+  font-size: 11px;
+  color: #b9c7ce;
+  margin-top: 10px;
+}
+#mixmate-iem-concept .mm-dialog.mm-group-dialog {
+  width: min(790px, 100%);
+}
+#mixmate-iem-concept .mm-pan-keys {
+  font-size: 11px;
+  color: #c1cdd4;
+  text-align: center;
+  margin-top: 8px;
+}
+@media (max-width: 900px) {
+  #mixmate-iem-concept .mm-long {
+    display: none;
+  }
+  #mixmate-iem-concept .mm-top {
+    grid-template-columns: 83px minmax(80px, 140px) minmax(100px, 1fr) auto;
+    gap: 7px;
+    padding: 6px 8px;
+  }
+  #mixmate-iem-concept .mm-utilities {
+    gap: 4px;
+  }
+  #mixmate-iem-concept .mm-utilities button {
+    padding: 6px 8px;
+  }
+  #mixmate-iem-concept .mm-digit {
+    transform: scale(0.9);
+    margin: -1px;
+  }
+  #mixmate-iem-concept .mm-heading {
+    gap: 5px;
+  }
+  #mixmate-iem-concept .mm-kicker {
+    display: none;
+  }
+  #mixmate-iem-concept .mm-sends-layout {
+    grid-template-columns: minmax(0, 1fr) 110px;
+  }
+  #mixmate-iem-concept .mm-strip-scroll > .mm-strip {
+    flex-basis: 112px;
+  }
+  #mixmate-iem-concept .mm-fader-space {
+    grid-template-columns: 19px minmax(36px, 1fr) 14px;
+    padding: 10px 7px 8px;
+    gap: 1px;
+  }
+}
+@media (max-width: 700px) {
+  #mixmate-iem-concept .mm-top {
+    grid-template-columns: 72px 95px minmax(90px, 1fr) auto;
+    gap: 5px;
+  }
+  #mixmate-iem-concept .mm-brand {
+    font-size: 20px;
+  }
+  #mixmate-iem-concept .mm-brand span {
+    font-size: 8px;
+  }
+  #mixmate-iem-concept .mm-utilities button {
+    font-size: 11px;
+    padding: 5px 7px;
+    min-height: 35px;
+  }
+  #mixmate-iem-concept .mm-digit {
+    transform: scale(0.76);
+    margin: -3px;
+  }
+  #mixmate-iem-concept .mm-clock {
+    gap: 2px;
+  }
+  #mixmate-iem-concept .mm-colon {
+    transform: scale(0.8);
+    margin: -1px;
+  }
+  #mixmate-iem-concept .mm-preview {
+    font-size: 8px;
+  }
+  #mixmate-iem-concept .mm-navigation {
+    padding: 4px 6px;
+    gap: 4px;
+  }
+  #mixmate-iem-concept .mm-mix-tabs {
+    gap: 4px;
+  }
+  #mixmate-iem-concept .mm-navigation button {
+    font-size: 10px;
+    padding: 4px;
+    min-height: 32px;
+  }
+  #mixmate-iem-concept .mm-toolbar {
+    padding: 4px 7px;
+    min-height: 36px;
+    gap: 5px;
+  }
+  #mixmate-iem-concept .mm-title {
+    font-size: 13px;
+  }
+  #mixmate-iem-concept .mm-toolbar button {
+    font-size: 10px;
+    padding: 4px 6px;
+    min-height: 29px;
+  }
+  #mixmate-iem-concept .mm-sends-layout {
+    grid-template-columns: minmax(0, 1fr) 94px;
+    gap: 6px;
+  }
+  #mixmate-iem-concept .mm-strip-grid {
+    gap: 5px;
+  }
+  #mixmate-iem-concept .mm-content {
+    padding: 0 6px 5px;
+  }
+  #mixmate-iem-concept .mm-strip-name {
+    font-size: 10px;
+    min-height: 27px;
+  }
+  #mixmate-iem-concept .mm-strip-detail {
+    font-size: 9px;
+  }
+  #mixmate-iem-concept .mm-value {
+    font-size: 14px;
+    margin: 0 5px;
+  }
+  #mixmate-iem-concept .mm-strip-head {
+    padding: 5px 5px 3px;
+  }
+  #mixmate-iem-concept .mm-bottom {
+    gap: 6px;
+    font-size: 9px;
+    padding: 1px 6px;
+    min-height: 24px;
+  }
+  #mixmate-iem-concept .mm-bottom .mm-desk {
+    font-size: 9px;
+  }
+  #mixmate-iem-concept .mm-page-state {
+    display: none;
+  }
+  #mixmate-iem-concept .mm-point-value {
+    min-width: 0;
+    font-size: 10px;
+  }
+  #mixmate-iem-concept .mm-eq-controls {
+    gap: 5px;
+    padding: 4px 8px;
+  }
+  #mixmate-iem-concept .mm-eq-foot {
+    font-size: 9px;
+  }
+  #mixmate-iem-concept .mm-dialog {
+    padding: 11px;
+  }
+  #mixmate-iem-concept .mm-dialog-head {
+    margin-bottom: 8px;
+  }
+  #mixmate-iem-concept .mm-dialog-actions {
+    margin-top: 8px;
+  }
+  #mixmate-iem-concept .mm-member-checks button {
+    font-size: 10px;
+    padding: 5px;
+    min-height: 34px;
+  }
+}
+#mixmate-iem-concept[data-compact="true"] .mm-preview {
+  display: flex; /* Mode identity and mode navigation must survive compact layouts. */
+}
+#mixmate-iem-concept[data-compact="true"] .mm-top {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-strip-detail {
+  margin-top: 2px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-strip-head {
+  padding-top: 4px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-master-tag {
+  display: none;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-eq-foot {
+  display: none;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-dialog-head h3 {
+  font-size: 15px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-dialog-head button {
+  min-height: 29px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-dialog {
+  padding: 9px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-editor-top :is(input, select) {
+  min-height: 30px !important;
+  padding: 5px !important;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-order {
+  margin: 6px 0;
+  min-height: 30px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-caption {
+  margin-top: 5px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-member-checks {
+  gap: 4px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-member-checks button {
+  min-height: 31px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-app {
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-top {
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-brand {
+  font-size: 24px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-clock {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: flex-end;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-snapshot {
+  grid-column: 1;
+  grid-row: 2;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-utilities {
+  grid-column: 2;
+  grid-row: 2;
+  flex-wrap: wrap;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-digit {
+  transform: none;
+  margin: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-colon {
+  transform: none;
+  margin: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-preview {
+  flex-wrap: wrap;
+  font-size: 9px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-preview .mm-feedback {
+  white-space: normal;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation {
+  flex-wrap: wrap;
+  padding: 6px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-home {
+  width: 100%;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-mix-tabs {
+  flex-wrap: wrap;
+  min-width: 100%;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation button {
+  min-height: 38px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-toolbar {
+  flex-wrap: wrap;
+  padding: 10px;
+  gap: 9px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-local-tabs {
+  flex-wrap: wrap;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-title {
+  font-size: 16px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-content {
+  flex: none;
+  overflow: visible;
+  padding: 0 8px 8px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-grid {
+  height: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip {
+  min-height: 330px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-fader-space {
+  height: var(--mm-travel);
+  flex: none;
+  min-height: 120px;
+  padding: 13px 10px 10px;
+  grid-template-columns: 25px 1fr 18px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-name {
+  font-size: 12px;
+  min-height: 34px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-value {
+  font-size: 18px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-detail {
+  font-size: 10px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-sends-layout {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-scroll {
+  height: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: visible;
+  gap: 8px;
+  padding: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-scroll > .mm-strip {
+  max-width: none;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-strip-scroll.mm-expanded
+  > .mm-group {
+  position: relative;
+  box-shadow: none;
+  grid-column: 1/-1;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-pinned {
+  padding-top: 8px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-bottom {
+  flex-wrap: wrap;
+  white-space: normal;
+  padding: 5px 8px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-layer {
+  align-items: flex-start;
+  padding: 14px 8px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-dialog {
+  max-height: 90dvh;
+  overflow: auto;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-member-checks {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-editor-top {
+  grid-template-columns: 1fr 1fr;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-editor-top > button {
+  grid-column: 1/-1;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-dialog-head h3 {
+  font-size: 16px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-shell {
+  height: auto;
+  min-height: 400px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-plot {
+  height: 260px;
+  flex: none;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-controls {
+  gap: 10px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-point-value {
+  width: 100%;
+  text-align: left;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-native-layer {
+  position: absolute;
+  height: 100dvh;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-native-tabs {
+  flex-wrap: wrap;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-native-content
+  .mm-strip-scroll {
+  display: flex;
+  height: 100%;
+  overflow-x: auto;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-native-content .mm-strip {
+  min-height: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-native-content
+  .mm-fader-space {
+  height: auto;
+  flex: 1;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-native-head {
+  flex-wrap: wrap;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-native-note {
+  display: none;
+}
+#mixmate-iem-concept .mm-app:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  min-height: 0;
+}
+
+#mixmate-iem-concept[data-compact="true"] .mm-dialog.mm-group-dialog {
+  padding: 7px;
+  overflow: hidden;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-dialog .mm-dialog-head {
+  margin-bottom: 4px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-dialog-head
+  button {
+  min-height: 26px;
+  padding: 3px 8px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-editor-top label > span {
+  display: none;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-order {
+  min-height: 24px;
+  margin: 4px 0;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-order span {
+  padding: 3px 6px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-dialog .mm-dialog-actions {
+  margin-top: 4px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-dialog-actions
+  button {
+  min-height: 30px;
+  padding: 4px 8px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-dialog .mm-member-checks {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-member-checks
+  button {
+  min-height: 44px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-dialog-actions
+  button {
+  min-height: 40px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-master
+  .mm-ruler
+  span:not(:first-child):not(:last-child),
+#mixmate-iem-concept[data-compact="true"]
+  .mm-channel
+  .mm-ruler
+  span:not(:first-child):not(:last-child) {
+  display: none;
+}
+/* One mix navigation row; fader height is the remaining screen height. */
+#mixmate-iem-concept .mm-navigation {
+  align-items: center;
+  gap: 7px;
+}
+#mixmate-iem-concept .mm-navigation .mm-heading {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-navigation .mm-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #e6dba8;
+}
+#mixmate-iem-concept .mm-navigation .mm-kicker {
+  display: none;
+}
+#mixmate-iem-concept .mm-navigation .mm-local-tabs {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+#mixmate-iem-concept .mm-navigation .mm-local-tabs button {
+  flex: none;
+  font-size: 11px;
+  padding: 5px 8px;
+  min-height: 34px;
+}
+#mixmate-iem-concept .mm-navigation .mm-collapse {
+  display: none;
+}
+#mixmate-iem-concept .mm-brand[data-action] {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  min-height: 0;
+}
+#mixmate-iem-concept .mm-content {
+  padding-top: 7px;
+}
+#mixmate-iem-concept .mm-snapshot[data-dirty="true"] .mm-snapshot-name:after {
+  content: " •";
+  color: #e5c97a;
+}
+#mixmate-iem-concept .mm-eq-native {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 174px;
+  gap: 0;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-eq-native .mm-eq-plot {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+#mixmate-iem-concept .mm-eq-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px;
+  background: #283139;
+  border-left: 1px solid #56636a;
+}
+#mixmate-iem-concept .mm-eq-mode {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-eq-mode button {
+  flex: 1;
+  min-height: 29px;
+  padding: 4px;
+  font-size: 11px;
+}
+#mixmate-iem-concept .mm-band-tabs {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-band-tabs button {
+  flex: 1;
+  min-height: 25px;
+  padding: 3px;
+  font: 11px monospace;
+}
+#mixmate-iem-concept .mm-eq-param-bank {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  min-height: 64px;
+  flex: 1;
+}
+#mixmate-iem-concept .mm-eq-param {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+  gap: 3px;
+  color: #b9c8d1;
+  font-size: 10px;
+}
+#mixmate-iem-concept .mm-eq-param output {
+  font: 11px monospace;
+  color: #e3d2b4;
+  white-space: nowrap;
+  min-height: 15px;
+}
+#mixmate-iem-concept .mm-eq-param .mm-vertical {
+  flex: 1;
+  height: auto;
+  min-height: 20px;
+  margin: 7px 0 5px;
+  width: 36px;
+}
+#mixmate-iem-concept .mm-eq-param .mm-vertical::-webkit-slider-thumb {
+  width: 30px;
+  height: 24px;
+  margin-left: -13px;
+}
+#mixmate-iem-concept .mm-eq-param .mm-vertical::-moz-range-thumb {
+  width: 28px;
+  height: 22px;
+}
+#mixmate-iem-concept .mm-eq-param .mm-vertical:disabled {
+  opacity: 0.3;
+}
+#mixmate-iem-concept .mm-eq-cut-bank {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  flex-shrink: 0;
+  padding-top: 3px;
+  border-top: 1px solid #53616b;
+}
+#mixmate-iem-concept .mm-eq-cut {
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-eq-cut label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #d8cbb6;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+#mixmate-iem-concept .mm-eq-cut label input {
+  width: 13px;
+  height: 13px;
+}
+#mixmate-iem-concept .mm-eq-cut > div {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: #aabac5;
+  font-size: 9px;
+}
+#mixmate-iem-concept .mm-eq-cut input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  background: #15222b;
+  color: #e7d4ab;
+  border: 1px solid #64737e;
+  padding: 3px 1px;
+  border-radius: 2px;
+  min-height: 25px;
+  font: 10px monospace;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+#mixmate-iem-concept
+  .mm-eq-cut
+  input[type="number"]::-webkit-inner-spin-button {
+  display: none;
+}
+#mixmate-iem-concept .mm-eq-cut input:disabled {
+  opacity: 0.4;
+}
+#mixmate-iem-concept .mm-eq-reset {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-top {
+  padding: 4px 8px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-top .mm-brand span,
+#mixmate-iem-concept[data-compact="true"] .mm-snapshot > span {
+  display: none;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-snapshot {
+  min-height: 31px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-snapshot small {
+  top: 7px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-utilities button {
+  min-height: 31px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-top .mm-clock {
+  height: 33px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-bottom,
+#mixmate-iem-concept[data-compact="true"] .mm-strip-detail,
+#mixmate-iem-concept[data-compact="true"] .mm-limit,
+#mixmate-iem-concept[data-compact="true"] .mm-master-tag {
+  display: none;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-strip-head {
+  padding: 5px 5px 4px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-strip-name {
+  min-height: 30px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-navigation {
+  padding: 4px 7px;
+  gap: 6px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-navigation .mm-home {
+  min-height: 32px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-content {
+  padding: 5px 7px 6px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-eq-sidebar {
+  gap: 4px;
+  padding: 5px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-eq-mode button {
+  min-height: 27px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-band-tabs button {
+  min-height: 23px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-eq-cut-bank {
+  padding-top: 3px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-eq-cut label {
+  margin-bottom: 2px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-eq-reset {
+  min-height: 26px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation {
+  flex-wrap: wrap;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation .mm-home {
+  width: auto;
+  min-width: 70px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation .mm-heading {
+  margin-left: 4px;
+  flex: 1;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-navigation
+  .mm-local-tabs {
+  width: 100%;
+  margin-left: 0;
+  justify-content: space-between;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-navigation
+  .mm-local-tabs
+  button {
+  flex: 1;
+  min-height: 38px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-native {
+  height: 430px;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 132px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-native .mm-eq-plot {
+  height: 100%;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-sidebar {
+  padding: 4px;
+  gap: 5px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-param output {
+  font-size: 9px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-cut-bank {
+  grid-template-columns: 1fr;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-cut {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-cut label {
+  margin: 0;
+  font-size: 9px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-cut > div {
+  flex: 1;
+  min-width: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-eq-cut
+  input[type="number"] {
+  font-size: 9px;
+}
+@media (max-width: 700px) {
+  #mixmate-iem-concept .mm-eq-native {
+    grid-template-columns: minmax(0, 1fr) 156px;
+  }
+  #mixmate-iem-concept .mm-navigation .mm-local-tabs {
+    gap: 3px;
+  }
+  #mixmate-iem-concept .mm-navigation .mm-local-tabs button {
+    padding: 5px 6px;
+    font-size: 10px;
+  }
+  #mixmate-iem-concept .mm-navigation .mm-title {
+    font-size: 12px;
+  }
+}
+
+#mixmate-iem-concept[data-ultra-compact="true"] .mm-band-tabs {
+  display: none;
+}
+#mixmate-iem-concept .mm-strip-grid > .mm-master {
+  border-color: var(--mm-strip-color);
+  border-top-width: 4px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--mm-strip-color) 12%, #20272d),
+    color-mix(in srgb, var(--mm-strip-color) 5%, #30363c)
+  );
+}
+#mixmate-iem-concept .mm-master .mm-strip-name,
+#mixmate-iem-concept .mm-master .mm-value {
+  color: var(--mm-strip-color, var(--mm-mix-color));
+  border-color: color-mix(
+    in srgb,
+    var(--mm-strip-color, var(--mm-mix-color)) 55%,
+    #39454d
+  );
+}
+#mixmate-iem-concept .mm-master .mm-vertical::-webkit-slider-thumb {
+  border-color: var(--mm-strip-color, var(--mm-mix-color));
+  background: linear-gradient(
+    color-mix(in srgb, var(--mm-strip-color, var(--mm-mix-color)) 55%, #4c5054),
+    color-mix(in srgb, var(--mm-strip-color, var(--mm-mix-color)) 45%, #faf2e5)
+      25%,
+    var(--mm-strip-color, var(--mm-mix-color)) 46%,
+    color-mix(in srgb, var(--mm-strip-color, var(--mm-mix-color)) 40%, #292b2f)
+      50%,
+    var(--mm-strip-color, var(--mm-mix-color)) 56%,
+    color-mix(in srgb, var(--mm-strip-color, var(--mm-mix-color)) 40%, #faf2e5)
+      80%,
+    color-mix(in srgb, var(--mm-strip-color, var(--mm-mix-color)) 60%, #41474d)
+  );
+}
+#mixmate-iem-concept[data-aux-view="true"] .mm-navigation {
+  border-top: 3px solid var(--mm-mix-color);
+  background: color-mix(in srgb, var(--mm-mix-color) 9%, #11181d);
+}
+#mixmate-iem-concept[data-aux-view="true"] .mm-title {
+  color: var(--mm-mix-color);
+}
+#mixmate-iem-concept[data-aux-view="true"] button.mm-active {
+  color: var(--mm-mix-color);
+  border-color: var(--mm-mix-color);
+  background: color-mix(in srgb, var(--mm-mix-color) 17%, #222a31);
+}
+#mixmate-iem-concept[data-aux-view="true"] .mm-group,
+#mixmate-iem-concept[data-aux-view="true"] .mm-channel {
+  border-top: 3px solid var(--mm-mix-color);
+}
+#mixmate-iem-concept[data-aux-view="true"] .mm-group .mm-strip-name {
+  color: var(--mm-mix-color);
+}
+#mixmate-iem-concept[data-aux-view="true"] .mm-eq-shell {
+  border-color: var(--mm-mix-color);
+}
+#mixmate-iem-concept .mm-sends-layout.mm-no-master {
+  grid-template-columns: minmax(0, 1fr);
+}
+#mixmate-iem-concept .mm-limit:empty {
+  display: none;
+}
+#mixmate-iem-concept .mm-dialog.mm-group-dialog {
+  width: min(1120px, 100%);
+  height: 100%;
+  max-height: 100%;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-dialog-head {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin: 0 0 8px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-dialog-head h3 {
+  flex: 0 0 auto;
+  font-size: 18px;
+  white-space: nowrap;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-dialog-head .mm-group-title-name {
+  order: 1;
+  flex: 1;
+  min-width: 60px;
+  width: auto;
+  min-height: 36px;
+  font-size: 14px;
+  margin: 0;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-dialog-head button {
+  order: 2;
+  flex: 0 0 auto;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#mixmate-iem-concept .mm-group-editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-group-picks {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+#mixmate-iem-concept .mm-group-picks button {
+  flex-shrink: 0;
+  font-size: 12px;
+  min-height: 34px;
+  padding: 5px 12px;
+}
+#mixmate-iem-concept .mm-group-editor-bar > button {
+  min-height: 34px;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-member-checks {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(32px, 1fr);
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: stretch;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-member-checks button {
+  min-height: 32px;
+  padding: 5px 7px;
+  font-size: 12px;
+  line-height: 1.15;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-member-checks button span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-member-checks button.mm-picked {
+  border-color: var(--mm-mix-color);
+  background: color-mix(in srgb, var(--mm-mix-color) 20%, #202c35);
+  color: #e6edf0;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-member-checks b {
+  color: var(--mm-mix-color);
+  min-width: 20px;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-dialog-actions {
+  flex-shrink: 0;
+  margin: 0;
+  gap: 8px;
+}
+#mixmate-iem-concept .mm-group-dialog .mm-dialog-actions button {
+  min-height: 34px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-dialog.mm-group-dialog {
+  padding: 8px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-dialog .mm-dialog-head {
+  margin-bottom: 6px;
+  gap: 8px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-dialog .mm-dialog-head h3 {
+  font-size: 15px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-dialog-head
+  .mm-group-title-name {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-dialog-head
+  button {
+  min-height: 30px;
+  padding: 4px 8px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-dialog .mm-dialog-body {
+  gap: 6px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-dialog .mm-member-checks {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-member-checks
+  button {
+  min-height: 32px;
+  padding: 4px;
+  font-size: 10px;
+  gap: 4px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-group-picks button,
+#mixmate-iem-concept[data-compact="true"] .mm-group-editor-bar > button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+#mixmate-iem-concept[data-compact="true"]
+  .mm-group-dialog
+  .mm-dialog-actions
+  button {
+  min-height: 30px;
+  padding: 4px 8px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-dialog.mm-group-dialog {
+  height: min(820px, 92dvh);
+  max-height: 92dvh;
+  padding: 10px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-dialog
+  .mm-dialog-head {
+  gap: 6px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-dialog
+  .mm-dialog-head
+  h3 {
+  font-size: 14px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-dialog
+  .mm-dialog-head
+  .mm-group-title-name {
+  font-size: 13px;
+  min-width: 65px;
+  padding: 6px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-dialog
+  .mm-dialog-head
+  button {
+  font-size: 11px;
+  padding: 5px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-dialog
+  .mm-member-checks {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(40px, 1fr);
+  gap: 5px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-dialog
+  .mm-member-checks
+  button {
+  font-size: 10px;
+  padding: 5px;
+  gap: 4px;
+  min-height: 40px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-picks button {
+  font-size: 11px;
+  padding: 5px 9px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-dialog
+  .mm-editor-feedback {
+  font-size: 10px;
+  max-width: 100px;
+}
+
+/* Responsive rehearsal controls: compact strips and full-width portrait EQ. */
+#mixmate-iem-concept .mm-group-switches {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  overflow-x: auto;
+  align-items: center;
+}
+#mixmate-iem-concept .mm-group-switches button {
+  flex: 0 0 auto;
+}
+#mixmate-iem-concept .mm-group-master-label {
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  color: var(--mm-mix-color);
+  display: block;
+  margin-top: 3px;
+}
+#mixmate-iem-concept .mm-eq-mode button {
+  font-size: 20px;
+  line-height: 1;
+  min-width: 0;
+}
+#mixmate-iem-concept .mm-eq-cut-bank button {
+  min-width: 0;
+  padding: 5px 2px;
+  font-size: 11px;
+  min-height: 30px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-scroll {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-strip-scroll.mm-expanded
+  > .mm-group {
+  grid-column: auto;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-scroll > .mm-strip {
+  min-height: 290px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-strip-scroll
+  .mm-fader-space {
+  grid-template-columns: 18px minmax(30px, 1fr) 12px;
+  gap: 2px;
+  padding: 10px 4px;
+  height: 190px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-strip-scroll .mm-value {
+  font-size: 14px;
+  margin: 0 4px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-strip-scroll
+  .mm-strip-head {
+  padding: 5px 4px 4px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-strip-scroll
+  .mm-strip-name {
+  font-size: 11px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-strip-scroll
+  .mm-strip-detail {
+  font-size: 9px;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-strip-scroll
+  .mm-pan-button {
+  font-size: 9px;
+  margin: 0 4px 5px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-native {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 280px 270px;
+  height: auto;
+  min-height: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-native .mm-eq-plot {
+  height: 100%;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-sidebar {
+  border-left: 0;
+  border-top: 1px solid #56636a;
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  grid-template-rows: 36px minmax(0, 1fr) 36px;
+  gap: 6px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-mode {
+  grid-column: 1;
+  grid-row: 1;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-band-tabs {
+  grid-column: 2;
+  grid-row: 1;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-param-bank {
+  grid-column: 2;
+  grid-row: 2/4;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-eq-cut-bank {
+  grid-column: 1;
+  grid-row: 2/4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches {
+  flex: 1;
+  min-width: 60px;
+}
+@media (min-width: 600px) {
+  #mixmate-iem-concept[data-orientation="portrait"] .mm-strip-scroll {
+    grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  }
+  #mixmate-iem-concept[data-orientation="portrait"] .mm-eq-native {
+    grid-template-rows: 360px 280px;
+  }
+}
+
+/* Keep track gestures available to the browser's scrolling implementation. */
+#mixmate-iem-concept .mm-fader-control {
+  position: relative;
+  justify-self: center;
+  min-height: 0;
+  height: 100%;
+  width: 42px;
+  touch-action: auto;
+}
+#mixmate-iem-concept .mm-fader-control > .mm-vertical {
+  pointer-events: none;
+  touch-action: auto;
+}
+#mixmate-iem-concept .mm-fader-hit {
+  position: absolute;
+  left: 0;
+  width: 42px;
+  height: 40px;
+  transform: translateY(-50%);
+  touch-action: none;
+  cursor: ns-resize;
+}
+#mixmate-iem-concept .mm-group-switches {
+  justify-content: flex-start;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches {
+  justify-content: flex-start;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-app {
+  overflow: visible;
+  height: auto;
+  max-height: none;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-app:fullscreen {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (orientation: portrait) {
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+#mixmate-iem-concept .mm-group-switches > button:first-child {
+  margin-inline-start: auto;
+}
+
+/* Portrait: two header rows, with every shortcut visible rather than clipped. */
+#mixmate-iem-concept[data-orientation="portrait"] .mm-top {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-utilities {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-utilities button {
+  padding: 6px;
+  min-height: 36px;
+  font-size: 11px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-snapshot {
+  width: 100%;
+  min-width: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches {
+  flex: 1 0 max-content;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  overflow: visible;
+}
+#mixmate-iem-concept[data-orientation="portrait"]
+  .mm-group-switches
+  > button:first-child {
+  margin-inline-start: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-group-switches > button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-navigation .mm-heading {
+  flex: 0 0 auto;
+}
+
+#mixmate-iem-concept .mm-eq-param > .mm-fader-control {
+  flex: 1;
+  height: auto;
+  min-height: 20px;
+  margin: 7px 0 5px;
+  width: 36px;
+}
+#mixmate-iem-concept .mm-eq-param .mm-fader-control > .mm-vertical {
+  flex: none;
+  width: 36px;
+  height: 100%;
+  margin: 0;
+}
+#mixmate-iem-concept .mm-eq-param .mm-fader-hit {
+  width: 36px;
+}
+#mixmate-iem-concept .mm-fader-horizontal {
+  width: 100%;
+  height: 62px;
+  flex-shrink: 0;
+}
+#mixmate-iem-concept .mm-fader-horizontal > .mm-pan-large {
+  pointer-events: none;
+  touch-action: auto;
+  margin: 0;
+  width: 100%;
+  height: 62px;
+}
+#mixmate-iem-concept .mm-fader-horizontal > .mm-fader-hit {
+  top: 50%;
+  width: 40px;
+  height: 62px;
+  transform: translate(-50%, -50%);
+  cursor: ew-resize;
+}
+
+#mixmate-iem-concept .mm-preview {
+  flex-wrap: wrap;
+  gap: 5px 12px;
+}
+#mixmate-iem-concept .mm-entry-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#mixmate-iem-concept .mm-entry-links a {
+  color: #e1d067;
+  text-underline-offset: 3px;
+}
+#mixmate-iem-concept .mm-mode-label {
+  font-weight: 700;
+  color: #e1d067;
+}
+#mixmate-iem-concept .mm-offline-state {
+  color: #abb3ba;
+  overflow-wrap: anywhere;
+}
+#mixmate-iem-concept .mm-empty {
+  padding: 25px;
+  border: 1px dashed #657079;
+  border-radius: 4px;
+  max-width: 620px;
+  margin: 20px auto;
+  color: #c8d1d6;
+  line-height: 1.6;
+}
+#mixmate-iem-concept .mm-empty h2 {
+  font-size: 19px;
+  color: #e1d067;
+}
+#mixmate-iem-concept [data-unknown="true"] .mm-fader-hit {
+  display: none;
+}
+#mixmate-iem-concept [data-unknown="true"] input {
+  visibility: hidden;
+}
+#mixmate-iem-concept .mm-strip-grid:empty {
+  display: none;
+}

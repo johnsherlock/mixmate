@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verifyOfflineCopy } from '../src/offline.js';
+import { verifyOfflineCopy, currentEntryRequirements } from '../src/offline.js';
 
 class FakeChannel {
   static instances = [];
@@ -65,4 +65,29 @@ test('registration observation happens within the deadline and late registration
   await assert.rejects(verifyOfflineCopy({ ...late.options, onRegistration: value => observed.push(value) }), /timed out/);
   resolveRegistration(registration); await new Promise(resolve => setImmediate(resolve));
   assert.equal(observed.length, 1);
+});
+
+
+test('legacy or mismatched ready replies cannot certify the currently loaded entry assets', async () => {
+  const required = { entry: 'https://example.test/mixmate/iem.html', token: 'a'.repeat(64), assets: ['https://example.test/mixmate/iem.html', 'https://example.test/mixmate/assets/iem-hash.js'] };
+  for (const proof of [undefined, { ...required, token: 'b'.repeat(64) }, { ...required, assets: [required.entry] }]) {
+    const { options } = setup({ controller: { postMessage(message, ports) { assert.deepEqual(message.required, required); ports[0].deliver({ ready: true, version: 'old', ...(proof ? { proof } : {}) }); } } });
+    await assert.rejects(verifyOfflineCopy({ ...options, required }), /does not verify the current page/);
+  }
+  const { options } = setup({ controller: { postMessage(message, ports) { ports[0].deliver({ ready: true, version: 'new', proof: message.required }); } } });
+  assert.equal((await verifyOfflineCopy({ ...options, required })).ready, true);
+});
+
+test('current entry requirements include actual module/CSS URLs and normalize known entry query/hash', () => {
+  const document = {
+    baseURI: 'https://example.test/mixmate/iem.html?rig=local#mix',
+    querySelector() { return { content: 'a'.repeat(64) }; },
+    querySelectorAll() { return [{ tagName: 'SCRIPT', getAttribute: () => './assets/iem-new.js' }, { tagName: 'LINK', getAttribute: () => './assets/iem-new.css' }]; },
+  };
+  const required = currentEntryRequirements(document);
+  assert.equal(required.entry, 'https://example.test/mixmate/iem.html');
+  assert.equal(required.token, 'a'.repeat(64));
+  assert.ok(required.assets.includes('https://example.test/mixmate/assets/iem-new.js'));
+  assert.ok(required.assets.includes('https://example.test/mixmate/assets/iem-new.css'));
+  assert.ok(required.assets.includes('https://example.test/mixmate/demo.html'));
 });

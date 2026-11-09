@@ -63,6 +63,12 @@ The production build generates a content-versioned service worker and precaches 
 
 Open a PR, request `@codex review`, resolve findings, and merge only once checks pass and Codex confirms no remaining issues. The repository must be connected to Codex with code review enabled. Phone/tablet installation, offline restart and local-network permission behavior require real-device checks; desktop tests cannot certify iOS support.
 
+## IEM destinations
+
+Open the [read-only IEM view](https://johnsherlock.github.io/mixmate/iem.html) or [interactive demo](https://johnsherlock.github.io/mixmate/demo.html). The read-only presentation starts empty with unavailable controls; its mixer session follows in the next story. Demo preserves the accepted simulated interactions and cannot connect to a desk. Its state stays in memory and never becomes live values. Mode labels and links remain visible in compact landscape too. The root connection/input-fader test remains available.
+
+Offline readiness verifies the current page's HTML identity and actual module/style assets. An older worker's generic readiness cannot certify these new pages; allow its update to download, close all MixMate windows when finished and reopen online before relying on offline launch. All runtime assets remain bundled locally.
+
 ## IEM design preview
 
 Open [the responsive IEM mockup](https://johnsherlock.github.io/mixmate/mockups/iem.html) on a phone or tablet. This standalone page simulates five stereo AUX mixes, relative channel groups, pan and EQ controls. It cannot connect to or change the mixer (network access is blocked by its content security policy). The native-app overlay is simulated too.
