@@ -10,12 +10,18 @@ An offline-first Soundcraft Ui24R connection and input-fader test. It displays c
 2. Android Chrome: menu → Install app. iPhone/iPad Safari: Share → Add to Home Screen.
 3. Open the installed app once while online and check offline readiness there too.
 4. Close it, turn off mobile data and disconnect internet, but leave Wi-Fi enabled. Join the Swissonic router’s Wi-Fi. Keep this connection if the phone warns it has no internet.
-5. Reopen Mixmate, enter the mixer’s private LAN IPv4 address (default `192.168.0.60`), and tap Connect. Allow local network access if asked.
+5. Reopen Mixmate, select a saved local rig or enter the mixer’s private LAN IPv4 address (default `192.168.0.60`), and tap Connect. Allow local network access if asked.
 6. Select an input and check Mixmate follows changes from the original Soundcraft UI. To send a level, check **Enable fader control**, adjust the slider, and release it (keyboard changes also send). The readout follows the desk’s reported level; the slider sends once per committed change. Stereo-linked inputs move together.
 7. Changing inputs, disconnecting or hiding the app disables control. Re-enable it for each selected input. No mute, gain, master, routing or scene controls are provided.
 8. Test closing/reopening and device sleep. Reconnect explicitly if the connection drops. Keep the original UI available.
 
 No Mac or internet server is required during use. All app assets are cached on each device; the device connects directly to the mixer. Revisit online for updates. The offline panel shows the verified **Offline version** and a separate notice when an update is downloaded and waiting. Close all MixMate windows/tabs when finished to let it activate. A later successfully verified version change shows an in-app updated notice; the first version observation silently establishes a baseline. Version history is device-local and optional when storage is unavailable. Clearing browser/site data can remove the offline copy. Cache-first launch keeps the installed version stable during a session; allow the update worker to finish downloading online before closing the app. Missing or damaged cached files are repaired online only when they match that installed version. If a newer deployment prevents repair, close all app windows and reopen online to finish the update; check offline readiness again.
+
+## Local rigs and preferences
+
+The connection test now saves named rigs on this device. **New rig** starts a draft; enter its name/address and choose **Save rig**. Save edits before switching rigs. Names identify your local profiles, not a verified desk identity; profiles can share an address. Selecting/deleting a rig or editing its target address disconnects and disables fader control. Connecting always requires a separate tap on Connect, using the address currently shown.
+
+**IEM display preferences** stores orientation and meter visibility for the future IEM view; it does not add simulated meters or change this test's layout. Settings status distinguishes loading/saving/saved from temporary memory-only changes or a conflict with another app window. If storage fails, the connection test still works, but temporary changes disappear when closed. No received mixer names, levels, meters or armed controls are saved. An old saved address migrates only after validation; its legacy key is removed after a durable settings commit. Settings backup/import/reset is the next story.
 
 ## Installation identity update
 

@@ -29,7 +29,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 F01 implementation/evidence scope is complete: PRs [#7](https://github.com/johnsherlock/mixmate/pull/7), [#8](https://github.com/johnsherlock/mixmate/pull/8), [#10](https://github.com/johnsherlock/mixmate/pull/10), [#11](https://github.com/johnsherlock/mixmate/pull/11), [#12](https://github.com/johnsherlock/mixmate/pull/12) and [#9](https://github.com/johnsherlock/mixmate/pull/9) merged after passing checks and affirmative Codex review. The S03 checkpoint merged at `b949430`, reviewed final head `bdf130b`. Physical Pixel/Android/iOS/offline qualification remains open in [F08-S01](stories/F08-S01.md); the tablet's targeted version/name pass does not qualify the full device workflow.
 
-F02-S01 implements the versioned local settings repository in [PR #13](https://github.com/johnsherlock/mixmate/pull/13), awaiting review/merge. S02 rig/preferences UI and legacy address migration must wait for that merge. Routine decisions and parked dependencies are in [the follow-up log](user-follow-up.md). Eight features contain 28 sequential stories.
+F02-S01 merged the versioned repository in [PR #13](https://github.com/johnsherlock/mixmate/pull/13) at `6b2e859` after passing CI and affirmative Codex review. F02-S02 adds named local rigs, display preferences, safe target switching and durable legacy-address migration; awaiting its story PR review/merge. F02-S03 backup/recovery follows only after that merge. Routine decisions and parked dependencies are in [the follow-up log](user-follow-up.md). Eight features contain 28 sequential stories.
 
 ## Evidence rules
 
