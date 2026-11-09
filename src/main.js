@@ -3,6 +3,8 @@ import { faderValueToDB } from 'soundcraft-ui-connection';
 import { MixerConnection } from './protocol.js';
 import { FaderIntent } from './fader-intent.js';
 import { verifyOfflineCopy, observeOfflineUpdates } from './offline.js';
+import { SettingsRepository } from './settings.js';
+import { mountRigSettings } from './rig-settings.js';
 
 const $ = id => document.getElementById(id);
 let state = Object.create(null);
@@ -19,7 +21,6 @@ function log(message) {
   $('diagnostics').textContent = [`Mixmate 0.2.0`, navigator.userAgent, `Origin: ${location.origin}`, `Secure context: ${window.isSecureContext}`, ...logs].join('\n');
 }
 for (let n = 1; n <= 24; n++) $('channel').add(new Option(`Channel ${String(n).padStart(2, '0')}`, n));
-try { $('address').value = localStorage.getItem('mixmate-address') || '192.168.0.60'; } catch { /* Storage is optional. */ }
 
 const statuses = {
   connecting: ['Connecting to your desk…', 'Allow local network access if asked. Waiting up to 15 seconds for mixer state.'],
@@ -102,7 +103,6 @@ $('connect-form').addEventListener('submit', event => {
   lastUpdate = null;
   try {
     connection.connect($('address').value);
-    try { localStorage.setItem('mixmate-address', $('address').value.trim()); } catch { /* Optional. */ }
   } catch (error) {
     $('address').setCustomValidity(error.message);
     $('address').reportValidity();
@@ -245,3 +245,14 @@ navigator.serviceWorker?.addEventListener('controllerchange', prepareOffline);
 log('App opened. No mixer connection started.');
 renderChannel();
 prepareOffline();
+
+const settingsRepository = new SettingsRepository();
+let settingsStorage;
+try { settingsStorage = localStorage; } catch { /* Optional. */ }
+mountRigSettings({
+  repository: settingsRepository, $, storage: settingsStorage,
+  makeOption: (label, value) => { const option = new Option('', value); option.textContent = label; return option; },
+  onTargetChange: () => { connection.disconnect(); setStatus('disconnected'); },
+  isConnected: () => ['connecting', 'connected', 'live'].includes(connectionStatus),
+  confirmDelete: name => window.confirm(`Delete local rig “${name}” and its group definitions? This does not change the mixer.`),
+});

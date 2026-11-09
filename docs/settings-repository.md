@@ -1,6 +1,6 @@
 # Local settings repository: version 1
 
-Story: [F02-S01](stories/F02-S01.md). Date: 2026-11-09. This is a backend foundation; F02-S02 will connect rig/preferences UI and visible persistence status. The current connection-test address continues using its existing `mixmate-address` localStorage key until that migration. No automatic mixer connection or new mixer message is introduced.
+Story: [F02-S01](stories/F02-S01.md). Date: 2026-11-09. F02-S02 wires this repository into the connection test through `src/rig-settings.js`, with visible status and validated legacy address migration. The old `mixmate-address` key is no longer written. No automatic mixer connection or new mixer message is introduced.
 
 ## Storage contract
 
@@ -25,7 +25,7 @@ Story: [F02-S01](stories/F02-S01.md). Date: 2026-11-09. This is a backend founda
 }
 ```
 
-The example is a schema illustration, not a seeded rig or evidence that those sources/mixes exist. Defaults have no profiles, a null selection, automatic orientation and meters enabled. Navigation defaults belong to a newly user-created profile in S02; null mix/group IDs mean no selection.
+The example is a schema illustration, not a seeded rig or evidence that those sources/mixes exist. Defaults have no profiles, a null selection, automatic orientation and meters enabled. Navigation defaults belong to each newly created profile; null mix/group IDs mean no selection.
 
 IDs are stable local strings (1–64 ASCII letters/digits/underscore/hyphen, starting with a letter/digit); a changed address does not change rig identity. Profile and group names are user-entered text (trimmed, 1–80 characters, no control characters), not copied live channel names. Consumers render them using `textContent`. An address must be canonical private IPv4. Duplicate profiles/groups/members and dangling selected profile/group IDs are rejected.
 
@@ -57,3 +57,21 @@ Future schema changes must add an explicit tested migration and bump the documen
 ## Validation and limitations
 
 `fake-indexeddb` 6.2.8 is pinned as a development-only dependency, following the [author's test API documentation](https://github.com/dumbmatter/fakeIndexedDB). It implements IDB requests, upgrades and transactions in memory for Node tests; it is not shipped as a browser polyfill or fetched at runtime. Tests exercise committed reopen, initial upgrade, rejection/preservation of unknown versions, transaction abort after request success, quota failure, ordering, defensive copies, corruption, in-flight connection invalidation and stale-instance conflicts (including concurrent first saves). This does not certify physical browser storage retention or mobile compatibility; those release checks remain open in F08-S01.
+
+## F02-S02 UI and target contract
+
+One repository per document backs the connection test's local rig picker/editor and orientation/showMeters preferences. First use creates one `My rig` profile from a validated legacy address or `192.168.0.60`. New rig starts a local editor draft; Save validates/commits it with a crypto-random stable ID, empty groups and no selected AUX/group. Duplicate IP addresses remain legal, separate identities. Names are inert text, trimmed to 1–80 characters; the UI caps profiles at 32. Delete requires confirmation and removes only that local rig and its definitions.
+
+Profile selection, New rig, selected-profile deletion and address input synchronously disconnect/clear/disarm before any asynchronous persistence. Renaming a profile without changing its target does not interrupt the socket. Connect is always an independent explicit action and uses the displayed address. Save never starts or retries a connection. An unsaved address remains usable temporarily and is labelled as a draft; Save before changing profiles to retain edits.
+
+The editor's runtime/draft selection is separate from persisted default selection. Preference updates cannot rebind a New rig or temporary-address draft. If the user types or connects before IndexedDB finishes, loaded settings do not replace the current address or infer rig identity from matching IPs, including duplicate-IP profiles. The target stays unbound until an explicit profile selection or Save. Late save completion only updates persistence status; it cannot overwrite a newer address/name draft or retarget a socket.
+
+Status subscriptions render `settingsStatusText` and never automatically reload definitions from another window. Atomic repository conflicts leave newer durable records untouched and the attempted definitions usable in temporary memory. Storage errors retain the validated legacy source. The old `mixmate-address` key is removed only after a persistent `saved` event (transaction commit), and is never written again; this prevents a successful migration followed by reset from reviving the legacy address. A removal failure remains harmless to current nonempty repository definitions; future reset/import recovery must clear the legacy key after its own durable commit as well.
+
+Orientation and showMeters are saved configuration for F03's IEM consumer. This connection test neither forces orientation nor invents meters. Navigation fields are initialized but not presented as live AUX availability. No received names/state, armed controls or gesture values enter the repository.
+
+
+S02 validation: 65 local/fake tests pass and production build emits eight precached assets (`fff7703f6e9d13b9`). Targeted production browser QA used isolated Chromium at 390×844 with real IndexedDB, loopback-only requests and a strict fake WebSocket: new profile creation, preferences before Save, identity preservation/reload and armed-profile-switch disconnect all passed. The layout had no horizontal overflow or JavaScript errors. Service workers were deliberately blocked for that UI run; this does not establish mobile retention, offline readiness or real mixer compatibility.
+
+
+Programmatic target assignment clears previous custom validation errors, matching the existing input-event path. Native Chromium testing reproduced invalid-address Connect → valid saved-rig still blocking submission before the fix; saved-rig and New rig recovery now clear `customError`, pass form validity and permit explicit fake-socket connection. No automatic connection or write is introduced.
