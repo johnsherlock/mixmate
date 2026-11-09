@@ -1,7 +1,7 @@
 # ADR-0002: Defer device qualification and authorize planned controls
 
 Date: 2026-11-09
-Status: Accepted by user in the master chat; documentation checkpoint awaiting PR review/merge.
+Status: Accepted by user in the master chat; documentation checkpoint merged in PR #9 at b949430 after passing CI and affirmative Codex review.
 Supersedes: ADR-0001's early mobile-qualification development gate and repeated feature-class permission gates. The remaining architecture and safety constraints remain in force.
 
 ## Context and user decisions

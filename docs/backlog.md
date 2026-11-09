@@ -7,7 +7,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 | Feature | Outcome | Stories | Status |
 | --- | --- | --- | --- |
 | [F01](features/F01.md) | Offline distribution and device compatibility | 6 | Evidence checkpoint ready — qualification deferred/open in F08 |
-| [F02](features/F02.md) | Device-local settings | 3 | Planned |
+| [F02](features/F02.md) | Device-local settings | 3 | In progress |
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Planned |
 | [F04](features/F04.md) | Groups and navigation | 2 | Planned |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Planned |
@@ -27,7 +27,9 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 ## Current work
 
-F01-S01, S02, S02A, S02B and S02C merged through PRs [#7](https://github.com/johnsherlock/mixmate/pull/7), [#8](https://github.com/johnsherlock/mixmate/pull/8), [#10](https://github.com/johnsherlock/mixmate/pull/10), [#11](https://github.com/johnsherlock/mixmate/pull/11) and [#12](https://github.com/johnsherlock/mixmate/pull/12), each after passing checks and affirmative Codex review. [PR #9](https://github.com/johnsherlock/mixmate/pull/9) now closes F01-S03 as an evidence/implementation checkpoint under the user's 2026-11-09 re-scope; it may merge after final affirmative review/checks, then sequential F02 implementation can begin. Pixel installation and the remaining Android/iOS/offline matrix stay open in [F08-S01](stories/F08-S01.md), with observed results unchanged. The tablet's targeted version/name retest is a pass only for that check; it is not full qualification. Routine decisions and parked dependencies are recorded in [the follow-up log](user-follow-up.md). Eight features contain 28 sequential stories.
+F01 implementation/evidence scope is complete: PRs [#7](https://github.com/johnsherlock/mixmate/pull/7), [#8](https://github.com/johnsherlock/mixmate/pull/8), [#10](https://github.com/johnsherlock/mixmate/pull/10), [#11](https://github.com/johnsherlock/mixmate/pull/11), [#12](https://github.com/johnsherlock/mixmate/pull/12) and [#9](https://github.com/johnsherlock/mixmate/pull/9) merged after passing checks and affirmative Codex review. The S03 checkpoint merged at `b949430`, reviewed final head `bdf130b`. Physical Pixel/Android/iOS/offline qualification remains open in [F08-S01](stories/F08-S01.md); the tablet's targeted version/name pass does not qualify the full device workflow.
+
+F02-S01 implements the versioned local settings repository and is awaiting its PR review/merge. S02 rig/preferences UI and legacy address migration must wait for that merge. Routine decisions and parked dependencies are in [the follow-up log](user-follow-up.md). Eight features contain 28 sequential stories.
 
 ## Evidence rules
 
