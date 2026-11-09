@@ -2,6 +2,10 @@
 
 Status: Partial Android installation reports plus received state on an unconfirmed installed-app platform/context; tablet targeted version/name retest passed; full mobile/offline checks outstanding. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
 
+## Qualification ownership
+
+On 2026-11-09 the user approved continuing implementation and deferring unresolved Pixel/mobile qualification to [F08-S01](stories/F08-S01.md), recorded in [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md). F01-S03 may merge as an evidence checkpoint after review; this checklist remains an open release gate. Existing result cells are unchanged and no missing check is treated as a pass. See [the follow-up log](user-follow-up.md).
+
 ## Current reviewed test build
 
 The current reviewed target is update-awareness merge `7c2fd850005d108f2a0de4c77cc26cccdc2595af` ([PR #12](https://github.com/johnsherlock/mixmate/pull/12)), worker `0dbe2dd8fae4a9dd`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42536378686) succeeded. The tablet user confirmed a targeted cache-version/name pass on prior worker `917e3ba9d64587ec`; update-notice behavior on the new release remains untested. The Pixel browser screenshot also verified `917e3ba9d64587ec`, while installation remains blocked. Historical worker IDs are not silently transferred to newer results.

@@ -1,6 +1,6 @@
 # F01-S03 device and transport evidence
 
-Status: In progress; physical-device gate outstanding. Story: [F01-S03](stories/F01-S03.md). Device procedure and return template: [real-device checks](device-checks.md).
+Status: Evidence checkpoint complete; qualification deferred/open in F08-S01 under the user's 2026-11-09 decision. Story: [F01-S03](stories/F01-S03.md). Device procedure and return template: [real-device checks](device-checks.md).
 
 ## Bounded desktop observation
 
@@ -63,9 +63,9 @@ The user then reported an installed “desktop app” connects and displays an a
 
 ## Outstanding physical-device gate
 
-Full Android Chrome, iPhone Safari and iPad Safari compatibility verdicts remain unverified. Android installation evidence is partial; Pixel installed launch is currently blocked, while both Safari device classes are unavailable. The unconfirmed installed-app state receipt does not fill any platform-specific offline matrix cell. The user must run the linked checklist on actual devices and return versions plus results for installation, installed cold offline launch, explicit connection with actual received state, local-network permission, disconnect/sleep/reopen, and update/recovery. Record both rigs separately when available.
+Full Android Chrome, iPhone Safari and iPad Safari compatibility verdicts remain unverified. Android installation evidence is partial; Pixel installed launch is currently blocked, while both Safari device classes are unavailable. The unconfirmed installed-app state receipt does not fill any platform-specific offline matrix cell. F08-S01 must collect the linked checklist on actual devices with versions plus results for installation, installed cold offline launch, explicit connection with actual received state, local-network permission, disconnect/sleep/reopen, and update/recovery. Record both rigs separately when available.
 
-Do not merge F01-S03 or mark F01 complete merely because this Node check succeeded or the draft PR passes review. If a browser blocks direct HTTPS-to-local-WebSocket transport, document the exact result and bring an explicit distribution/transport decision to the user. Do not weaken browser security, change mixer/router settings or silently drop a support target.
+The user explicitly re-scoped F01/S03 on 2026-11-09 in [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md): PR #9 may merge as an evidence checkpoint after final affirmative review/checks, and independent implementation may continue. That does not convert the Node check or any missing physical evidence into a compatibility pass; full qualification remains open in [F08-S01](stories/F08-S01.md). If a browser blocks direct HTTPS-to-local-WebSocket transport, document the exact result and bring an explicit distribution/transport decision to the user. Do not weaken browser security, change mixer/router settings or silently drop a support target.
 
 ## Later targeted tablet and Pixel observations
 
@@ -89,4 +89,8 @@ Sources: [Cube4 manifest](https://github.com/johnsherlock/cube4/blob/main/manife
 
 A separate confirmed cross-app risk exists in [StackIt's service worker](https://github.com/johnsherlock/stackit/blob/main/public/sw.js): activation deletes every origin cache except `stack-it-v1`. Direct inspection of its deployed `sw.js` confirms this code. Since Cache Storage is origin-wide, activation can remove MixMate's offline caches even though worker URL scopes differ. This does not explain the installed/Open message by itself. No other repository or deployed app was modified. A scoped cache cleanup fix belongs in the StackIt project; isolating MixMate on its own origin is a distribution option requiring a deliberate decision, not a silent hosting change.
 
-The next Pixel diagnostic is the exact installed/Open dialog and the entry point used (Chrome menu or MixMate's install button). Do not uninstall sibling apps, clear all Chrome data or claim the browser report is proven. F01-S03 remains incomplete.
+The Pixel issue is parked at the user's request. Later diagnostics can capture the exact installed/Open dialog and entry point (Chrome menu or MixMate's install button). Do not uninstall sibling apps, clear all Chrome data or claim the browser report is proven. F01-S03 may close as the evidence checkpoint under ADR-0002; Pixel and physical qualification remain unresolved in F08-S01.
+
+## 2026-11-09 development checkpoint
+
+The user asked to move on from the unresolved Pixel issue, authorized the planned control classes and EQ mapping, and requested autonomous progress with recorded decisions/parked blockers. [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) records these decisions. The result matrix above is unchanged. The [follow-up log](user-follow-up.md) and F08-S01 carry unresolved installation, platform, offline, sleep, update and protocol evidence; no hardware qualification is marked complete by this handoff.

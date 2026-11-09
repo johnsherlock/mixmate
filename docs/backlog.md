@@ -1,12 +1,12 @@
 # MixMate implementation backlog
 
-Approved direction: 2026-11-08. The accepted responsive clickable prototype in `mockups/iem.html` is the product target. Delivery uses sequential features and stories, with explicit protocol, device and write-permission gates.
+Approved direction: 2026-11-08. The accepted responsive clickable prototype in `mockups/iem.html` is the product target. Delivery uses sequential features and stories, with explicit protocol verification and release-qualification gates. [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) records the user's 2026-11-09 authorization and qualification deferral.
 
 ## Feature order
 
 | Feature | Outcome | Stories | Status |
 | --- | --- | --- | --- |
-| [F01](features/F01.md) | Offline distribution and device compatibility | 6 | In progress — device gate pending |
+| [F01](features/F01.md) | Offline distribution and device compatibility | 6 | Evidence checkpoint ready — qualification deferred/open in F08 |
 | [F02](features/F02.md) | Device-local settings | 3 | Planned |
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Planned |
 | [F04](features/F04.md) | Groups and navigation | 2 | Planned |
@@ -21,13 +21,13 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 - Work in this repository on `codex/` branches. Preserve pre-existing user changes, including the uncommitted integration handoff; do not stage it implicitly.
 - Each story has a PR, passing tests/build and affirmative `@codex review` before merge. Fix review findings and repeat review as needed; no parallel story implementation or starting the next story while review is outstanding.
 - Record completion in story, feature and backlog documents. When preparing a merge, status may say implementation complete / awaiting review; only report merged when GitHub confirms it.
-- New findings may split a story or add a dependency; record the scope change. Browser/hardware blockers do not silently reduce support targets.
-- Report real-device checks when needed with an exact procedure and fields to return. Keep the feature awaiting evidence until the user supplies results or approves a revised scope.
-- Never broaden outbound permissions implicitly. Later permission stories require explicit approval of exact paths, validations and arming behavior before implementation.
+- New findings may split a story or add a dependency; record the scope change. Under ADR-0002, park blocked hardware-dependent acceptance honestly and record a dependency exception before independent coding. Do not start parallel implementation or silently reduce support targets.
+- Track real-device checks and unresolved decisions in [user-follow-up.md](user-follow-up.md). The user approved deferring remaining F01 qualification to F08-S01; implementation may continue while hardware stays unverified. Arrange later exact device checks without inferring passes.
+- Planned AUX levels/groups, pan, output GEQ/shelf curve mapping, snapshot recall/save and recording start/stop are user-authorized in ADR-0002. Verify exact wire forms, types/ranges, stereo/current-socket prerequisites and typed guards, then deliberately update the active allowlist through the feature PR; no repeated permission request for these approved feature classes. Other operation classes remain outside scope. No real-desk actuation during development.
 
 ## Current work
 
-F01-S01, S02, S02A, S02B and S02C merged through PRs [#7](https://github.com/johnsherlock/mixmate/pull/7), [#8](https://github.com/johnsherlock/mixmate/pull/8), [#10](https://github.com/johnsherlock/mixmate/pull/10), [#11](https://github.com/johnsherlock/mixmate/pull/11) and [#12](https://github.com/johnsherlock/mixmate/pull/12), each after passing checks and affirmative Codex review. The tablet's targeted cache update and named-selector retest passed by user report. Pixel installation remains blocked despite a verified current browser cache. Cube4 and StackIt WebAPK details confirm separate app IDs/scopes on the shared GitHub Pages origin; investigation is recorded in [device evidence](f01-device-evidence.md). [Draft PR #9](https://github.com/johnsherlock/mixmate/pull/9) remains incomplete pending full cold-offline, sleep and platform evidence. Safari devices remain unavailable/untested. Do not start F02 before the gate is resolved or explicitly re-scoped. Eight features contain 28 sequential stories.
+F01-S01, S02, S02A, S02B and S02C merged through PRs [#7](https://github.com/johnsherlock/mixmate/pull/7), [#8](https://github.com/johnsherlock/mixmate/pull/8), [#10](https://github.com/johnsherlock/mixmate/pull/10), [#11](https://github.com/johnsherlock/mixmate/pull/11) and [#12](https://github.com/johnsherlock/mixmate/pull/12), each after passing checks and affirmative Codex review. [PR #9](https://github.com/johnsherlock/mixmate/pull/9) now closes F01-S03 as an evidence/implementation checkpoint under the user's 2026-11-09 re-scope; it may merge after final affirmative review/checks, then sequential F02 implementation can begin. Pixel installation and the remaining Android/iOS/offline matrix stay open in [F08-S01](stories/F08-S01.md), with observed results unchanged. The tablet's targeted version/name retest is a pass only for that check; it is not full qualification. Routine decisions and parked dependencies are recorded in [the follow-up log](user-follow-up.md). Eight features contain 28 sequential stories.
 
 ## Evidence rules
 
