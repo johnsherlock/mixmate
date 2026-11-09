@@ -1,0 +1,9 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "date": "2026-11-09",
+    "basis": "soundcraft-ui-connection 7.1.0 receive selectors/facades; Ui24 manual sections 4.3 and 4.3.1",
+    "notes": "Hand-authored names and values; no real mixer state or mockup values copied. Firmware string is explicitly synthetic. Current-firmware validation parked after a bounded connection timeout."
+  },
+  "frame": "3:::SETS^model^ui24\nSETS^firmware^synthetic-test\nSETS^a.0.name^AUX <A> ^ Monitor\nSETD^a.0.mix^0.25\nSETD^a.0.pan^0.5\nSETD^a.0.mute^0\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETS^i.0.name^Input <one> ^ literal\nSETD^i.0.stereoIndex^-1\nSETS^l.1.name^Line B\nSETD^l.1.stereoIndex^-1\nSETS^p.0.name^Player A\nSETD^p.0.stereoIndex^-1\nSETS^f.3.name^FX D\nSETD^i.0.aux.0.value^0\nSETD^i.0.aux.0.pan^0.5\nSETD^i.0.aux.0.mute^1\nSETD^i.0.aux.0.post^0\nSETD^i.0.aux.0.postproc^1\nSETD^l.1.aux.0.value^0.125\nSETD^p.0.aux.0.value^0.375\nSETD^f.3.aux.0.value^0.625"
+}

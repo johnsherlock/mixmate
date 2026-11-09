@@ -41,6 +41,8 @@ If connection fails, expand diagnostics and copy the result. It includes the bro
 
 Incoming name/mix/mute/stereoIndex state never triggers a write. No mute, gain, master, routing, scene, clock or network writes exist. The third-party `soundcraft-ui-connection` library supplies the fader-to-dB conversion, not its connection or control facade. Automated write tests use fake sockets and must not move real faders.
 
+The separate [IEM receive schema contract](docs/iem-protocol-contract.md) documents source-backed AUX/source paths and unknown-state rules for the forthcoming read-only view. It is not yet wired into this connection test and adds no writer. Current-firmware corroboration remains open.
+
 Reference: [community protocol documentation](https://fmalcher.github.io/soundcraft-ui/more/howitworks). Mixmate is an independent experiment, not a Soundcraft product.
 
 ## Development
