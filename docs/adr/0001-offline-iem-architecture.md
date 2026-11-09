@@ -1,7 +1,7 @@
 # ADR-0001: Offline IEM architecture and sequential delivery
 
 Date: 2026-11-08
-Status: Accepted direction by user; implementation pending story review and evidence gates.
+Status: Accepted direction by user; amended on 2026-11-09 by [ADR-0002](0002-deferred-qualification-and-authorized-controls.md).
 
 ## Context
 
@@ -19,24 +19,24 @@ MixMate must be installed from HTTPS while online, then run on Android/iOS phone
 8. Connect only after explicit user action; initially select a rig address or enter a private IPv4 address. No automatic reconnect, startup probing or post-sleep reconnect. Disconnect/clear/disarm on hiding and navigation. Connection faults and stale sessions require deliberate recovery.
 9. Persist device-local user settings in a versioned IndexedDB repository: rig profile IDs/names/addresses, display/navigation preferences and ordered source-ID group definitions. Use validation, migrations, visible save failures, memory fallback and export/import. Request persistent storage where supported. Do not assume browser and installed-app storage are shared.
 10. Live mixer values, meters, arming, gesture baselines and pending operations remain memory-only. An IP is not mixer identity. Missing source IDs remain unresolved; groups are not silently assigned to replacement sources. Never queue/retry/replay writes or restore an armed session.
-11. Retain accepted layout and gestures: three strips across phone portrait; wider tablet grids; landscape viewport fit/horizontal banks; portrait/fullscreen vertical scroll; wrapping shortcuts; identifiable expanded group master without AUX master. Demo sliders drag from caps and jump on double track taps; single taps/swipes scroll. Live controls stay disabled until separately authorized; browsing/fullscreen/local clock may work.
+11. Retain accepted layout and gestures: three strips across phone portrait; wider tablet grids; landscape viewport fit/horizontal banks; portrait/fullscreen vertical scroll; wrapping shortcuts; identifiable expanded group master without AUX master. Demo sliders drag from caps and jump on double track taps; single taps/swipes scroll. Live controls stay disabled until their already-authorized feature has verified protocol/guards and reviewed implementation; browsing/fullscreen/local clock may work.
 12. Deliver features and stories sequentially through one story agent at a time. Each story receives a PR, tests/build, requested `@codex review`, fixes and affirmative Codex review before merge and the next story.
 
 ## Compatibility gate
 
-Offline launch and local mixer transport are independent capabilities. Installed HTTPS origin does not bypass browser mixed-content or local-network policy. Actual Android Chrome, iPhone Safari and iPad Safari testing is required before support claims. If direct WebSocket access fails, bring an explicit deployment/transport decision to the user; do not weaken browser security or change mixer/router settings. F01 remains incomplete until its evidence gate is resolved.
+Offline launch and local mixer transport are independent capabilities. Installed HTTPS origin does not bypass browser mixed-content or local-network policy. Actual Android Chrome, iPhone Safari and iPad Safari testing is required before support claims. If direct WebSocket access fails, bring an explicit deployment/transport decision to the user; do not weaken browser security or change mixer/router settings. Under ADR-0002, F01/S03 may close as an implementation/evidence checkpoint; unresolved physical qualification is carried explicitly into F08-S01 and remains a release gate, not a blocker for all independent development.
 
 ## Permissions and deferred decisions
 
-This ADR does not expand AGENTS.md. Only the existing explicitly armed input `.mix` experiment may issue its currently permitted writes. No AUX action may invoke it. AUX masters/sends, pan, EQ, snapshots and recording require separate exact allowlists and explicit user approval before implementation.
+ADR-0002 records the user's 2026-11-09 authorization for planned AUX masters/sends, pan, output EQ mapping, snapshots and recording. The active implemented allowlist still contains only connection messages and the existing explicitly armed input `.mix` experiment. No AUX action may invoke that input writer. Each feature must verify and document exact allowlists and typed guards before enabling its approved operation; no repeated feature-class permission request is needed. Other prohibitions remain.
 
-A future write ADR must define current-socket metadata prerequisites, arming and disarming, both stereo dimensions, normalized/dB/silence mappings, native edits during gestures, whole-group clamping, and non-atomic partial/disconnect behavior.
+The feature-specific verified write contracts, under ADR-0002, must define current-socket metadata prerequisites, arming and disarming, both stereo dimensions, normalized/dB/silence mappings, native edits during gestures, whole-group clamping, and non-atomic partial/disconnect behavior.
 
-Output EQ representation is unresolved: the prototype's point/drawn models must be reconciled with actual graphic EQ and available cuts without claiming new hardware processing or overwriting unrelated settings. Snapshot/record semantics and native UI iframe feasibility require individual evidence. Provide a direct-link alternative if embedding is unsupported.
+The user has accepted mapping requested point/drawn EQ curves onto actual output graphic-EQ bands and supported low/high shelves under ADR-0002; exact protocol, band centres/ranges and user-reported shelf support still require verification, without claiming new hardware processing or overwriting unrelated settings. Snapshot/record semantics and native UI iframe feasibility require individual evidence. Provide a direct-link alternative if embedding is unsupported.
 
 ## Consequences
 
-No backend or internet is required at a gig. Settings are installation-local and can be lost if site data is cleared; export/import supplies a portable backup. Mobile transport feasibility is an early release gate. Read-only delivery can proceed without AUX permission changes, while later controls may require explicit product decisions where the hardware cannot match the prototype exactly.
+No backend or internet is required at a gig. Settings are installation-local and can be lost if site data is cleared; export/import supplies a portable backup. Mobile transport feasibility remains a release-qualification gate in F08-S01; ADR-0002 permits independent implementation to continue while it is unresolved. Read-only delivery can proceed without AUX permission changes, while later controls may require explicit product decisions where the hardware cannot match the prototype exactly.
 
 ## References
 

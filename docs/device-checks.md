@@ -1,6 +1,16 @@
 # F01 real-device checks
 
-Status: Not run. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
+Status: Partial Android installation reports plus received state on an unconfirmed installed-app platform/context; tablet targeted version/name retest passed; full mobile/offline checks outstanding. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
+
+## Qualification ownership
+
+On 2026-11-09 the user approved continuing implementation and deferring unresolved Pixel/mobile qualification to [F08-S01](stories/F08-S01.md), recorded in [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md). F01-S03 may merge as an evidence checkpoint after review; this checklist remains an open release gate. Existing result cells are unchanged and no missing check is treated as a pass. See [the follow-up log](user-follow-up.md).
+
+## Current reviewed test build
+
+The current reviewed target is update-awareness merge `7c2fd850005d108f2a0de4c77cc26cccdc2595af` ([PR #12](https://github.com/johnsherlock/mixmate/pull/12)), worker `0dbe2dd8fae4a9dd`. [Pages deployment](https://github.com/johnsherlock/mixmate/actions/runs/42536378686) succeeded. The tablet user confirmed a targeted cache-version/name pass on prior worker `917e3ba9d64587ec`; update-notice behavior on the new release remains untested. The Pixel browser screenshot also verified `917e3ba9d64587ec`, while installation remains blocked. Historical worker IDs are not silently transferred to newer results.
+
+Open online, allow any waiting update to download, close all MixMate windows/tabs and reopen before testing. The new version is visible in the offline panel; first observation seeds history, later verified changes announce an update. Follow [S02A migration cautions](stories/F01-S02A.md#migration-and-device-gate): remove only an identifiable MixMate installation, never sibling apps or browser data. Record the verified worker version; an existing icon alone does not identify a build.
 
 ## Safety and setup
 
@@ -27,11 +37,20 @@ Have one Android phone/tablet with Chrome, one iPhone with Safari and one iPad w
 
 Use pass / fail / not run / not applicable, with evidence. No mobile support is claimed at baseline. Each installed device must pass offline launch and actual received state without internet; both rig transport rows remain separate.
 
-| Device / browser | Browser online | Installed offline cold launch | Rig .0.60 state | Rig .1.60 state | Hide/sleep/reopen | Permission recovery | Two-release update | Verdict |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Android / Chrome (version pending) | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Unverified |
-| iPhone / Safari (version pending) | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Unverified |
-| iPad / Safari (version pending) | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Unverified |
+| Device / browser | Browser online readiness | Installation / installed online launch | Installed offline cold launch | Rig .0.60 state | Rig .1.60 state | Hide/sleep/reopen | Permission recovery | Two-release update | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Pixel 6 Pro / Chrome 156 (actual OS version unknown) | Screenshot verifies browser cache `917e3ba9d64587ec` | Blocked: Chrome reports installed/Open; app not found and Open does nothing; absent from chrome://webapks; Settings Apps result pending | Not run | Not run | Not run | Not run | Not run | Not run | Install/launch blocker; cause unknown |
+| Lenovo approximately 9-inch tablet / Chrome (exact model and versions pending) | User verifies cache `917e3ba9d64587ec`; selector names work | Installation reported; current installed/browser context not independently confirmed | Not run | Not run | Not run | Not run | Not run | Not run | Targeted version/name update passed; full qualification pending |
+| iPhone / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
+| iPad / Safari | Not run — unavailable | Not run — unavailable | Not run | Not run | Not run | Not run | Not run | Not run | Unverified; support target unchanged |
+
+User reports and screenshots dated 2026-11-08 confirm the prior `917e3ba9d64587ec` cache on both devices and the tablet's targeted named-selector retest. See [latest evidence](f01-device-evidence.md#later-targeted-tablet-and-pixel-observations). This does not establish cold-offline/sleep behavior or the new update-notice build. Pixel installation remains blocked; installed sibling-app metadata is documented in the [comparison](f01-device-evidence.md#installed-sibling-app-comparison). No support target is silently dropped.
+
+## Additional user report with platform/context unconfirmed
+
+The user confirmed that a router-reachability incident was resolved by moving the cable to the correct Ethernet port on the desk. An installed app described as a “desktop app” now connects and displays an actual received channel name, while the input dropdown displayed placeholders. A follow-up answer did not establish whether this meant the Lenovo home-screen installation or a computer installation. Record actual received state as reported, but do not assign it to a device/rig matrix cell or infer internet was unavailable. No actual channel name is stored here.
+
+F01-S02B has corrected the selector labels from current-socket state, with `textContent`, clearing on disconnect and no write behavior. The later tablet report confirms named labels on worker `917e3ba9d64587ec`; retain this targeted result separately from the earlier ambiguous installed-app report. Exact model/OS/browser/context and offline/sleep conditions still need confirmation.
 
 ## Copyable evidence record
 

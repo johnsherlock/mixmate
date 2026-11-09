@@ -4,8 +4,12 @@ An offline PWA testing Soundcraft Ui24R connectivity on Android and iOS.
 
 - This is a separate project from solartracker.
 - Keep all application assets bundled locally; no runtime CDNs, analytics or accounts.
-- Outbound messages are restricted to `3:::INIT`, `3:::ALIVE`, `2::`, and validated `3:::SETD^i.<0..23>.mix^<0..1>` fader writes. No mute, gain, scene, routing, time or network changes.
-- Fader writes require received channel level and stereo-link metadata on the current live socket. Preserve stereo-linked pairs. Never queue/retry writes or write in response to incoming state.
+- The current implemented outbound allowlist is restricted to `3:::INIT`, `3:::ALIVE`, `2::`, and validated `3:::SETD^i.<0..23>.mix^<0..1>` writes in the existing explicitly armed input-fader test. Read-only IEM exposes only the three connection messages; AUX controls must never call the input `.mix` writer.
+- User authorization dated 2026-11-09 covers future implementation of AUX-master/send levels and relative groups, AUX pan, AUX output EQ curves mapped to verified graphic-EQ bands/supported shelves, snapshot recall/save, and multitrack start/stop. See [ADR-0002](docs/adr/0002-deferred-qualification-and-authorized-controls.md). This is feature-class authorization, not an immediate expansion of the active wire allowlist; do not request the same scope permission again.
+- Before enabling an approved feature, document verified exact paths/message forms, types/ranges, capabilities, stereo handling and current-socket prerequisites, then deliberately update this active allowlist and narrow typed guards in that feature's reviewed PR. No generic sender or guessed paths. Unknown semantics remain unavailable or parked. No independent mute, gain, routing, clock/time, network, general scene-edit/delete or destructive configuration writes.
+- The approved snapshot recall/save operations are the deliberate exception to the former scene-change prohibition; recall may apply the selected snapshot's stored settings. This does not authorize arbitrary parameter/configuration write paths outside the named operation.
+- No real-desk actuation during development or automated verification. All automated writes use fake mixer transports; human live-actuation qualification must be separately arranged.
+- Fader writes require received channel level and stereo-link metadata on the current live socket. Future approved controls require their verified current-socket capability/state prerequisites. Preserve source and output stereo-linked relationships. Never queue/retry/replay writes or write in response to incoming state. Clamp relative group moves as a whole at the first member limit; do not independently clamp members and lose balance.
 - UI control starts disabled and must be enabled by the user for the selected channel. Disarm on channel change, disconnect and app hiding.
 - Automated tests must use fake mixer transports for all write commands; do not move real faders.
 - Connect only after a user action. Do not reconnect automatically, including after sleep or navigation.
@@ -15,3 +19,5 @@ An offline PWA testing Soundcraft Ui24R connectivity on Android and iOS.
 - Preserve relative paths and service worker scope under `/mixmate/` on GitHub Pages.
 - Run `npm test` and `npm run build` before opening a PR.
 - Request `@codex review` on PRs; resolve findings and wait for affirmative Codex review before merging. Silence is not approval.
+
+- Per ADR-0002, F01/S03 may complete as an implementation/evidence checkpoint while physical-device qualification remains open in F08-S01. Record unsupported/untested results honestly. Work stories sequentially through reviewed PRs; when hardware blocks a story, record it as parked and document a dependency exception before independent coding. Track decisions and follow-ups in `docs/user-follow-up.md`.
