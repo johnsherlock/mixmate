@@ -1,6 +1,6 @@
 # Read-only IEM session — F03-S03
 
-Date: 2026-11-09. Baseline: reviewed F03-S02 merge `9ce2647` / PR #17. No new parameter writes, meter decoding or actual desk actuation.
+Date: 2026-11-09. Baseline: reviewed F03-S02 merge `9ce2647` / PR #17. Historical S03 scope: no new parameter writes, meter decoding or actual desk actuation. S03 merged in PR #18 at `8c887a0`; S04 extends it with the separate [meter contract](iem-meter-contract.md).
 
 ## Scoped plan and routine choices
 
@@ -34,3 +34,7 @@ The compact connection affordance opens a dialog; it reads existing local profil
 Root isolated Chromium QA on earlier story builds `1815…`/`fce6…` used strict fake WebSockets: five observed output slots and seven i/l/p/f sends, literal names with zero injected image/SVG nodes, unequal linked levels, received-zero minus infinity, explicit normalized pan, matrix/unknown-mode unbrowsable, stable input/cap/bank nodes during injected readback, portrait three-column sources and no page overflow. Only INIT/ALIVE/heartbeat were sent. A real 30-second fake-socket silence cleared all state with no reconnect. Editing an active address synchronously closed/cleared it; invalid public IP created no socket; explicit valid target recovery worked. Live→demo→back had zero demo/return sockets and no restored live strips. Selected AUX with no sends retained its received master and a specific empty-source paragraph.
 
 These are fake-transport desktop checks, not current-firmware or physical Android/iOS qualification. Final-build `278765c0d1f64197` fresh-context QA passed: exact offline readiness/version, accepted first-output colour `#6bcbd1`, 844×390 app height 390px with no horizontal page overflow and visible mode bar. The seven-source landscape bank scrolled (826px content/709px client) with disabled controls and contained long names. Emulated visibility hiding closed/cleared the fake session, and return opened no socket. Network-disabled cold navigation to `iem.html?qa=offline` verified the same version with zero sockets/strips and disconnected status. Screenshot: ignored `output/playwright/iem-live-sources-landscape-final.png`. Visibility was emulated; this does not certify physical sleep or Android/iOS behavior. No actual mixer was contacted or moved in this story; the prior bounded timeout remains parked under ADR-0002/F08-S01.
+
+## S04 freshness amendment
+
+Source-backed VU2 is now independent current-socket state, with 2-second sample TTL and 100 ms publication cadence. Snapshots compute freshness before returning, while a dual monotonic/wall elapsed guard clears proven suspended/clock-changed sessions before late packets, keepalives or navigation can revive them. Small wall-clock backward skew has a 1-second grace. Heartbeat-responsive sockets retain unchanged valid SET state; no parameter-change timeout is added. See the meter contract for exact profile/count/length/tap/scaling rules and current-firmware qualification limits.

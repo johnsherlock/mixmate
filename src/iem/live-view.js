@@ -8,6 +8,10 @@ import { outputColour, overviewColour } from './theme.js';
 export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
+  const meterLegend = document.createElement('p');
+  meterLegend.className = 'mm-live-meter-legend';
+  meterLegend.textContent = 'VU: post-fader · source VU is NOT AUX-send contribution · library scale; firmware unverified';
+  content.before(meterLegend);
   const element = (tag, className, text) => { const node = document.createElement(tag); node.className = className; if (text) node.textContent = text; return node; };
   const empty = element('div', 'mm-empty');
   empty.append(element('h2', '', 'Waiting for received AUX state'), element('p', '', 'Connect explicitly to your desk. Unknown or unsupported state stays unavailable; Demo is a separate simulation.'));
@@ -40,10 +44,38 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     const input = element('input', 'mm-vertical');
     input.type = 'range'; input.min = '0'; input.max = '1'; input.step = '0.001'; input.disabled = true;
     if (kind === 'source') input.dataset.channel = ''; else input.dataset.master = '';
-    const meter = element('span', 'mm-meter-pair', '—'); meter.setAttribute('aria-label', 'Meter unavailable');
+    const meter = element('span', 'mm-meter-pair'); meter.setAttribute('role', 'img');
+    const tracks = [0, 1].map(() => {
+      const track = element('span', 'mm-meter'), fill = element('i'); track.append(fill); meter.append(track); return { track, fill };
+    });
+    const meterCaption = element('span', 'mm-live-meter-caption'), meterLabel = element('span', 'mm-live-meter-label'), meterStatus = element('span', 'mm-live-meter-status');
+    meterCaption.append(meterLabel, meterStatus);
     const pan = element('span', 'mm-pan-button'), state = element('span', 'mm-live-strip-state');
-    space.append(scale, input, meter); article.append(head, output, space, pan, state);
-    return { article, name, description, output, input, pan, state };
+    space.append(scale, input, meter); article.append(head, output, space, pan, state, meterCaption);
+    return { article, name, description, output, input, pan, state, meter, tracks, meterCaption, meterLabel, meterStatus };
+  }
+  function updateMeter(strip, model) {
+    const meter = model.meter || { status: 'missing', channelCount: 1, label: 'Meter', values: [], provenance: '' };
+    // State frames may arrive alongside every VU packet. Existing fresh meter
+    // fills/text publish only at the session cadence; missing/stale clears once.
+    if (strip.meterRevision === meter.revision && (meter.status === 'fresh' || strip.meterState === meter.status)) return;
+    strip.meterRevision = meter.revision; strip.meterState = meter.status;
+    strip.meter.dataset.state = meter.status;
+    strip.meterLabel.textContent = model.sourceId ? `Source VU${meter.channelCount === 2 ? ' L/R' : ''}` : 'Output VU';
+    const numbers = meter.values.map(value => value.floor ? '−80 dB floor' : `${value.db.toFixed(1)} dB`);
+    const numericText = meter.values.length === 2 ? meter.values.map(value => value.floor ? '−80 floor' : value.db.toFixed(1)).join('/') + ' dB' : numbers[0];
+    strip.meterStatus.textContent = meter.status === 'fresh' ? numericText : meter.status === 'stale' ? 'Stale' : 'Unavailable';
+    strip.meter.setAttribute('aria-label', `${meter.label}${meter.channelCount === 2 ? ' (L/R)' : ''}: ${strip.meterStatus.textContent}. ${meter.provenance}`);
+    strip.meterCaption.setAttribute('title', `${meter.label}: ${strip.meterStatus.textContent}; ${meter.provenance}. Encoded zero is the meter floor, not proof of physical silence.`);
+    strip.tracks.forEach(({ track, fill }, index) => {
+      track.hidden = index >= meter.channelCount;
+      fill.style.setProperty('--level', `${meter.status === 'fresh' ? (meter.values[index]?.position || 0) * 100 : 0}%`);
+    });
+  }
+  function renderMeters(model) {
+    for (const [strips, models] of [[overviewStrips, model.mixes], [sourceStrips, model.sources], [pinnedStrips, model.selectedMix ? [model.selectedMix] : []]]) {
+      for (const item of models || []) { const strip = strips.get(item.id); if (strip) updateMeter(strip, item); }
+    }
   }
   function reconcile(container, strips, models, kind) {
     const ids = new Set(models.map(model => model.id));
@@ -57,11 +89,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.name.textContent = model.name; strip.description.textContent = model.detail;
       strip.output.textContent = model.levelText ?? '—';
       strip.pan.textContent = model.panText ?? 'Pan unavailable'; strip.state.textContent = model.stateText ?? '';
+      strip.pan.setAttribute('title', strip.pan.textContent); strip.state.setAttribute('title', strip.state.textContent);
+      strip.name.setAttribute('title', model.name);
       strip.name.disabled = !model.browsable;
       if (model.browsable) strip.name.dataset.openAux = String(model.auxIndex); else delete strip.name.dataset.openAux;
       strip.input.setAttribute('aria-label', `${model.name} received level, read-only`);
       const known = typeof model.position === 'number' && Number.isFinite(model.position) && model.position >= 0 && model.position <= 1;
       strip.article.dataset.unknown = String(!known); strip.input.value = known ? String(model.position) : '0';
+      updateMeter(strip, model);
     }
   }
   function render(model) {
@@ -98,9 +133,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   }
   root.addEventListener('click', click);
   return {
-    render,
+    render, renderMeters,
     preferences(preferences) { root.dataset.preferredOrientation = preferences.orientation; root.dataset.showMeters = String(preferences.showMeters); layout.apply(); },
     clear() { gestures.cancel(); render({ status: 'Not connected — no received mixer state', mixes: [] }); },
-    destroy() { root.removeEventListener('click', click); gestures.destroy(); layout.destroy(); stopClock(); },
+    destroy() { meterLegend.remove(); root.removeEventListener('click', click); gestures.destroy(); layout.destroy(); stopClock(); },
   };
 }

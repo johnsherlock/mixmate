@@ -1,4 +1,4 @@
-import { faderValueToDB } from 'soundcraft-ui-connection';
+import { faderValueToDB, vuValueToDB } from 'soundcraft-ui-connection';
 import { parseIemStateFrame, receivedAuxMode, receivedIemField, stereoRelationship, observedAuxSources } from './protocol.js';
 
 // Definitions/profile bounds never manufacture received availability.
@@ -50,6 +50,20 @@ function relationshipText(state, id) {
   return { mono: 'Received mono', unknown: 'Stereo-link state unknown', conflict: 'Stereo-link metadata conflict', 'intrinsic-stereo': 'Stereo FX source · library profile' }[link.status] || 'Stereo unavailable';
 }
 const flagText = (state, path, yes, no) => state.has(path) ? (state.get(path) ? yes : no) : 'Unknown';
+function projectMeter(session, id, source = false, allowed = true) {
+  const label = source ? 'Source post-fader VU · NOT AUX send' : 'Output post-fader VU';
+  const channelCount = id.startsWith('f.') ? 2 : 1;
+  const observed = allowed ? session.meters?.get(id) : undefined;
+  const status = observed ? session.meterState || 'missing' : 'missing';
+  const fields = channelCount === 2 ? ['vuPostFaderL', 'vuPostFaderR'] : ['vuPostFader'];
+  const values = status === 'fresh' ? fields.map(field => observed[field]) : [];
+  const valid = values.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  return {
+    status: valid ? status : 'missing', label, channelCount, revision: session.meterRevision ?? 0,
+    provenance: '7.1.0 library scale; firmware unverified',
+    values: valid ? values.map(value => ({ position: Math.min(value, 1), db: vuValueToDB(value), floor: value === 0 })) : [],
+  };
+}
 export function projectLiveState(session, selectedAux = null) {
   const state = session.observations, model = state.get('model');
   const result = { status: session.detail, connectionPhase: session.phase, selectedAux: null, modelLabel: model === 'ui24' ? 'Ui24 model received' : 'Ui24 model not verified', mixes: [], sources: [], selectedMix: null };
@@ -65,6 +79,7 @@ export function projectLiveState(session, selectedAux = null) {
       detail: `${aux ? 'AUX' : mode.received ? 'MATRIX — outside IEM' : 'Output mode unknown'} ${index + 1} · ${relationshipText(state, id)}`,
       ...aux ? level(state.get(`${id}.mix`)) : {},
       panText: state.has(`${id}.pan`) ? `Pan ${state.get(`${id}.pan`).toFixed(3)} · normalized` : 'Pan not received',
+      meter: projectMeter(session, id, false, aux),
       stateText: `Output mute: ${flagText(state, `${id}.mute`, 'Muted', 'Unmuted')}`,
     };
   });
@@ -79,6 +94,7 @@ export function projectLiveState(session, selectedAux = null) {
       detail: `${sourceLabel(source.sourceId)} · AUX ${selectedAux + 1} SEND · ${relationshipText(state, source.sourceId)}`,
       ...level(state.get(`${prefix}.value`)),
       panText: state.has(`${prefix}.pan`) ? `Pan ${state.get(`${prefix}.pan`).toFixed(3)} · normalized` : 'Pan not received',
+      meter: projectMeter(session, source.sourceId, true),
       stateText: `Send mute: ${flagText(state, `${prefix}.mute`, 'Muted', 'Unmuted')} · ${flagText(state, `${prefix}.post`, 'Post-fader', 'Pre-fader')} · ${flagText(state, `${prefix}.postproc`, 'Post-processing', 'Pre-processing')}`,
     };
   });

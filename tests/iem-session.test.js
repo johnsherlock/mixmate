@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { createLiveProvider, projectLiveState } from '../src/iem/live-provider.js';
 import { mountLiveController } from '../src/iem/live-controller.js';
+import { readFile } from 'node:fs/promises';
 import { emptySettings } from '../src/settings.js';
 const ALLOWED = new Set(['3:::INIT', '3:::ALIVE', '2::']);
 const LIVE = '3:::SETS^model^ui24\nSETS^a.0.name^Synthetic <img src=x>\nSETD^a.0.matrix^0\nSETD^a.0.mix^0\nSETD^a.0.stereoIndex^-1';
@@ -35,7 +36,7 @@ function setup(options = {}) {
     open() { this.readyState = 1; this.onopen?.(); }
     receive(data) { this.onmessage?.({ data }); }
   }
-  return { sockets, timers, session: createReadOnlySession({ WebSocketClass: FakeSocket, timers, ...options }) };
+  return { sockets, timers, session: createReadOnlySession({ WebSocketClass: FakeSocket, timers, now: () => timers.now, wallNow: () => timers.now, ...options }) };
 }
 test('read-only session starts inert, owns no public socket/sender, and sends exactly the three connection literals', () => {
   const { sockets, timers, session } = setup();
@@ -204,4 +205,143 @@ test('browser connection failure does not invalidate a valid target and prevent 
   app.ui.form.emit('submit'); assert.equal(app.session.snapshot().phase, 'blocked'); assert.equal(app.ui.address.validity, '');
   app.ui.form.emit('submit'); assert.equal(app.session.snapshot().phase, 'blocked'); assert.equal(app.ui.address.validity, '');
   app.controller.destroy();
+});
+
+
+const meterFixture = JSON.parse(await readFile(new URL('./fixtures/iem-vu2.json', import.meta.url)));
+const vu = meterFixture.frame;
+const packetFrame = bytes => '3:::VU2^' + Buffer.from(bytes).toString('base64');
+
+test('meter receipt requires current Ui24 model and never manufactures output/source availability or AUX readiness', () => {
+  const { session, sockets, timers } = setup(); session.connect('192.168.0.60'); const socket = sockets[0]; socket.open();
+  socket.receive(vu); assert.equal(session.snapshot().meters.size, 0);
+  socket.receive('3:::SETS^model^ui24'); socket.receive(vu);
+  assert.equal(session.snapshot().meterState, 'fresh');
+  assert.equal(projectLiveState(session.snapshot()).mixes.length, 0);
+  assert.equal(session.snapshot().phase, 'partial'); // Meter counts are not state/AUX readiness.
+  timers.tick(15001); assert.equal(session.snapshot().phase, 'timeout');
+  assert.equal(session.snapshot().meters.size, 0);
+});
+
+test('meter burst notifications are bounded while keeping the latest whole packet and independent copies', () => {
+  const { session, sockets, timers } = setup(); session.connect('192.168.0.60'); const socket = sockets[0]; socket.open(); socket.receive(LIVE);
+  const events = []; session.subscribe((snapshot, kind) => { if (kind === 'meters') events.push(snapshot); });
+  for (let n = 0; n < 100; n++) {
+    const bytes = new Uint8Array(14); bytes[0] = 1; bytes[10] = n;
+    socket.receive(packetFrame(bytes));
+  }
+  assert.equal(events.length, 0); assert.equal(session.snapshot().meters.size, 1);
+  timers.tick(99); assert.equal(events.length, 0); timers.tick(1); assert.equal(events.length, 1);
+  assert.equal(events[0].meters.get('i.0').vuPostFader, 99 * 0.004167508166392142);
+  events[0].meters.clear(); assert.equal(session.snapshot().meters.size, 1);
+  assert.throws(() => { session.snapshot().meters.get('i.0').vuPostFader = 123; }, TypeError);
+  for (let n = 0; n < 100; n++) socket.receive(vu);
+  timers.tick(100); assert.equal(events.length, 2);
+  session.disconnect(); assert.equal(timers.jobs.size, 0);
+});
+
+test('projection labels source taps, encoded floor and separate FX/output values without pretending AUX contribution', () => {
+  const { session, sockets } = setup(); session.connect('192.168.0.60'); const socket = sockets[0]; socket.open();
+  socket.receive(LIVE + '\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.8\nSETD^a.2.matrix^1\nSETS^a.3.name^Unknown mode\nSETD^i.0.aux.0.value^0.4\nSETD^i.0.aux.0.mute^1\nSETD^i.0.aux.0.post^0\nSETD^p.0.aux.0.value^0.5\nSETD^f.0.aux.0.value^0.6');
+  socket.receive(vu);
+  const model = projectLiveState(session.snapshot(), 0);
+  assert.equal(model.mixes[0].meter.status, 'fresh');
+  assert.notEqual(model.mixes[0].meter.values[0].position, model.mixes[1].meter.values[0].position);
+  assert.equal(model.mixes[0].meter.channelCount, 1); // Individual linked output readbacks, never averaged.
+  assert.equal(model.mixes[2].meter.status, 'missing'); // Matrix array slot is not proof of normal AUX meter semantics.
+  assert.equal(model.mixes[3].meter.status, 'missing');
+  assert.match(model.sources[0].meter.label, /Source post-fader.*NOT AUX send/);
+  assert.equal(model.sources[0].meter.values[0].position, 120 * 0.004167508166392142);
+  assert.match(model.sources[0].stateText, /Muted.*Pre-fader/); // Does not alter the independent source meter.
+  assert.equal(model.sources[1].meter.values[0].db, -80); assert.equal(model.sources[1].meter.values[0].floor, true);
+  assert.equal(model.sources[2].meter.channelCount, 2);
+  assert.notEqual(model.sources[2].meter.values[0].position, model.sources[2].meter.values[1].position);
+  assert.match(model.sources[2].meter.provenance, /firmware unverified/);
+  session.disconnect();
+});
+
+test('malformed meters cannot refresh freshness, omitted families replace prior samples, and zero is not unknown/stale', () => {
+  const { session, sockets, timers } = setup(); session.connect('192.168.0.60'); const socket = sockets[0]; socket.open();
+  socket.receive(LIVE); socket.receive(vu); timers.tick(1000);
+  for (const frame of ['3:::VU2^!!!', '3:::VU2^A', packetFrame(new Uint8Array(307))]) socket.receive(frame);
+  timers.tick(999); assert.equal(session.snapshot().meterState, 'fresh');
+  timers.tick(1); assert.equal(session.snapshot().meterState, 'stale');
+  const stale = projectLiveState(session.snapshot());
+  assert.equal(stale.mixes[0].meter.status, 'stale'); assert.deepEqual(stale.mixes[0].meter.values, []);
+  const partial = new Uint8Array(14); partial[0] = 1;
+  socket.receive(packetFrame(partial));
+  assert.equal(session.snapshot().meterState, 'fresh'); assert.equal(session.snapshot().meters.size, 1);
+  assert.equal(projectLiveState(session.snapshot()).mixes[0].meter.status, 'missing');
+  assert.equal(session.snapshot().meters.get('i.0').vuPostFader, 0);
+  socket.receive(packetFrame(new Uint8Array(8))); assert.equal(session.snapshot().meters.size, 0);
+  session.disconnect();
+});
+
+test('wrapped base64 and logical state/VU batches work without accepting malformed payload fragments', () => {
+  const { session, sockets, timers } = setup(); session.connect('192.168.0.60'); const socket = sockets[0]; socket.open();
+  socket.receive(LIVE + '\n' + vu.slice(4)); assert.equal(session.snapshot().meters.size, 50);
+  socket.receive(vu.slice(0, 30) + '\n' + vu.slice(30)); assert.equal(session.snapshot().meters.size, 50);
+  timers.tick(1000);
+  socket.receive(packetFrame(new Uint8Array(8)) + '\nAAAA'); // Complete decode invalid; no partial first-line refresh.
+  assert.equal(session.snapshot().meters.size, 50);
+  timers.tick(1000); assert.equal(session.snapshot().meterState, 'stale');
+  session.disconnect();
+});
+
+test('disconnect/reconnect cancels pending meter renders/expiry and stale callbacks cannot refresh a new generation', () => {
+  const { session, sockets, timers } = setup(); session.connect('192.168.0.60'); const first = sockets[0]; first.open(); first.receive(LIVE); first.receive(vu);
+  const old = first.onmessage, events = []; session.subscribe((value, kind) => { if (kind === 'meters') events.push(value); });
+  timers.tick(50); session.disconnect(); assert.equal(timers.jobs.size, 0);
+  session.connect('192.168.0.60'); const second = sockets[1]; second.open(); second.receive(LIVE);
+  old({ data: vu }); timers.tick(2001);
+  assert.equal(session.snapshot().meters.size, 0); assert.equal(session.snapshot().meterState, 'missing');
+  assert.equal(events.length, 0); assert.equal(sockets.length, 2);
+  session.disconnect(); assert.equal(timers.jobs.size, 0);
+});
+
+test('unchanged legitimate parameter state remains live while heartbeat traffic continues, with independent meter expiry', () => {
+  const { session, sockets, timers } = setup(); session.connect('192.168.0.60'); const socket = sockets[0]; socket.open(); socket.receive(LIVE); socket.receive(vu);
+  for (let n = 0; n < 5; n++) { timers.tick(10000); socket.receive('2::'); }
+  assert.equal(session.snapshot().phase, 'live');
+  assert.equal(session.snapshot().observations.get('a.0.mix'), 0);
+  assert.equal(session.snapshot().meterState, 'stale');
+  session.disconnect();
+});
+
+test('elapsed/clock guards run before late packets or timer-free snapshots can revive a suspended session', () => {
+  for (const observation of ['snapshot', 'packet', 'heartbeat']) for (const jump of ['both', 'wall-only', 'mono-only', 'wall-backward']) {
+    let mono = 0, wall = 100000;
+    const { session, sockets, timers } = setup({ now: () => mono, wallNow: () => wall });
+    session.connect('192.168.0.60'); const socket = sockets[0]; socket.open(); socket.receive(LIVE); socket.receive(vu);
+    if (jump === 'both' || jump === 'mono-only') mono += 32000;
+    if (jump === 'both' || jump === 'wall-only') wall += 32000;
+    if (jump === 'wall-backward') wall -= 1001;
+    if (observation === 'packet') socket.receive(vu);
+    if (observation === 'heartbeat') socket.receive('2::');
+    const snapshot = session.snapshot();
+    assert.equal(snapshot.phase, 'timeout', jump + ':' + observation);
+    assert.equal(snapshot.observations.size, 0); assert.equal(snapshot.meters.size, 0);
+    assert.equal(timers.jobs.size, 0); assert.equal(socket.readyState, 3); assert.equal(sockets.length, 1);
+  }
+});
+
+test('meter snapshots expire without timer callbacks, while small wall-clock skew does not disconnect a healthy socket', () => {
+  let mono = 0, wall = 10000;
+  const { session, sockets } = setup({ now: () => mono, wallNow: () => wall });
+  session.connect('192.168.0.60'); const socket = sockets[0]; socket.open(); socket.receive(LIVE); socket.receive(vu);
+  mono = 500; wall -= 500; socket.receive('2::');
+  assert.equal(session.snapshot().phase, 'live'); assert.equal(session.snapshot().meterState, 'fresh');
+  mono = 2100; wall += 2000;
+  assert.equal(session.snapshot().meterState, 'stale'); assert.equal(session.snapshot().phase, 'live');
+  session.disconnect();
+});
+
+
+test('an already-queued old flush cannot discard the new generation pending handle or duplicate its cadence', () => {
+  const { session, sockets, timers } = setup(); session.connect('192.168.0.60'); sockets[0].open(); sockets[0].receive(LIVE); sockets[0].receive(vu);
+  const oldFlush = [...timers.jobs.values()].find(job => !job.repeat && job.delay === 100).callback;
+  session.connect('192.168.0.60'); sockets[1].open(); sockets[1].receive(LIVE); sockets[1].receive(vu);
+  const count = timers.jobs.size; oldFlush(); sockets[1].receive(vu);
+  assert.equal(timers.jobs.size, count);
+  session.disconnect(); assert.equal(timers.jobs.size, 0);
 });

@@ -4,9 +4,11 @@ import { createDemoProvider } from '../src/iem/demo-provider.js';
 import { createEmptyLiveProvider } from '../src/iem/live-provider.js';
 import { installFaderGestures } from '../src/iem/gestures.js';
 import { mountReadOnlyView } from '../src/iem/live-view.js';
+import { createReadOnlySession } from '../src/iem/live-session.js';
+import { projectLiveState } from '../src/iem/live-provider.js';
 
 class Node {
-  children = []; dataset = {}; style = { setProperty() {} }; attributes = {}; value = ''; disabled = false;
+  children = []; dataset = {}; style = { values: {}, calls: [], setProperty(name, value) { this.values[name] = value; this.calls.push([name, value]); } }; attributes = {}; value = ''; disabled = false;
   handlers = new Map();
   constructor(document) { this.ownerDocument = document; }
   addEventListener(type, callback) { this.handlers.set(type, [...(this.handlers.get(type) || []), callback]); }
@@ -111,6 +113,71 @@ test('read-only keyed strips render strings as text and preserve nodes through u
     view.clear(); assert.equal(grid.children.length, 0); assert.equal(bank.children.length, 0);
   } finally {
     view?.destroy();
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+  }
+});
+
+
+test('mixed state/VU bursts throttle actual meter fill/text writes and preserve caps, scroll and zero/stale/unknown distinctions', () => {
+  const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
+  const document = documentFixture(), root = new Node(document);
+  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app']) {
+    const node = document.createElement('div'); node.className = name; root.append(node);
+  }
+  Object.assign(globalThis, { document, window: new Node(document), matchMedia: () => ({ matches: true }), innerHeight: 844, ResizeObserver: class { observe() {} disconnect() {} } });
+  let clock = 0, next = 0, socket, view;
+  const jobs = new Map();
+  const timers = {
+    setTimeout(callback, delay) { const id = ++next; jobs.set(id, { callback, at: clock + delay }); return id; },
+    clearTimeout(id) { jobs.delete(id); },
+    setInterval() { return 999; }, clearInterval() {},
+  };
+  function tick(amount) {
+    const end = clock + amount;
+    while (true) {
+      const found = [...jobs].filter(([, job]) => job.at <= end).sort((a, b) => a[1].at - b[1].at)[0];
+      if (!found) break;
+      jobs.delete(found[0]); clock = found[1].at; found[1].callback();
+    }
+    clock = end;
+  }
+  class FakeSocket { readyState = 0; constructor() { socket = this; } send(message) { assert.ok(['3:::INIT', '3:::ALIVE', '2::'].includes(message)); } close() { this.readyState = 3; } }
+  const session = createReadOnlySession({ WebSocketClass: FakeSocket, timers, now: () => clock, wallNow: () => clock });
+  try {
+    view = mountReadOnlyView(root);
+    session.subscribe((snapshot, kind) => {
+      const model = projectLiveState(snapshot, 0);
+      if (kind === 'meters') view.renderMeters(model); else view.render(model);
+    });
+    session.connect('192.168.0.60'); socket.readyState = 1; socket.onopen();
+    socket.onmessage({ data: '3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.0.mix^0.5\nSETD^i.0.aux.0.value^0.25' });
+    const bank = root.querySelector('.mm-strip-scroll'), article = bank.children[0], input = article.querySelector('input'), cap = article.querySelector('.mm-fader-hit');
+    const pair = article.querySelector('.mm-meter-pair'), fill = article.querySelector('.mm-meter').children[0], caption = article.querySelector('.mm-live-meter-status');
+    bank.scrollLeft = 73; const initialWrites = fill.style.calls.length;
+    for (let n = 0; n < 100; n++) {
+      const packet = new Uint8Array(14); packet[0] = 1; packet[10] = n;
+      socket.onmessage({ data: `3:::SETD^i.0.aux.0.value^${n / 100}\nVU2^${Buffer.from(packet).toString('base64')}` });
+    }
+    assert.equal(fill.style.calls.length, initialWrites);
+    assert.equal(pair.dataset.state, 'missing');
+    tick(100);
+    assert.equal(fill.style.calls.length, initialWrites + 1); assert.equal(pair.dataset.state, 'fresh');
+    assert.equal(fill.style.values['--level'], `${99 * 0.004167508166392142 * 100}%`);
+    assert.match(root.querySelector('.mm-live-meter-legend').textContent, /source VU is NOT AUX-send contribution.*firmware unverified/);
+    const zero = new Uint8Array(14); zero[0] = 1;
+    socket.onmessage({ data: '3:::VU2^' + Buffer.from(zero).toString('base64') }); tick(100);
+    assert.match(caption.textContent, /−80 dB floor/); assert.equal(pair.dataset.state, 'fresh');
+    tick(1900); assert.equal(pair.dataset.state, 'stale'); assert.match(caption.textContent, /Stale/);
+    assert.equal(fill.style.values['--level'], '0%');
+    socket.onmessage({ data: '3:::VU2^' + Buffer.from(new Uint8Array(8)).toString('base64') }); tick(100);
+    assert.equal(pair.dataset.state, 'missing'); assert.match(caption.textContent, /Unavailable/);
+    assert.equal(root.querySelector('.mm-strip-scroll'), bank); assert.equal(bank.scrollLeft, 73);
+    assert.equal(bank.children[0], article); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap);
+    assert.equal(input.disabled, true);
+    view.preferences({ orientation: 'portrait', showMeters: false }); assert.equal(root.dataset.showMeters, 'false');
+    session.disconnect(); assert.equal(bank.children.length, 0); assert.equal(jobs.size, 0);
+  } finally {
+    session.disconnect(); view?.destroy();
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
   }
 });
