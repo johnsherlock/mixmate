@@ -20,7 +20,8 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
   }
   let legacy;
   try { const value = storage?.getItem(LEGACY_ADDRESS); if (value) legacy = privateAddress(value); } catch { /* Optional legacy source. */ }
-  setAddress(legacy || DEFAULT_ADDRESS);
+  // Resolve legacy migration only after knowing whether a durable record exists.
+  setAddress(DEFAULT_ADDRESS);
   const controls = ['rig-profile', 'rig-name', 'new-rig', 'save-rig', 'delete-rig', 'preferred-orientation', 'show-meters'];
   const feedback = message => { $('rig-feedback').textContent = message; };
   function cleanLegacy(status) {
@@ -61,7 +62,7 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
     return save(change);
   }
   function targetChanged() { touched = true; revision++; onTargetChange(); }
-  $('connect-form').addEventListener('submit', () => { touched = true; });
+  $('connect-form').addEventListener('submit', () => { touched = true; revision++; });
   $('address').addEventListener('input', () => {
     targetChanged();
     feedback('Unsaved address draft. Save rig to keep it on this device.');
@@ -140,10 +141,12 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
   render();
   const initialization = repository.initialize().then(result => {
     settings = result.settings;
-    const previous = settings.profiles.find(profile => profile.id === settings.selectedProfileId) || settings.profiles[0];
-    if (!settings.profiles.length) {
+    const previous = settings.profiles.find(profile => profile.id === settings.selectedProfileId);
+    if (!settings.profiles.length && !result.hasStoredSettings && !['corrupt-data', 'unsupported-version'].includes(result.status.reason)) {
       let address = legacy || DEFAULT_ADDRESS;
-      try { address = privateAddress($('address').value); } catch { /* Preserve invalid draft without saving it. */ }
+      if (touched) {
+        try { address = privateAddress($('address').value); } catch { /* Preserve invalid draft without saving it. */ }
+      }
       const profile = { id: createID(), name: 'My rig', address, groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
       settings.profiles.push(profile); settings.selectedProfileId = profile.id;
       selectedID = !touched && !isConnected() ? profile.id : null;
@@ -158,10 +161,35 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
     const applyTarget = !touched && !isConnected();
     const profile = applyTarget ? previous : undefined;
     selectedID = profile?.id || null;
-    if (applyTarget && profile) setAddress(profile.address);
+    if (applyTarget) setAddress(profile?.address || DEFAULT_ADDRESS);
     $('rig-name').value = profile?.name || '';
     ready = true; render();
     if (!selectedID) feedback('Temporary address. Save it as a new rig or select a saved rig.');
   });
-  return { ready: initialization, async whenIdle() { await initialization; await pending; } };
+  return {
+    ready: initialization,
+    revision: () => revision,
+    snapshot: () => ready ? validateSettings(settings) : undefined,
+    async whenIdle() { await initialization; await pending; },
+    // Apply target/identity changes synchronously. Promise completion may report
+    // persistence only; it must never overwrite a later user draft or socket.
+    replaceSettings(value) {
+      if (!ready) throw new Error('Local settings are still loading.');
+      const candidate = validateSettings(value);
+      targetChanged();
+      const token = revision;
+      settings = candidate;
+      const profile = candidate.profiles.find(item => item.id === candidate.selectedProfileId);
+      selectedID = profile?.id || null;
+      setAddress(profile?.address || DEFAULT_ADDRESS);
+      $('rig-name').value = profile?.name || '';
+      feedback(profile ? '' : 'No selected rig. Enter a name and Save rig to create one, or select a saved rig.');
+      render();
+      const completion = repository.replace(candidate);
+      pending = completion.catch(error => {
+        if (token === revision) feedback(`Settings were not saved. ${error.message}`);
+      });
+      return { revision: token, completion };
+    },
+  };
 }

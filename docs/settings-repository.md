@@ -35,10 +35,10 @@ Only these fields are accepted. Received names, channel levels, meter data, EQ v
 
 ## API and persistence status
 
-Create one shared `SettingsRepository` per app document. `initialize()` opens/reads once and never connects to a mixer. `snapshot()` returns independent `{ settings, status }`. `subscribe(listener)` immediately reports a snapshot and returns an unsubscribe function. Observer errors cannot turn a committed save into a failure.
+Create one shared `SettingsRepository` per app document. `initialize()` opens/reads once and never connects to a mixer. `snapshot()` returns independent `{ settings, status, hasStoredSettings }`. `subscribe(listener)` immediately reports a snapshot and returns an unsubscribe function. Observer errors cannot turn a committed save into a failure.
 
 - `update(draft => { ... })` serializes synchronous edits so each updater sees the latest accepted result of earlier calls. Use this for UI edits; do not compose concurrent changes from stale snapshots. Async updater callbacks reject without accepting their draft.
-- `replace(document)` validates/copies immediately and serializes an intentional whole-document replacement, for the later import UI. Caller mutations cannot race the save. Invalid input throws `SettingsValidationError` (or its `SettingsVersionError` subtype); an invalid update rejects its returned promise and leaves prior settings untouched.
+- `replace(document)` validates/copies immediately and serializes an intentional whole-document replacement, for the explicit previewed import/reset UI. Caller mutations cannot race the save. Invalid input throws `SettingsValidationError` (or its `SettingsVersionError` subtype); an invalid update rejects its returned promise and leaves prior settings untouched.
 - Mutation promises resolve after transaction completion, not request success. Storage failures resolve with the accepted memory settings and an explicit unsaved status. Consumers must inspect/render status rather than treating promise resolution as proof of persistence.
 - `close()` releases the database/subscribers after queued work; further edits reject. No saved state includes a live socket or arming.
 
@@ -52,7 +52,7 @@ Queued updates serialize within one shared app-document instance. Independent ta
 
 No earlier MixMate settings-repository schema existed. The version-1 database creation and validated version-1 record read are the current migration path. No fictitious legacy v0 shape is accepted. Older/unknown/newer data versions and newer database versions are preserved in memory fallback; do not downgrade/delete them. The old localStorage address belongs to S02's explicit migration, independently of this schema.
 
-Future schema changes must add an explicit tested migration and bump the document version (and database version if the store structure changes), retaining ordering/identities and forbidden-state exclusions. `validateSettings` is the shared canonical validation boundary for future decoded JSON imports. File size parsing limits, preview, import confirmation, backup/reset and persistent-storage requests are F02-S03 scope.
+Future schema changes must add an explicit tested migration and bump the document version (and database version if the store structure changes), retaining ordering/identities and forbidden-state exclusions. `validateSettings` is the shared canonical validation boundary for future decoded JSON imports. F02-S03 adds file size limits, preview/confirmation, local export/reset and explicit persistent-storage requests; see [backup guide](settings-backup.md).
 
 ## Validation and limitations
 
@@ -66,7 +66,7 @@ Profile selection, New rig, selected-profile deletion and address input synchron
 
 The editor's runtime/draft selection is separate from persisted default selection. Preference updates cannot rebind a New rig or temporary-address draft. If the user types or connects before IndexedDB finishes, loaded settings do not replace the current address or infer rig identity from matching IPs, including duplicate-IP profiles. The target stays unbound until an explicit profile selection or Save. Late save completion only updates persistence status; it cannot overwrite a newer address/name draft or retarget a socket.
 
-Status subscriptions render `settingsStatusText` and never automatically reload definitions from another window. Atomic repository conflicts leave newer durable records untouched and the attempted definitions usable in temporary memory. Storage errors retain the validated legacy source. The old `mixmate-address` key is removed only after a persistent `saved` event (transaction commit), and is never written again; this prevents a successful migration followed by reset from reviving the legacy address. A removal failure remains harmless to current nonempty repository definitions; future reset/import recovery must clear the legacy key after its own durable commit as well.
+Status subscriptions render `settingsStatusText` and never automatically reload definitions from another window. Atomic repository conflicts leave newer durable records untouched and the attempted definitions usable in temporary memory. Storage errors retain the validated legacy source. The old `mixmate-address` key is removed only after a persistent `saved` event (transaction commit), and is never written again; this prevents a successful migration followed by reset from reviving the legacy address. F02-S03 also uses durable record-presence metadata: an intentional empty record is not first use. The legacy source is resolved only after storage lookup, and is not remigrated after reset/import even if key removal fails. No default `My rig` is silently re-created from a deliberate empty record.
 
 Orientation and showMeters are saved configuration for F03's IEM consumer. This connection test neither forces orientation nor invents meters. Navigation fields are initialized but not presented as live AUX availability. No received names/state, armed controls or gesture values enter the repository.
 
@@ -75,3 +75,13 @@ S02 validation: 65 local/fake tests pass and production build emits eight precac
 
 
 Programmatic target assignment clears previous custom validation errors, matching the existing input-event path. Native Chromium testing reproduced invalid-address Connect → valid saved-rig still blocking submission before the fix; saved-rig and New rig recovery now clear `customError`, pass form validity and permit explicit fake-socket connection. No automatic connection or write is introduced.
+
+## F02-S03 replacement and recovery integration
+
+`hasStoredSettings` is repository metadata, not part of the exported schema. It records an observed existing IDB record (even if validation fails) or a successful commit. A new empty document, a deliberately stored empty document and an unreadable version are not treated as the same first-use condition. Database schema version remains 1; no settings fields or unknown legacy shapes are added.
+
+`mountRigSettings` exposes a defensive accepted-definition snapshot, monotonic user-action revision and synchronous `replaceSettings` method. Replacement validates, disconnects/disarms, applies target/profile/preferences and returns a completion promise; late results cannot replace fresh input. Runtime selection stays separate from persisted definitions, including null imported selection and New rig drafts. `mountSettingsRecovery` adds bounded file reads, inert preview, explicit confirm/cancel, local download and optional StorageManager protection.
+
+Normal import/reset uses the existing atomic baseline guard. If storage is unavailable/corrupt/newer/conflicted, local definitions remain exportable memory state and unknown durable records stay untouched. Forced destructive recovery is parked. No `deleteDatabase`, cache deletion, origin clear, worker unregister or mixer operation exists in this flow.
+
+S03 validation: 77 tests pass; production build emits eight assets, worker `f06247a2bdfa6b31`. Targeted isolated Chromium QA used real service worker/IndexedDB and actual JSON download/file import with strictly fake mixer traffic. All assets verified, exact ordered settings roundtripped, markup stayed literal, browser-network-offline reload preserved settings/readiness, and confirmed armed-session reset preserved cache keys/offline marker/sibling storage while remaining empty after another offline reload. This is desktop emulation, not physical Android/iOS qualification or proof of long-term retention.

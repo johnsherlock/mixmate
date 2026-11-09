@@ -5,6 +5,7 @@ import { FaderIntent } from './fader-intent.js';
 import { verifyOfflineCopy, observeOfflineUpdates } from './offline.js';
 import { SettingsRepository } from './settings.js';
 import { mountRigSettings } from './rig-settings.js';
+import { mountSettingsRecovery } from './settings-recovery.js';
 
 const $ = id => document.getElementById(id);
 let state = Object.create(null);
@@ -249,10 +250,14 @@ prepareOffline();
 const settingsRepository = new SettingsRepository();
 let settingsStorage;
 try { settingsStorage = localStorage; } catch { /* Optional. */ }
-mountRigSettings({
+const rigSettings = mountRigSettings({
   repository: settingsRepository, $, storage: settingsStorage,
   makeOption: (label, value) => { const option = new Option('', value); option.textContent = label; return option; },
   onTargetChange: () => { connection.disconnect(); setStatus('disconnected'); },
   isConnected: () => ['connecting', 'connected', 'live'].includes(connectionStatus),
   confirmDelete: name => window.confirm(`Delete local rig “${name}” and its group definitions? This does not change the mixer.`),
 });
+
+let storageManager;
+try { storageManager = navigator.storage; } catch { /* Optional browser API. */ }
+mountSettingsRecovery({ repository: settingsRepository, rigs: rigSettings, $, storageManager });
