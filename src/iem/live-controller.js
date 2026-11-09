@@ -21,9 +21,14 @@ export function createLiveConnectionUI(root) {
   const closeButton = $('.mm-dialog-head button'); closeButton.disabled = false;
   const openButtons = [open, $('.mm-brand'), $('.mm-desk')];
   for (const button of openButtons) button.disabled = false;
-  let focusBefore;
-  const show = () => { focusBefore = document.activeElement; layer.hidden = false; address.focus(); };
-  const close = () => { layer.hidden = true; focusBefore?.focus?.(); };
+  let focusBefore, beforeOpen = () => {}, connectionVisible = false;
+  const show = () => {
+    beforeOpen(); connectionVisible = true; focusBefore = document.activeElement;
+    $('.mm-dialog').classList.remove('mm-group-dialog');
+    $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = 'Connect read-only IEM';
+    layer.hidden = false; address.focus();
+  };
+  const close = () => { if (!connectionVisible) return; connectionVisible = false; layer.hidden = true; focusBefore?.focus?.(); };
   const onKey = event => {
     if (layer.hidden) return;
     if (event.key === 'Escape') close();
@@ -37,7 +42,7 @@ export function createLiveConnectionUI(root) {
   for (const button of openButtons) button.addEventListener('click', show);
   closeButton.addEventListener('click', close);
   return {
-    form, profile, address, connect, disconnect, settings, note, close,
+    form, profile, address, connect, disconnect, settings, note, close, beforeOpen(callback) { beforeOpen = callback; },
     navigation: [...root.querySelectorAll('.mm-entry-links a')],
     profiles(profiles, selectedId = '') {
       const option = make('option', 'Manual address — not a saved rig'); option.value = '';
@@ -51,31 +56,46 @@ export function createLiveConnectionUI(root) {
 
 export function mountLiveController({ session, repository, view, ui, document = globalThis.document, window = globalThis.window }) {
   let touched = false, destroyed = false, profiles = [], selectedAux = null;
+  let boundProfileId = null, contextRevision = 0, settingsReady = false, previousPhase = 'idle';
+  let projected = { selectedAux: null, sources: [] };
+  const contextListeners = new Set();
+  const context = () => ({ profileId: boundProfileId, revision: contextRevision, ready: settingsReady, selectedAux,
+    sources: (projected.sources || []).map(source => ({ sourceId: source.sourceId, name: source.name })) });
+  const emitContext = () => { for (const listener of contextListeners) listener(context()); };
+  const invalidateDraft = (detach = false) => { contextRevision++; if (detach) boundProfileId = null; emitContext(); };
   const handlers = [];
   const listen = (target, type, callback) => { target.addEventListener(type, callback); handlers.push([target, type, callback]); };
   const isActive = phase => ['connecting', 'connected', 'partial', 'live'].includes(phase);
   function render(snapshot = session.snapshot(), kind) {
     if (destroyed) return;
     const model = projectLiveState(snapshot, selectedAux);
-    selectedAux = model.selectedAux;
+    if (selectedAux !== model.selectedAux) contextRevision++;
+    selectedAux = model.selectedAux; projected = model;
+    if (isActive(previousPhase) && !isActive(snapshot.phase)) contextRevision++;
+    previousPhase = snapshot.phase;
     if (kind === 'meters' && view.renderMeters) view.renderMeters(model);
     else view.render(model);
     ui.connect.disabled = isActive(snapshot.phase); ui.disconnect.disabled = !isActive(snapshot.phase);
     ui.note.textContent = snapshot.detail;
+    if (kind !== 'meters') emitContext();
   }
   const unsubscribe = session.subscribe(render);
-  function invalidate() { touched = true; selectedAux = null; session.disconnect(); }
-  listen(ui.address, 'input', () => { invalidate(); ui.profile.value = ''; ui.address.setCustomValidity(''); });
+  function invalidate(detach = false) { touched = true; selectedAux = null; invalidateDraft(detach); session.disconnect(); }
+  listen(ui.address, 'input', () => { invalidate(true); ui.profile.value = ''; ui.address.setCustomValidity(''); });
   listen(ui.profile, 'change', () => {
-    invalidate();
+    invalidate(true);
     const rig = profiles.find(profile => profile.id === ui.profile.value);
-    if (rig) ui.address.value = rig.address;
+    if (rig) { ui.address.value = rig.address; boundProfileId = rig.id; }
+    emitContext();
     ui.address.setCustomValidity('');
   });
   listen(ui.form, 'submit', event => {
     event.preventDefault();
     if (destroyed || document.hidden || isActive(session.snapshot().phase)) return;
-    touched = true; selectedAux = null; ui.address.setCustomValidity('');
+    touched = true; selectedAux = null;
+    const bound = profiles.find(profile => profile.id === boundProfileId);
+    invalidateDraft(!bound || bound.address !== ui.address.value.trim());
+    ui.address.setCustomValidity('');
     if (session.connect(ui.address.value)) ui.close();
     else if (session.snapshot().phase === 'invalid') { ui.address.setCustomValidity(session.snapshot().detail); ui.address.reportValidity(); }
   });
@@ -88,17 +108,20 @@ export function mountLiveController({ session, repository, view, ui, document = 
   ui.profiles([]);
   const ready = repository.initialize().then(({ settings, status }) => {
     if (destroyed) return;
-    profiles = settings.profiles;
+    profiles = settings.profiles; settingsReady = true;
     const rig = !touched && !isActive(session.snapshot().phase) ? profiles.find(profile => profile.id === settings.selectedProfileId) : null;
     ui.profiles(profiles, rig?.id || '');
-    if (rig) ui.address.value = rig.address;
+    if (rig) { ui.address.value = rig.address; boundProfileId = rig.id; }
+    emitContext();
     view.preferences(settings.preferences);
     ui.settings.textContent = status.mode === 'persistent' ? 'Saved local rig definitions. Edit/save rigs in the connection test.' : 'Local rigs are temporary/unavailable. Manual Connect still works.';
   }).catch(() => { if (!destroyed) ui.settings.textContent = 'Could not load local rigs. Manual Connect still works.'; });
   return {
     ready,
-    selectAux(index) { selectedAux = index; render(); },
-    overview() { selectedAux = null; render(); },
-    destroy() { destroyed = true; unsubscribe(); session.disconnect(); for (const [target, type, callback] of handlers) target.removeEventListener(type, callback); ui.destroy?.(); view.destroy(); },
+    context,
+    subscribeContext(listener) { contextListeners.add(listener); listener(context()); return () => contextListeners.delete(listener); },
+    selectAux(index) { invalidateDraft(); selectedAux = index; render(); },
+    overview() { invalidateDraft(); selectedAux = null; render(); },
+    destroy() { invalidateDraft(true); destroyed = true; contextListeners.clear(); unsubscribe(); session.disconnect(); for (const [target, type, callback] of handlers) target.removeEventListener(type, callback); ui.destroy?.(); view.destroy(); },
   };
 }

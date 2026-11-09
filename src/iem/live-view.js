@@ -8,6 +8,7 @@ import { outputColour, overviewColour } from './theme.js';
 export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
+  let groupEditing = false, auxSelected = false;
   const meterLegend = document.createElement('p');
   meterLegend.className = 'mm-live-meter-legend';
   meterLegend.textContent = 'VU: post-fader · source VU is NOT AUX-send contribution · library scale; firmware unverified';
@@ -106,7 +107,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     const selected = model.selectedAux !== undefined && model.selectedAux !== null;
     root.dataset.auxView = String(selected);
     root.style.setProperty('--mm-mix-color', model.selectedMix ? outputColour(model.selectedMix.themeIndex ?? model.selectedMix.auxIndex) : overviewColour);
-    $('.mm-local-tabs').hidden = !selected;
+    auxSelected = selected;
+    $('.mm-local-tabs').hidden = !selected && !groupEditing;
     if ($('.mm-title')) $('.mm-title').textContent = model.selectedMix?.name ?? '';
     if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? 'Observed AUX sources · read-only' : 'Individual received outputs';
     reconcile(grid, overviewStrips, model.mixes, 'master');
@@ -134,6 +136,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   root.addEventListener('click', click);
   return {
     render, renderMeters,
+    groupEditing(enabled) {
+      groupEditing = enabled;
+      root.dataset.groupEditing = String(enabled);
+      const button = root.querySelector('[data-action="edit-groups"]');
+      if (button) button.disabled = !enabled;
+      $('.mm-local-tabs').hidden = !auxSelected && !enabled;
+    },
     preferences(preferences) { root.dataset.preferredOrientation = preferences.orientation; root.dataset.showMeters = String(preferences.showMeters); layout.apply(); },
     clear() { gestures.cancel(); render({ status: 'Not connected — no received mixer state', mixes: [] }); },
     destroy() { meterLegend.remove(); root.removeEventListener('click', click); gestures.destroy(); layout.destroy(); stopClock(); },

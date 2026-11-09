@@ -25,6 +25,12 @@ The connection test now saves named rigs on this device. **New rig** starts a dr
 
 **Request storage protection** asks the browser to protect local storage from automatic removal. It is optional and may be denied; the app remains usable. Even granted protection does not prevent a user clearing site data, so keep a backup. Storage belongs to this browser/installation; sharing with another browser or home-screen app is not assumed.
 
+## Local IEM groups
+
+In the read-only IEM view, **Edit Groups** stores ordered source-ID membership for the active local rig. Select a saved rig in the connection dialog if using a manual address; matching an IP does not select a rig identity. Select an observed AUX to add its received sources. Existing missing IDs stay marked **Unresolved** and can be edited offline without being replaced.
+
+Tap order determines membership order. Clear requires confirmation and changes only the draft; Cancel discards it. Save changes local definitions only, with visible temporary/conflict warnings if storage fails. Durable Save closes the editor. The editor does not move faders or enable group level control; group browsing/expanded layouts follow separately. Save definitions before navigating away, and keep a settings backup.
+
 ## Installation identity update
 
 The manifest now identifies MixMate specifically as `/mixmate/`, correcting an earlier origin-root app ID. Browsers can treat this as a separate installation. If an existing MixMate installation needs replacement, record its details first and uninstall/reinstall **only the identifiable MixMate app** after opening the updated site online. Uninstall can remove installation-local data. Do not clear all Chrome data or remove another app. If Chrome says installed/Open but MixMate cannot be found or opened, report the device/OS/Chrome versions and its Android app/WebAPK details before further recovery. This correction still needs phone/tablet retesting.

@@ -2454,6 +2454,8 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-snapshot,
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-utilities button:disabled,
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-local-tabs{display:none}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"][data-group-editing="true"] .mm-local-tabs{display:flex}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-local-tabs button:disabled{display:none}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-brand{font-size:18px;line-height:24px}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-top .mm-clock{height:24px;min-height:0}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-digit,
@@ -2471,3 +2473,5 @@ body {
 /* Visually clip, rather than remove, full text for assistive technology. */
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-pan-button,
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-live-strip-state{position:absolute;width:1px;height:1px;min-height:0;max-height:1px;flex-basis:auto;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}
+
+#mixmate-iem-concept .mm-local-group-editor{display:flex;flex-direction:column;gap:7px;flex:1;min-height:0;height:100%;overflow:hidden}#mixmate-iem-concept .mm-group-rig-label{margin:0;overflow-wrap:anywhere;flex-shrink:0}#mixmate-iem-concept .mm-local-group-editor>.mm-caption{font-size:10px;margin:0;flex-shrink:0}#mixmate-iem-concept .mm-local-group-editor .mm-editor-feedback{max-width:none;flex:1;min-width:0}#mixmate-iem-concept .mm-member-checks [data-unresolved="true"]{border-style:dashed}#mixmate-iem-concept .mm-local-group-editor .mm-dialog-actions{flex-shrink:0}

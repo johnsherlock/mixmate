@@ -15,7 +15,7 @@ Open online, allow any waiting update to download, close all MixMate windows/tab
 
 ## Latest reviewed read-only IEM target
 
-Until F03-S04 passes review/merge, use read-only session PR #18, main `8c887a0`, worker `278765c0d1f64197` as the latest reviewed IEM baseline. This is distinct from the historical F01 target/results above. The S04 working branch adds meters but is not a new reviewed device target yet. Read-only entry: `https://johnsherlock.github.io/mixmate/iem.html`; it starts disconnected, and **Connect to desk → Connect read-only** is explicit. Its parameter controls are disabled. The root input-fader connection test remains separate; keep **Enable fader control unchecked** there. Demo/reference gestures are simulated and cannot establish live behavior.
+The latest reviewed read-only IEM baseline is [PR #19](https://github.com/johnsherlock/mixmate/pull/19), main `14cf968`, worker `c16e200d043d0162`, after green checks and affirmative final-head review. Pages run `42671886732` succeeded on attempt 2, and the public `sw.js` version was independently checked. The earlier attempt built its artifact but never started deployment; the retry required no source/workflow change. This is distinct from historical F01 and PR #18 results. F04 candidate builds are not reviewed device targets until their own review/merge. The displayed app version `0.2.0` is not the update indicator: record the verified **Offline version** hash. Read-only entry: `https://johnsherlock.github.io/mixmate/iem.html`; it starts disconnected, and **Connect to desk → Connect read-only** is explicit. Its parameter controls are disabled. The root input-fader connection test remains separate; keep **Enable fader control unchecked** there. Demo/reference gestures are simulated and cannot establish live behavior.
 
 Use the [settings backup guide](settings-backup.md) before any device-only recovery. Backup/import/reset already exists in F02; reset is scoped to local definitions and preserves cached app files/offline history/sibling data. Never clear origin-wide/browser data or remove another app to test MixMate. Record the actual entry, commit and verified worker for every new observation; historical result cells below are unchanged.
 
@@ -83,3 +83,5 @@ Follow-up / retest required:
 ```
 
 If a device blocks the local socket, return its exact versions and diagnostics. Leave that verdict blocked/unverified pending a decision; installation or successful desktop access cannot override it. Raw mixer names/values need not be shared for distribution testing.
+
+On 2026-11-09 the user could not run the optional current-tablet read-only check. It remains pending/not run; no request is repeated while they are unavailable, and no prior result is transferred to the c16e… build.
