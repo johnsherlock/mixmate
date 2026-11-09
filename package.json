@@ -10,6 +10,11 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test"
   },
-  "dependencies": {"soundcraft-ui-connection": "7.1.0"},
-  "devDependencies": {"vite": "8.3.6"}
+  "dependencies": {
+    "soundcraft-ui-connection": "7.1.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.8",
+    "vite": "8.3.6"
+  }
 }
