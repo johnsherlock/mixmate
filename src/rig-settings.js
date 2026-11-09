@@ -14,9 +14,13 @@ function privateAddress(value) {
 export function mountRigSettings({ repository, $, makeOption, onTargetChange, isConnected,
   storage, createID = () => globalThis.crypto.randomUUID(), confirmDelete = () => true }) {
   let settings, selectedID = null, ready = false, touched = false, revision = 0, pending = Promise.resolve();
+  function setAddress(address) {
+    $('address').value = address;
+    $('address').setCustomValidity('');
+  }
   let legacy;
   try { const value = storage?.getItem(LEGACY_ADDRESS); if (value) legacy = privateAddress(value); } catch { /* Optional legacy source. */ }
-  $('address').value = legacy || DEFAULT_ADDRESS;
+  setAddress(legacy || DEFAULT_ADDRESS);
   const controls = ['rig-profile', 'rig-name', 'new-rig', 'save-rig', 'delete-rig', 'preferred-orientation', 'show-meters'];
   const feedback = message => { $('rig-feedback').textContent = message; };
   function cleanLegacy(status) {
@@ -71,7 +75,7 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
     const profile = settings.profiles.find(item => item.id === $('rig-profile').value);
     if (!profile) return;
     targetChanged();
-    $('address').value = profile.address;
+    setAddress(profile.address);
     $('rig-name').value = profile.name;
     feedback('');
     selectedID = profile.id;
@@ -81,7 +85,7 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
     if (!ready || settings.profiles.length >= 32) return;
     targetChanged();
     selectedID = null;
-    $('address').value = DEFAULT_ADDRESS;
+    setAddress(DEFAULT_ADDRESS);
     $('rig-name').value = '';
     feedback('New rig draft. Enter a name and address, then Save rig.');
     render();
@@ -104,7 +108,7 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
       const candidate = structuredClone(settings); change(candidate); validateSettings(candidate);
       if (settings.profiles.find(profile => profile.id === selectedID)?.address !== address) targetChanged();
       else revision++;
-      $('address').value = address;
+      setAddress(address);
       $('rig-name').value = name;
       feedback('');
       selectedID = id;
@@ -117,7 +121,7 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
     if (!confirmDelete(profile.name)) return;
     targetChanged();
     const next = settings.profiles.find(item => item.id !== id);
-    $('address').value = next?.address || DEFAULT_ADDRESS;
+    setAddress(next?.address || DEFAULT_ADDRESS);
     $('rig-name').value = next?.name || '';
     feedback(next ? '' : 'No saved rigs. Enter a name and Save rig to create one.');
     selectedID = next?.id || null;
@@ -143,7 +147,7 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
       const profile = { id: createID(), name: 'My rig', address, groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
       settings.profiles.push(profile); settings.selectedProfileId = profile.id;
       selectedID = !touched && !isConnected() ? profile.id : null;
-      if (selectedID) $('address').value = profile.address;
+      if (selectedID) setAddress(profile.address);
       $('rig-name').value = selectedID ? profile.name : '';
       ready = true; render();
       if (!selectedID) feedback('Temporary address. Save it as a new rig or select a saved rig.');
@@ -154,7 +158,7 @@ export function mountRigSettings({ repository, $, makeOption, onTargetChange, is
     const applyTarget = !touched && !isConnected();
     const profile = applyTarget ? previous : undefined;
     selectedID = profile?.id || null;
-    if (applyTarget && profile) $('address').value = profile.address;
+    if (applyTarget && profile) setAddress(profile.address);
     $('rig-name').value = profile?.name || '';
     ready = true; render();
     if (!selectedID) feedback('Temporary address. Save it as a new rig or select a saved rig.');

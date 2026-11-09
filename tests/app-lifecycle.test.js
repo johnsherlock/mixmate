@@ -27,6 +27,7 @@ class Element extends Events {
   focus() {}
   setAttribute(name, value) { this.attributes[name] = value; }
   setCustomValidity(value) { this.validity = value; }
+  checkValidity() { return !this.validity; }
   reportValidity() {}
 }
 function app({ offline, storage = new Map(), storageAccess, indexedDB, repository, confirmDelete = true } = {}) {
@@ -568,4 +569,39 @@ test('another window save becomes a visible temporary conflict without changing 
   const reopened = app({ indexedDB: factory }); await reopened.settingsReady();
   assert.equal(reopened.element('rig-name').value, 'Window A');
   await reopened.close();
+});
+
+
+test('valid profile/default replacements clear a previous address custom validation error before Connect', async () => {
+  for (const action of ['profile', 'new', 'delete', 'save']) {
+    const factory = new IDBFactory(); await seedRigs(factory);
+    const view = app({ indexedDB: factory }); await view.settingsReady();
+    view.element('address').value = '8.8.8.8'; view.element('address').emit('input');
+    view.element('connect-form').emit('submit');
+    assert.equal(view.element('address').checkValidity(), false);
+    assert.equal(view.sockets.length, 0);
+    if (action === 'profile') { view.element('rig-profile').value = 'second-rig'; view.element('rig-profile').emit('change'); }
+    if (action === 'new') view.element('new-rig').emit('click');
+    if (action === 'delete') view.element('delete-rig').emit('click');
+    if (action === 'save') { view.element('address').value = '192.168.0.60'; view.element('save-rig').emit('click'); }
+    assert.equal(view.element('address').checkValidity(), true, `${action} should clear stale custom validity`);
+    view.element('connect-form').emit('submit');
+    assert.equal(view.sockets.length, 1);
+    assert.ok(view.sockets[0].url.startsWith('ws://192.168.'));
+    await view.settingsIdle(); await view.close();
+  }
+});
+
+test('an untouched startup address replacement clears stale custom validity without affecting edited targets', async () => {
+  const factory = new IDBFactory(); await seedRigs(factory);
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  class DelayedRepository extends SettingsRepository { initialize() { return super.initialize().then(result => gate.then(() => result)); } }
+  const view = app({ repository: new DelayedRepository({ indexedDB: factory }) });
+  view.element('address').setCustomValidity('Prior validation error');
+  release(); await view.settingsReady();
+  assert.equal(view.element('address').value, '192.168.0.60');
+  assert.equal(view.element('address').checkValidity(), true);
+  assert.equal(view.sockets.length, 0);
+  await view.close();
 });
