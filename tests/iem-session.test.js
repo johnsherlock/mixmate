@@ -4,7 +4,8 @@ import { createReadOnlySession } from '../src/iem/live-session.js';
 import { createLiveProvider, projectLiveState } from '../src/iem/live-provider.js';
 import { mountLiveController } from '../src/iem/live-controller.js';
 import { readFile } from 'node:fs/promises';
-import { emptySettings } from '../src/settings.js';
+import { emptySettings, SettingsRepository } from '../src/settings.js';
+import { mountGroupEditor } from '../src/iem/group-editor.js';
 const ALLOWED = new Set(['3:::INIT', '3:::ALIVE', '2::']);
 const LIVE = '3:::SETS^model^ui24\nSETS^a.0.name^Synthetic <img src=x>\nSETD^a.0.matrix^0\nSETD^a.0.mix^0\nSETD^a.0.stereoIndex^-1';
 class Clock {
@@ -344,4 +345,76 @@ test('an already-queued old flush cannot discard the new generation pending hand
   const count = timers.jobs.size; oldFlush(); sockets[1].receive(vu);
   assert.equal(timers.jobs.size, count);
   session.disconnect(); assert.equal(timers.jobs.size, 0);
+});
+
+
+test('group binding uses only selected stable rig identity and detaches on manual or early-touched targets', async () => {
+  const settings = localSettings(); settings.settings.profiles[1].address = settings.settings.profiles[0].address;
+  const app = controllerFixture({ initialize: async () => settings }); await app.controller.ready;
+  assert.equal(app.controller.context().profileId, 'rigA');
+  app.ui.profile.value = 'rigB'; app.ui.profile.emit('change');
+  assert.equal(app.controller.context().profileId, 'rigB'); // Same address, different explicit identity.
+  app.ui.address.emit('input'); assert.equal(app.controller.context().profileId, null);
+  app.controller.destroy();
+  let finish;
+  const early = controllerFixture({ initialize: () => new Promise(resolve => { finish = resolve; }) });
+  early.ui.address.value = '192.168.1.60'; early.ui.address.emit('input'); early.ui.form.emit('submit');
+  finish(settings); await early.controller.ready;
+  assert.equal(early.controller.context().profileId, null);
+  assert.equal(early.ui.profile.value, '');
+  early.controller.destroy();
+});
+
+test('live group draft survives names/meters but closes when incoming output mode invalidates its AUX', async () => {
+  const repository = new SettingsRepository({ indexedDB: undefined }); await repository.replace(localSettings().settings);
+  const app = controllerFixture({ initialize: async () => repository.snapshot() }); await app.controller.ready;
+  app.ui.form.emit('submit'); const socket = app.sockets[0]; socket.open();
+  socket.receive(LIVE + '\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.4\nSETD^i.0.aux.0.value^0.3\nSETD^l.0.aux.0.value^0.2\nSETD^p.1.aux.0.value^0.1\nSETD^f.0.aux.0.value^0.5');
+  app.controller.selectAux(0);
+  const ui = { name: {}, cancel: {}, save: {}, message: {}, status: {}, bind(actions) { this.actions = actions; },
+    show() { this.visible = true; }, hide() { this.visible = false; }, choices() {}, members(catalog, selected) { this.catalog = catalog; this.selected = [...selected]; this.paints = (this.paints || 0) + 1; }, busy() {}, saved() {}, destroy() {} };
+  const editor = mountGroupEditor({ repository, controller: app.controller, ui }); editor.open(); ui.name.value = 'User draft';
+  assert.deepEqual(ui.catalog.map(source => source.id), ['i.0', 'l.0', 'p.1', 'f.0']);
+  ui.actions.toggle('f.0'); ui.actions.toggle('i.0');
+  socket.receive('3:::SETS^i.0.name^Renamed <img src=x>');
+  assert.deepEqual(editor.snapshot().members, ['f.0', 'i.0']); assert.equal(ui.name.value, 'User draft');
+  assert.equal(ui.catalog[0].name, 'Renamed <img src=x>');
+  const paints = ui.paints, revision = app.controller.context().revision;
+  for (let n = 0; n < 20; n++) socket.receive(vu);
+  app.timers.tick(100);
+  assert.equal(ui.paints, paints); assert.equal(app.controller.context().revision, revision);
+  socket.receive('3:::SETD^a.0.matrix^1');
+  assert.equal(app.session.snapshot().phase, 'live'); // The other AUX is still valid.
+  assert.equal(app.controller.context().selectedAux, null);
+  assert.ok(app.controller.context().revision > revision);
+  assert.equal(ui.visible, false); assert.equal(editor.snapshot(), null);
+  assert.deepEqual(repository.snapshot().settings.profiles[0].groups, []);
+  assert.ok(socket.sent.every(message => ALLOWED.has(message)));
+  editor.destroy(); app.controller.destroy(); await repository.close();
+});
+
+
+test('lifecycle/target changes cancel queued group Save before it can persist or retarget', async () => {
+  for (const action of ['hide', 'pagehide', 'navigation', 'disconnect', 'profile', 'address', 'aux']) {
+    const repository = new SettingsRepository({ indexedDB: undefined }); await repository.replace(localSettings().settings);
+    const app = controllerFixture({ initialize: async () => repository.snapshot() }); await app.controller.ready;
+    app.ui.form.emit('submit'); const socket = app.sockets[0]; socket.open(); socket.receive(LIVE + '\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.5'); app.controller.selectAux(0);
+    const ui = { name: {}, cancel: {}, save: {}, message: {}, status: {}, bind(value) { this.actions = value; }, show() {}, hide() {}, choices() {}, members() {}, busy() {}, saved() {}, destroy() {} };
+    const editor = mountGroupEditor({ repository, controller: app.controller, ui }); editor.open(); ui.name.value = 'Queued group';
+    let release; const gate = new Promise(resolve => { release = resolve; }), update = repository.update.bind(repository);
+    repository.update = change => gate.then(() => update(change));
+    const pending = ui.actions.save();
+    if (action === 'hide') { app.document.hidden = true; app.document.emit('visibilitychange'); }
+    if (action === 'pagehide') app.window.emit('pagehide');
+    if (action === 'navigation') app.ui.navigation[0].emit('click');
+    if (action === 'disconnect') app.ui.disconnect.emit('click');
+    if (action === 'profile') { app.ui.profile.value = 'rigB'; app.ui.profile.emit('change'); }
+    if (action === 'address') { app.ui.address.value = '10.0.0.2'; app.ui.address.emit('input'); }
+    if (action === 'aux') app.controller.selectAux(1);
+    assert.equal(editor.snapshot(), null, action);
+    release(); await pending;
+    assert.ok(repository.snapshot().settings.profiles.every(profile => profile.groups.length === 0), action);
+    assert.equal(app.sockets.length, 1); assert.ok(socket.sent.every(message => ALLOWED.has(message)));
+    editor.destroy(); app.controller.destroy(); await repository.close();
+  }
 });
