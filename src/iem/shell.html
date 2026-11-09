@@ -1,0 +1,106 @@
+<div id="mixmate-iem-concept" data-orientation="landscape">
+  <div class="mm-app">
+    <header class="mm-top">
+      <button
+        class="mm-brand"
+        data-action="desks"
+        aria-label="MixMate desk connection"
+      >
+        MixMate<span>IEM MIXER</span>
+      </button>
+      <button class="mm-snapshot" data-action="snapshots">
+        <span>SNAPSHOT</span
+        ><strong class="mm-snapshot-name">Unavailable</strong><small>⌄</small>
+      </button>
+      <div class="mm-clock" role="timer" aria-label="Current time"></div>
+      <div class="mm-utilities">
+        <button data-action="save" aria-label="Save current snapshot">
+          Save<span class="mm-long"> snapshot</span></button
+        ><button data-action="record" class="mm-record">
+          <i></i
+          ><span class="mm-rec-text"
+            >Record<span class="mm-long"> MTK</span></span
+          ></button
+        ><button data-action="native">
+          Native<span class="mm-long"> app</span> ↗</button
+        ><button data-action="fullscreen" aria-label="Enter full screen">
+          ⛶
+        </button>
+      </div>
+    </header>
+    <div class="mm-preview">
+      <strong class="mm-mode-label"></strong>
+      <nav class="mm-entry-links" aria-label="Application mode">
+        <a href="./iem.html">Read-only IEM</a><a href="./demo.html">Demo</a
+        ><a href="./">Connection test</a>
+      </nav>
+      <span class="mm-offline-state" role="status" aria-live="polite"
+        >Offline copy not verified</span
+      ><span class="mm-feedback" role="status" aria-live="polite"
+        >No received mixer state</span
+      >
+    </div>
+    <nav class="mm-navigation" aria-label="Mix navigation">
+      <button class="mm-home" data-action="overview">All Mixes</button>
+      <div class="mm-mix-tabs" hidden></div>
+      <div class="mm-heading">
+        <span class="mm-kicker"></span><strong class="mm-title"></strong>
+      </div>
+      <div class="mm-group-switches" aria-label="Switch group" hidden></div>
+      <div class="mm-local-tabs">
+        <button data-mode="eq">Mix EQ</button
+        ><button data-action="edit-groups" aria-label="Edit groups">
+          Edit Groups
+        </button>
+      </div>
+      <button class="mm-collapse" data-action="collapse" hidden>
+        ← Groups
+      </button>
+    </nav>
+    <section class="mm-content" aria-label="Mixer surface"></section>
+    <footer class="mm-bottom">
+      <button class="mm-desk" data-action="desks">No connection</button
+      ><span class="mm-dirty">Snapshot unavailable</span
+      ><span class="mm-rec-state">Recording unavailable</span
+      ><span class="mm-page-state"></span>
+    </footer>
+    <div class="mm-layer" hidden>
+      <section
+        class="mm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mm-dialog-title"
+      >
+        <div class="mm-dialog-head">
+          <h3 id="mm-dialog-title"></h3>
+          <button data-action="close-dialog" aria-label="Close dialog">
+            Close ×
+          </button>
+        </div>
+        <div class="mm-dialog-body"></div>
+      </section>
+    </div>
+    <section class="mm-native-layer" hidden aria-label="Native mixer preview">
+      <div class="mm-native-head">
+        <span>Soundcraft Ui · layer preview</span
+        ><span class="mm-native-note">Simulated native screen</span
+        ><button
+          data-action="close-native"
+          aria-label="Close native mixer and return to MixMate"
+        >
+          × <span>MixMate</span>
+        </button>
+      </div>
+      <div class="mm-native-tabs">
+        <button>MIX / GAIN</button><button>AUX SENDS</button
+        ><button>EDIT · EQ</button
+        ><span class="mm-native-snapshot">Unavailable</span>
+      </div>
+      <div class="mm-native-content"></div>
+      <div class="mm-native-foot">
+        Embedding must be verified on each browser · separate-tab fallback
+        available
+      </div>
+    </section>
+  </div>
+</div>

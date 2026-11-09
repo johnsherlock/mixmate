@@ -2,7 +2,7 @@ import './style.css';
 import { faderValueToDB } from 'soundcraft-ui-connection';
 import { MixerConnection } from './protocol.js';
 import { FaderIntent } from './fader-intent.js';
-import { verifyOfflineCopy, observeOfflineUpdates } from './offline.js';
+import { verifyOfflineCopy, observeOfflineUpdates, currentEntryRequirements } from './offline.js';
 import { SettingsRepository } from './settings.js';
 import { mountRigSettings } from './rig-settings.js';
 import { mountSettingsRecovery } from './settings-recovery.js';
@@ -225,6 +225,7 @@ async function prepareOffline() {
     const result = await verifyOfflineCopy({
       serviceWorker: navigator.serviceWorker,
       baseURI: document.baseURI,
+      required: currentEntryRequirements(document),
       onRegistration: registration => {
         if (attempt !== offlineAttempt) return;
         stopUpdateObserver = observeOfflineUpdates(registration, waiting => {

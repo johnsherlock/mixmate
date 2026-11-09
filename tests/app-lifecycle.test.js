@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { MixerConnection, OUTBOUND } from '../src/protocol.js';
 import { FaderIntent } from '../src/fader-intent.js';
-import { observeOfflineUpdates } from '../src/offline.js';
+import { observeOfflineUpdates, currentEntryRequirements } from '../src/offline.js';
 import { SettingsRepository, emptySettings } from '../src/settings.js';
 import { mountRigSettings } from '../src/rig-settings.js';
 import { mountSettingsRecovery, parseSettingsBackup, settingsBackupText, MAX_SETTINGS_BYTES } from '../src/settings-recovery.js';
@@ -51,14 +51,14 @@ function app({ offline, storage = new Map(), storageAccess, indexedDB, repositor
   class FakeConnection extends MixerConnection {
     constructor(options) { super({ ...options, WebSocketClass: FakeSocket }); client = this; }
   }
-  const document = Object.assign(new Events(), { hidden: false, baseURI: 'https://example.test/mixmate/', getElementById: element, querySelector: element });
+  const document = Object.assign(new Events(), { hidden: false, baseURI: 'https://example.test/mixmate/', getElementById: element, querySelector: element, querySelectorAll: () => [] });
   const window = Object.assign(new Events(), { isSecureContext: true, confirm: () => confirmDelete });
   const navigator = { storage: storageManager, userAgent: 'fake browser', ...(offline ? { serviceWorker: new Events() } : {}) };
   vm.runInNewContext(source, {
     document, window, navigator, location: { origin: 'https://example.test' },
     localStorage: storageAccess || { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     Option: function(text, value) { this.textContent = text; this.value = String(value); },
-    MixerConnection: FakeConnection, FaderIntent, faderValueToDB, verifyOfflineCopy: offline, observeOfflineUpdates, SettingsRepository: FakeSettingsRepository,
+    MixerConnection: FakeConnection, FaderIntent, faderValueToDB, verifyOfflineCopy: offline, observeOfflineUpdates, currentEntryRequirements, SettingsRepository: FakeSettingsRepository,
     mountRigSettings: options => { settingsController = mountRigSettings(options); return settingsController; },
     mountSettingsRecovery: options => { recoveryController = mountSettingsRecovery({ ...options, download: text => downloads.push(text) }); return recoveryController; },
     caches: { delete: key => cacheOperations.push(key), keys: () => [] },

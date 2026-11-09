@@ -1,6 +1,7 @@
 const VERSION = '__VERSION__';
 const ASSETS = __ASSETS__;
 const HASHES = __HASHES__;
+const ENTRY_PROOFS = __ENTRY_PROOFS__;
 const SCOPE = self.registration.scope;
 const PREFIX = `mixmate:${SCOPE}:`;
 const CACHE = `${PREFIX}${VERSION}`;
@@ -46,8 +47,10 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (!url.href.startsWith(SCOPE)) return; // Never cache or proxy mixer traffic.
-  const target = request.mode === 'navigate' && (url.pathname === new URL(SCOPE).pathname || url.pathname === new URL('index.html', SCOPE).pathname)
-    ? new URL('index.html', SCOPE).href : url.href;
+  const knownEntry = ['index.html', 'iem.html', 'demo.html'].map(path => new URL(path, SCOPE)).find(entry => entry.pathname === url.pathname);
+  const target = request.mode === 'navigate'
+    ? url.pathname === new URL(SCOPE).pathname ? new URL('index.html', SCOPE).href : knownEntry?.href || url.href
+    : url.href;
   if (!EXPECTED.has(target)) return;
   event.respondWith(caches.open(CACHE).then(cache => verifiedAsset(cache, target)));
 });
@@ -55,9 +58,17 @@ self.addEventListener('message', event => {
   if (event.data?.type !== 'VERIFY_OFFLINE' || !event.ports[0]) return;
   event.waitUntil((async () => {
     try {
+      const required = event.data.required;
+      let proof;
+      if (required !== undefined) {
+        if (!required || typeof required.entry !== 'string' || typeof required.token !== 'string' || !Array.isArray(required.assets) || required.assets.length > 64 || required.assets.some(url => typeof url !== 'string' || !EXPECTED.has(url)) || !required.assets.includes(required.entry)) throw new Error('Unknown entry assets.');
+        const path = required.entry.startsWith(SCOPE) ? required.entry.slice(SCOPE.length) : '';
+        if (!ENTRY_PROOFS[path] || ENTRY_PROOFS[path] !== required.token) throw new Error('Entry belongs to another version.');
+        proof = { entry: required.entry, token: required.token, assets: required.assets };
+      }
       const cache = await caches.open(CACHE);
       await Promise.all(URLS.map(url => verifiedAsset(cache, url)));
-      event.ports[0].postMessage({ ready: true, version: VERSION });
+      event.ports[0].postMessage({ ready: true, version: VERSION, ...(proof ? { proof } : {}) });
     } catch { event.ports[0].postMessage({ ready: false, version: VERSION }); }
   })());
 });

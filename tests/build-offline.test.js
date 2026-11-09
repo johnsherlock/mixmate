@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { buildServiceWorker } from '../scripts/build-sw.js';
+import { posix } from 'node:path';
 
 async function inventory(directory, prefix = '') {
   const result = [];
@@ -45,19 +46,46 @@ test('production build precaches the exact emitted inventory and resolves instal
     // Identity must survive a future start URL change within this app's scope.
     assert.equal(new URL(manifest.id, new URL('connection-test.html', scope).origin).href, appID.href);
     for (const icon of manifest.icons) assert.ok(first.assets.includes(icon.src.replace(/^\.\//, '')));
-    const html = await readFile(join(directory, 'index.html'), 'utf8');
-    for (const [, reference] of html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
-      if (/^https?:/.test(reference)) continue; // Source/feedback links are not runtime assets.
-      const url = new URL(reference, scope);
-      assert.ok(url.href.startsWith(scope), reference);
-      if (url.href !== scope) assert.ok(first.assets.includes(url.href.slice(scope.length)), reference);
+    for (const entry of ['index.html', 'iem.html', 'demo.html']) {
+      const html = await readFile(join(directory, entry), 'utf8');
+      assert.match(html, /name="mixmate-entry-proof" content="[a-f0-9]{64}"/);
+      for (const [, reference] of html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
+        if (/^https?:/.test(reference)) continue;
+        const url = new URL(reference, scope);
+        assert.ok(url.href.startsWith(scope), reference);
+        if (url.href !== scope) assert.ok(first.assets.includes(url.href.slice(scope.length)), reference);
+      }
     }
+    const moduleGraph = async entry => {
+      const html = await readFile(join(directory, entry), 'utf8');
+      const start = /<script[^>]+src="([^" ]+\.js)"/.exec(html)[1].replace(/^\.\//, '');
+      const visited = new Set();
+      async function visit(path) {
+        if (visited.has(path)) return '';
+        visited.add(path);
+        const source = await readFile(join(directory, path), 'utf8');
+        let result = source;
+        for (const match of source.matchAll(/(?:from|import)\s*["'](\.\/[^"']+\.js)["']/g)) result += await visit(posix.join(posix.dirname(path), match[1]));
+        return result;
+      }
+      return visit(start);
+    };
+    const live = await moduleGraph('iem.html'), demo = await moduleGraph('demo.html');
+    assert.ok(demo.includes('KICK') && demo.includes('SNARE'));
+    assert.ok(!live.includes('KICK') && !live.includes('SNARE'));
+    assert.ok(!live.includes('3:::INIT') && !demo.includes('3:::INIT'));
     const generated = await readFile(join(directory, 'sw.js'), 'utf8');
-    assert.ok(!/__VERSION__|__ASSETS__|__HASHES__/.test(generated));
+    assert.ok(!/__VERSION__|__ASSETS__|__HASHES__|__ENTRY_PROOFS__/.test(generated));
     assert.match(generated, /cache: 'reload'/);
     assert.ok(!generated.includes('skipWaiting('));
     assert.equal(await readFile(join(directory, 'mockups/iem.html'), 'utf8'), await readFile('mockups/iem.html', 'utf8'));
     assert.deepEqual(await buildServiceWorker(directory), first);
+    const oldEntry = await readFile(join(directory, 'iem.html'), 'utf8');
+    const oldToken = /name="mixmate-entry-proof" content="([a-f0-9]{64})"/.exec(oldEntry)[1];
+    await writeFile(join(directory, 'iem.html'), oldEntry.replace('</title>', ' revised</title>'));
+    await buildServiceWorker(directory);
+    const newToken = /name="mixmate-entry-proof" content="([a-f0-9]{64})"/.exec(await readFile(join(directory, 'iem.html'), 'utf8'))[1];
+    assert.notEqual(newToken, oldToken); // HTML-only changes cannot reuse old entry proof.
     await writeFile(join(directory, 'manifest.webmanifest'), '{}');
     const changed = await buildServiceWorker(directory);
     assert.notEqual(changed.version, first.version);
