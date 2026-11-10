@@ -71,36 +71,39 @@ test('production build precaches the exact emitted inventory and resolves instal
       return (await Promise.all(starts.map(visit))).join('\n');
     };
     const live = await moduleGraph('index.html'), alias = await moduleGraph('iem.html'), demo = await moduleGraph('demo.html'), connection = await moduleGraph('connection-test.html');
-    assert.equal(live, alias); // Root and compatibility URL load the same read-only capability.
+    assert.equal(live, alias); // Root and compatibility URL load the same typed AUX capability.
     assert.ok(connection.includes('setInputFader') && connection.includes('3:::SETD'));
     const rootHTML = await readFile(join(directory, 'index.html'), 'utf8');
     const connectionHTML = await readFile(join(directory, 'connection-test.html'), 'utf8');
     assert.match(rootHTML, /id="iem-root"/); assert.ok(!rootHTML.includes('id="enable-fader"'));
     assert.match(connectionHTML, /id="enable-fader"[^>]*disabled/);
-    assert.match(connectionHTML, /href="\.\/">← Main read-only IEM app/);
+    assert.match(connectionHTML, /href="\.\/">← Main live IEM app/);
     assert.match(rootHTML, /connect-src ws:/);
     const metadata = JSON.parse(await readFile('package.json', 'utf8'));
     const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
-    assert.equal(metadata.version, '0.3.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
+    assert.equal(metadata.version, '0.4.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
     assert.ok(live.includes(metadata.version) && connection.includes(metadata.version));
     assert.equal(manifest.name, 'MixMate — IEM mixer'); assert.equal(manifest.id, 'mixmate/'); assert.equal(manifest.start_url, './'); assert.equal(manifest.scope, './');
     const shell = await readFile('src/iem/shell.html', 'utf8');
-    assert.match(shell, /href="\.\/">Read-only IEM/); assert.match(shell, /href="\.\/connection-test.html"[^>]*>Settings \/ test/);
+    assert.match(shell, /href="\.\/">Live IEM/); assert.match(shell, /href="\.\/connection-test.html"[^>]*>Settings \/ test/);
     assert.ok(demo.includes('KICK') && demo.includes('SNARE'));
     assert.ok(!live.includes('KICK') && !live.includes('SNARE'));
     assert.ok(live.includes('3:::INIT') && live.includes('3:::ALIVE') && live.includes('2::'));
     assert.ok(live.includes('VU2^') && live.includes('NOT AUX send') && live.includes('vuPostFaderL'));
     assert.ok(!demo.includes('VU2^')); // Meter decoding cannot enter the isolated simulation graph.
     assert.ok(!demo.includes('3:::INIT') && !demo.includes('3:::ALIVE'));
-    assert.ok(!live.includes('setInputFader') && !live.includes('3:::SETD') && !live.includes('3:::SETS'));
+    assert.ok(!live.includes('setInputFader') && live.includes('3:::SETD') && !live.includes('3:::SETS'));
     assert.ok(!live.includes('new MixerConnection') && !live.includes('faderTargets'));
     const liveHTML = await readFile(join(directory, 'iem.html'), 'utf8');
     const demoHTML = await readFile(join(directory, 'demo.html'), 'utf8');
     assert.match(liveHTML, /connect-src ws:/);
     assert.match(demoHTML, /connect-src 'none'/);
-    const transport = await readFile('src/iem/live-session.js', 'utf8');
-    assert.deepEqual([...transport.matchAll(/\.send\(([^)]+)\)/g)].map(match => match[1]).sort(), ["'2::'", "'3:::ALIVE'", "'3:::INIT'"].sort());
+    const transport = await readFile('src/iem/session-core.js', 'utf8');
+    assert.deepEqual([...transport.matchAll(/\.send\(([^)]+)\)/g)].map(match => match[1]).sort(), ["'2::'", "'3:::ALIVE'", "'3:::INIT'", "grant.message"].sort());
     assert.ok(!transport.includes('../protocol.js'));
+    assert.match(transport, /createReadOnlySession\(options\) \{ return createSession\(false, options\)/);
+    assert.match(transport, /createAuxLevelSession\(options\) \{ return createSession\(true, options\)/);
+    assert.doesNotMatch(transport, /export function createSession/);
     const generated = await readFile(join(directory, 'sw.js'), 'utf8');
     assert.ok(!/__VERSION__|__ASSETS__|__HASHES__|__ENTRY_PROOFS__/.test(generated));
     assert.match(generated, /cache: 'reload'/);

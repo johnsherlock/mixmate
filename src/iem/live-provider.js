@@ -66,7 +66,7 @@ function projectMeter(session, id, source = false, allowed = true) {
 }
 export function projectLiveState(session, selectedAux = null) {
   const state = session.observations, model = state.get('model');
-  const result = { status: session.detail, connectionPhase: session.phase, selectedAux: null, modelLabel: model === 'ui24' ? 'Ui24 model received' : 'Ui24 model not verified', mixes: [], sources: [], selectedMix: null };
+  const result = { ...(session.control ? { control: session.control } : {}), status: session.detail, connectionPhase: session.phase, selectedAux: null, modelLabel: model === 'ui24' ? 'Ui24 model received' : 'Ui24 model not verified', mixes: [], sources: [], selectedMix: null };
   if (model !== 'ui24') return result;
   const indices = [...new Set([...state.keys()].map(path => /^a\.([0-9])\./.exec(path)?.[1]).filter(value => value !== undefined).map(Number))].sort((a, b) => a - b);
   result.mixes = indices.map(index => {
@@ -89,7 +89,7 @@ export function projectLiveState(session, selectedAux = null) {
   result.sources = observedAuxSources(state, selectedAux).map(source => {
     const prefix = `${source.sourceId}.aux.${selectedAux}`;
     return {
-      id: `${source.sourceId}@${selectedAux}`, sourceId: source.sourceId,
+      id: `${source.sourceId}@${selectedAux}`, sourceId: source.sourceId, auxIndex: selectedAux, themeIndex: result.selectedMix.themeIndex,
       name: observedName(state, `${source.sourceId}.name`, sourceLabel(source.sourceId)),
       detail: `${sourceLabel(source.sourceId)} · AUX ${selectedAux + 1} SEND · ${relationshipText(state, source.sourceId)}`,
       ...level(state.get(`${prefix}.value`)),

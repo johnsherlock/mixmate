@@ -240,3 +240,87 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
   }
 });
+
+test('level gesture hooks commit once on cap release/double track tap or keyboard keyup, never single/swipe/input changes', () => {
+  const document = documentFixture(), root = new Node(document), wrap = document.createElement('div'); wrap.className = 'mm-fader-control';
+  const input = document.createElement('input'); input.className = 'mm-vertical'; input.min = '0'; input.max = '1'; input.step = '0.001'; input.value = '0.4'; input.dataset.channel = '0';
+  const cap = document.createElement('span'); cap.className = 'mm-fader-hit'; wrap.append(input, cap); root.append(wrap);
+  let begins = 0, cancels = 0, releases = 0; const commits = [], token = Object.freeze({}); wrap.releasePointerCapture = () => { releases++; };
+  const gestures = installFaderGestures(root, { onBegin() { begins++; return token; }, onCommit(input, received) { assert.equal(received, token); commits.push(Number(input.value)); }, onCancel() { cancels++; } });
+  const target = hit => ({ closest: selector => selector === '.mm-fader-control' ? wrap : hit && selector === '.mm-fader-hit' ? cap : null });
+  const event = (hit, y) => ({ target: target(hit), pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
+  try {
+    root.emit('pointerdown', event(false, 70)); root.emit('pointerup', event(false, 70)); assert.equal(begins, 0); assert.equal(commits.length, 0); gestures.cancel();
+    root.emit('pointerdown', event(false, 70)); root.emit('pointermove', event(false, 150)); root.emit('pointerup', event(false, 150)); assert.equal(begins, 0); assert.equal(commits.length, 0);
+    root.emit('pointerdown', event(true, 100)); root.emit('pointermove', event(true, 60)); assert.equal(begins, 1); assert.equal(commits.length, 0); assert.ok(+input.value > 0.4);
+    root.emit('pointerup', event(true, 60)); assert.equal(commits.length, 1); assert.equal(releases, 1); root.emit('pointerup', event(true, 60)); assert.equal(commits.length, 1);
+    for (let n = 0; n < 2; n++) { root.emit('pointerdown', event(false, 30)); root.emit('pointerup', event(false, 30)); }
+    assert.equal(commits.length, 2); assert.equal(begins, 2);
+    root.emit('pointerdown', event(true, 100)); root.emit('pointermove', event(true, 70)); root.emit('pointercancel', event(true, 70)); root.emit('pointerup', event(true, 70)); assert.equal(commits.length, 2); assert.equal(cancels, 1);
+    input.closest = () => wrap;
+    const keyboard = key => ({ target: input, key, preventDefault() {} });
+    root.emit('keydown', keyboard('ArrowUp')); root.emit('keydown', keyboard('ArrowUp')); assert.equal(commits.length, 2); assert.equal(begins, 4);
+    root.emit('keyup', keyboard('ArrowUp')); assert.equal(commits.length, 3); root.emit('keyup', keyboard('ArrowUp')); assert.equal(commits.length, 3);
+    root.emit('keydown', keyboard('End')); assert.equal(Number(input.value), 1); root.emit('keydown', keyboard('Escape')); root.emit('keyup', keyboard('End')); assert.equal(commits.length, 3);
+    root.emit('keydown', keyboard('Home')); root.emit('focusout', { target: input }); root.emit('keyup', keyboard('Home')); assert.equal(commits.length, 3);
+    root.emit('input', { target: input }); root.emit('change', { target: input }); assert.equal(commits.length, 3);
+    input.disabled = true; root.emit('keydown', keyboard('ArrowUp')); root.emit('pointerdown', event(true, 100)); root.emit('pointerup', event(true, 70)); assert.equal(commits.length, 3);
+  } finally { gestures.destroy(); }
+});
+
+test('selected armed level preview preserves cap/input/received readout across renders and resets on invalidation', () => {
+  const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
+  const document = documentFixture(), root = new Node(document);
+  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-group-switches', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app']) {
+    const node = document.createElement('div'); node.className = name; root.append(node);
+  }
+  Object.assign(globalThis, { document, window: new Node(document), matchMedia: () => ({ matches: true }), innerHeight: 844, ResizeObserver: class { observe() {} disconnect() {} } });
+  let view, commits = 0;
+  try {
+    const target = { kind: 'send', auxIndex: 0, sourceId: 'i.0' }, token = Object.freeze({});
+    view = mountReadOnlyView(root, { onBeginLevel: () => token, onCommitLevel: () => commits++ });
+    const master = { id: 'a.0', auxIndex: 0, name: 'Master', position: 0.4 };
+    const source = { id: 'i.0@0', sourceId: 'i.0', auxIndex: 0, name: '<img> Input', position: 0.4, levelText: '-20.0 dB' };
+    const model = { status: 'Live', mixes: [master], selectedMix: master, selectedAux: 0, sources: [source], control: { selected: target, eligible: true, armed: false, pending: false, status: 'Off' } };
+    view.render(model); const bank = root.querySelector('.mm-strip-scroll'), article = bank.children[0], input = article.querySelector('input'), cap = article.querySelector('.mm-fader-hit'), wrap = input.parentElement;
+    assert.equal(input.disabled, true); assert.equal(article.dataset.levelSelected, 'true'); assert.match(root.querySelector('.mm-level-enable').attributes['aria-label'], /Enable level for Input 1/);
+    model.control.armed = true; model.control.gestureActive = true; view.render(model); assert.equal(input.disabled, false);
+    const targetNode = { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null };
+    const pointer = y => ({ target: targetNode, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
+    root.emit('pointerdown', pointer(100)); root.emit('pointermove', pointer(60)); const draft = input.value;
+    assert.notEqual(Number(draft), 0.4); assert.equal(article.querySelector('.mm-value').textContent, '-20.0 dB');
+    view.render({ ...model, sources: [{ ...source, name: 'Renamed' }] }); view.renderMeters(model);
+    assert.equal(input.value, draft); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(commits, 0);
+    model.control.armed = false; model.control.gestureActive = false; view.render(model);
+    assert.equal(input.disabled, true); assert.equal(Number(input.value), 0.4); root.emit('pointerup', pointer(60)); assert.equal(commits, 0);
+  } finally {
+    view?.destroy();
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+  }
+});
+
+
+test('normal capture release preserves demo double-master-cap taps while active capture loss cancels', () => {
+  for (const deferred of [false, true]) {
+    const document = documentFixture(), root = new Node(document), wrap = document.createElement('div'); wrap.className = 'mm-fader-control';
+    const input = document.createElement('input'); input.className = 'mm-vertical'; input.min = '0'; input.max = '1'; input.step = '0.001'; input.value = '0.4'; input.dataset.master = '2';
+    const cap = document.createElement('span'); cap.className = 'mm-fader-hit'; wrap.append(input, cap); root.append(wrap);
+    const losses = [], opened = [];
+    wrap.releasePointerCapture = pointerId => {
+      const lost = () => root.emit('lostpointercapture', { pointerId, target: wrap });
+      if (deferred) losses.push(lost); else lost();
+    };
+    const gestures = installFaderGestures(root, { onMasterEQ: index => opened.push(index) });
+    const event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
+    try {
+      for (let n = 0; n < 2; n++) {
+        root.emit('pointerdown', event(100)); root.emit('pointerup', event(100));
+        for (const loss of losses.splice(0)) loss();
+      }
+      assert.deepEqual(opened, [2]); assert.deepEqual(input.events, undefined);
+      root.emit('pointerdown', event(100)); root.emit('pointermove', event(70));
+      root.emit('lostpointercapture', { pointerId: 1, target: wrap }); root.emit('pointerup', event(70));
+      assert.deepEqual(input.events, ['input']); assert.deepEqual(opened, [2]); // Interrupted drag never commits change/EQ.
+    } finally { gestures.destroy(); }
+  }
+});

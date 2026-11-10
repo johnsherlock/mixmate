@@ -133,11 +133,11 @@ test('current receipt evidence is mandatory and caller snapshots cannot replace 
   const fake = fixture(); owned.context.generation++;
   assert.throws(() => owned.guard.authorizeNext(plan, 0, fake.context));
 });
-test('pinned display conversion distinguishes silence and finite positions; live entry remains read-only', async () => {
+test('pinned display conversion distinguishes silence and finite positions; AUX entry never imports input writer', async () => {
   assert.equal(faderValueToDB(0), -Infinity); assert.equal(DBToFaderValue(-200), 0); assert.equal(DBToFaderValue(10), 1);
   assert.ok(Number.isFinite(faderValueToDB(0.5))); assert.equal(faderValueToDB(1), 10);
   const entry = await readFile(new URL('../src/iem/live-entry.js', import.meta.url), 'utf8');
-  assert.match(entry, /createReadOnlySession/); assert.doesNotMatch(entry, /aux-level|createAuxLevelGuard/);
+  assert.match(entry, /createAuxLevelSession/); assert.doesNotMatch(entry, /setInputFader|MixerConnection|fader-intent/);
   const session = await readFile(new URL('../src/iem/live-session.js', import.meta.url), 'utf8');
   assert.doesNotMatch(session, /SETD|aux-level|authorizeNext/);
 });

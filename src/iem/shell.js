@@ -7,6 +7,6 @@ export function mountShell(container, mode) {
   root.querySelector(".mm-mode-label").textContent =
     mode === "demo"
       ? "DEMO · SIMULATED · NO MIXER CONNECTION"
-      : "READ-ONLY IEM · NO RECEIVED STATE";
+      : "LIVE IEM · LEVELS OFF";
   return root;
 }

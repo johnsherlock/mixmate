@@ -1,11 +1,12 @@
 import { installFaderGestures } from './gestures.js';
 import { observeIemLayout } from './layout.js';
 import { startLocalClock } from './clock.js';
+import { sourceLabel } from './live-provider.js';
 import { outputColour, overviewColour } from './theme.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onSelectLevel = () => {}, onToggleLevel = () => {}, onBeginLevel = () => null, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false;
@@ -31,7 +32,11 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   $('.mm-dirty').textContent = 'Read-only · no parameter writes';
   $('.mm-rec-state').textContent = 'Recording status unavailable';
   const shortcuts = $('.mm-group-switches');
-  const shortcutNodes = new Map();
+  const shortcutNodes = new Map(), levelTargets = new WeakMap();
+  const enableLevel = element('button', 'mm-level-enable', 'Enable level'); enableLevel.type = 'button'; enableLevel.disabled = true; enableLevel.hidden = true;
+  $('.mm-local-tabs').append(enableLevel);
+  let control = null, preview = null;
+  const selectedTarget = target => control?.selected && JSON.stringify(target) === JSON.stringify(control.selected);
   function renderShortcuts(model, selected) {
     if (!shortcuts) return;
     const choices = [...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })), { key: 'channels', name: 'All Channels' }];
@@ -53,7 +58,15 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     }
     shortcuts.hidden = !selected;
   }
-  const gestures = installFaderGestures(root), layout = observeIemLayout(root, gestures.sync), stopClock = startLocalClock($('.mm-clock'));
+  const gestures = installFaderGestures(root, {
+    onBegin(input) {
+      const token = onBeginLevel();
+      if (token) preview = { input, token };
+      return token;
+    },
+    onCommit(input, token) { preview = null; onCommitLevel(token, Number(input.value)); },
+    onCancel(input, token) { preview = null; onCancelLevel(token); },
+  }), layout = observeIemLayout(root, gestures.sync), stopClock = startLocalClock($('.mm-clock'));
   function createStrip(kind) {
     const article = element('article', `mm-strip ${kind === 'source' ? 'mm-channel' : kind === 'group' ? 'mm-group' : 'mm-master'}`);
     const head = element('div', 'mm-strip-head'), name = element('button', 'mm-strip-name'), description = element('span', 'mm-strip-detail');
@@ -126,17 +139,39 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.pan.textContent = model.panText ?? 'Pan unavailable'; strip.state.textContent = model.stateText ?? '';
       strip.pan.setAttribute('title', strip.pan.textContent); strip.state.setAttribute('title', strip.state.textContent);
       strip.name.setAttribute('title', model.name);
-      strip.name.disabled = !model.browsable;
+      const levelTarget = model.sourceId && model.auxIndex !== undefined ? { kind: 'send', auxIndex: model.auxIndex, sourceId: model.sourceId }
+        : model.auxIndex !== undefined ? { kind: 'master', auxIndex: model.auxIndex } : null;
+      if (levelTarget) levelTargets.set(strip.name, levelTarget);
+      const isSelected = levelTarget && selectedTarget(levelTarget);
+      strip.article.dataset.levelSelected = String(Boolean(isSelected));
+      strip.name.setAttribute('aria-pressed', String(Boolean(isSelected)));
+      strip.name.disabled = !model.browsable && !(control && levelTarget);
       if (model.browsable) strip.name.dataset.openAux = String(model.auxIndex); else delete strip.name.dataset.openAux;
       strip.input.setAttribute('aria-label', `${model.name} received level, read-only`);
       const known = typeof model.position === 'number' && Number.isFinite(model.position) && model.position >= 0 && model.position <= 1;
-      strip.article.dataset.unknown = String(!known); strip.input.value = known ? String(model.position) : '0';
+      strip.article.dataset.unknown = String(!known);
+      strip.input.disabled = !(control && isSelected && control.eligible && control.armed && !control.pending);
+      strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, controls off' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
+      if (preview?.input !== strip.input) strip.input.value = known ? String(model.position) : '0';
       updateMeter(strip, model);
     }
   }
   function render(model) {
-    $('.mm-mode-label').textContent = 'READ-ONLY IEM';
-    $('.mm-feedback').textContent = model.status;
+    control = model.control || null;
+    root.dataset.levelControls = String(Boolean(control));
+    if (!control?.gestureActive && preview) { preview = null; gestures.cancel(); }
+    const targetLabel = control?.selected ? `${control.selected.kind === 'master' ? 'Master' : sourceLabel(control.selected.sourceId)} → AUX ${control.selected.auxIndex + 1}` : 'no selected level';
+    enableLevel.hidden = !control;
+    enableLevel.disabled = !control?.selected || !control.eligible || control.pending;
+    enableLevel.textContent = control?.armed ? 'Disable level' : 'Enable level';
+    enableLevel.setAttribute('aria-label', `${control?.armed ? 'Disable' : 'Enable'} level for ${targetLabel}`);
+    enableLevel.setAttribute('title', `${targetLabel}: ${control?.reason || control?.status || ''}`);
+    $('.mm-mode-label').textContent = control ? `LIVE IEM · LEVELS ${control.pending ? 'PENDING' : control.armed ? 'ENABLED' : 'OFF'}` : 'READ-ONLY IEM';
+    $('.mm-dirty').textContent = control ? control.status : 'Read-only · no parameter writes';
+    $('.mm-dirty').setAttribute('title', control?.status || 'Read-only');
+    $('.mm-feedback').textContent = control ? `${targetLabel}: ${control.pending ? control.status : control.reason || control.status}` : model.status;
+    $('.mm-feedback').setAttribute('title', `${model.status} · ${targetLabel}: ${control?.reason || control?.status || ''}`);
+    $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
     $('.mm-desk').textContent = model.connectionPhase ? `${model.modelLabel} · ${model.connectionPhase}` : 'No socket connection';
     const selected = model.selectedAux !== undefined && model.selectedAux !== null;
     root.dataset.auxView = String(selected);
@@ -144,7 +179,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     auxSelected = selected;
     $('.mm-local-tabs').hidden = !selected && !groupEditing;
     if ($('.mm-title')) $('.mm-title').textContent = model.selectedMix?.name ?? '';
-    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? 'Expanded group · level unavailable' : 'Local group masters · level unavailable' : 'All observed AUX sources · read-only' : 'Individual received outputs';
+    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? 'Expanded group · level unavailable' : 'Local group masters · level unavailable' : control ? 'All observed AUX sources · select and enable a level' : 'All observed AUX sources · read-only' : 'Individual received outputs';
     reconcile(grid, overviewStrips, model.mixes, 'master');
     reconcile(bank, sourceStrips, model.sources || [], 'source');
     reconcile(pinned, pinnedStrips, model.selectedMix && model.showAuxMaster !== false ? [model.selectedMix] : [], 'master');
@@ -162,6 +197,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
+    if (control && levelTargets.has(button)) { gestures.cancel(); onSelectLevel(levelTargets.get(button)); }
+    if (button === enableLevel) { gestures.cancel(); onToggleLevel(); }
     if (button.dataset.toggleGroup !== undefined) { gestures.cancel(); onToggleGroup(button.dataset.toggleGroup); }
     if (button.dataset.mode === 'channels') { gestures.cancel(); onAllChannels(); }
     if (button.dataset.action === 'overview') { gestures.cancel(); onOverview(); }
