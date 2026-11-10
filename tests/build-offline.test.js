@@ -46,7 +46,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     // Identity must survive a future start URL change within this app's scope.
     assert.equal(new URL(manifest.id, new URL('connection-test.html', scope).origin).href, appID.href);
     for (const icon of manifest.icons) assert.ok(first.assets.includes(icon.src.replace(/^\.\//, '')));
-    for (const entry of ['index.html', 'iem.html', 'demo.html']) {
+    for (const entry of ['index.html', 'iem.html', 'demo.html', 'connection-test.html']) {
       const html = await readFile(join(directory, entry), 'utf8');
       assert.match(html, /name="mixmate-entry-proof" content="[a-f0-9]{64}"/);
       for (const [, reference] of html.matchAll(/(?:src|href)="([^"#]+)"/g)) {
@@ -58,7 +58,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     }
     const moduleGraph = async entry => {
       const html = await readFile(join(directory, entry), 'utf8');
-      const start = /<script[^>]+src="([^" ]+\.js)"/.exec(html)[1].replace(/^\.\//, '');
+      const starts = [...html.matchAll(/<script[^>]+src="([^" ]+\.js)"/g)].map(match => match[1].replace(/^\.\//, ''));
       const visited = new Set();
       async function visit(path) {
         if (visited.has(path)) return '';
@@ -68,9 +68,24 @@ test('production build precaches the exact emitted inventory and resolves instal
         for (const match of source.matchAll(/(?:from|import)\s*["'](\.\/[^"']+\.js)["']/g)) result += await visit(posix.join(posix.dirname(path), match[1]));
         return result;
       }
-      return visit(start);
+      return (await Promise.all(starts.map(visit))).join('\n');
     };
-    const live = await moduleGraph('iem.html'), demo = await moduleGraph('demo.html');
+    const live = await moduleGraph('index.html'), alias = await moduleGraph('iem.html'), demo = await moduleGraph('demo.html'), connection = await moduleGraph('connection-test.html');
+    assert.equal(live, alias); // Root and compatibility URL load the same read-only capability.
+    assert.ok(connection.includes('setInputFader') && connection.includes('3:::SETD'));
+    const rootHTML = await readFile(join(directory, 'index.html'), 'utf8');
+    const connectionHTML = await readFile(join(directory, 'connection-test.html'), 'utf8');
+    assert.match(rootHTML, /id="iem-root"/); assert.ok(!rootHTML.includes('id="enable-fader"'));
+    assert.match(connectionHTML, /id="enable-fader"[^>]*disabled/);
+    assert.match(connectionHTML, /href="\.\/">← Main read-only IEM app/);
+    assert.match(rootHTML, /connect-src ws:/);
+    const metadata = JSON.parse(await readFile('package.json', 'utf8'));
+    const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
+    assert.equal(metadata.version, '0.3.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
+    assert.ok(live.includes(metadata.version) && connection.includes(metadata.version));
+    assert.equal(manifest.name, 'MixMate — IEM mixer'); assert.equal(manifest.id, 'mixmate/'); assert.equal(manifest.start_url, './'); assert.equal(manifest.scope, './');
+    const shell = await readFile('src/iem/shell.html', 'utf8');
+    assert.match(shell, /href="\.\/">Read-only IEM/); assert.match(shell, /href="\.\/connection-test.html"[^>]*>Settings \/ test/);
     assert.ok(demo.includes('KICK') && demo.includes('SNARE'));
     assert.ok(!live.includes('KICK') && !live.includes('SNARE'));
     assert.ok(live.includes('3:::INIT') && live.includes('3:::ALIVE') && live.includes('2::'));

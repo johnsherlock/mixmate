@@ -90,4 +90,14 @@ test('current entry requirements include actual module/CSS URLs and normalize kn
   assert.ok(required.assets.includes('https://example.test/mixmate/assets/iem-new.js'));
   assert.ok(required.assets.includes('https://example.test/mixmate/assets/iem-new.css'));
   assert.ok(required.assets.includes('https://example.test/mixmate/demo.html'));
+  assert.ok(required.assets.includes('https://example.test/mixmate/connection-test.html'));
+});
+
+
+test('root and secondary query launches request the correct executing entry plus all four destinations', () => {
+  for (const [path, expected] of [['?launch=installed#home', 'index.html'], ['connection-test.html?launch=test#channel', 'connection-test.html']]) {
+    const required = currentEntryRequirements({ baseURI: 'https://example.test/mixmate/' + path, querySelector: () => ({ content: 'e'.repeat(64) }), querySelectorAll: () => [] });
+    assert.equal(required.entry, 'https://example.test/mixmate/' + expected);
+    assert.deepEqual(new Set(required.assets), new Set(['index.html', 'iem.html', 'demo.html', 'connection-test.html'].map(entry => 'https://example.test/mixmate/' + entry)));
+  }
 });

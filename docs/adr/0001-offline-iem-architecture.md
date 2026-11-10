@@ -1,7 +1,7 @@
 # ADR-0001: Offline IEM architecture and sequential delivery
 
 Date: 2026-11-08
-Status: Accepted direction by user; amended on 2026-11-09 by [ADR-0002](0002-deferred-qualification-and-authorized-controls.md).
+Status: Accepted direction by user; amended by [ADR-0002](0002-deferred-qualification-and-authorized-controls.md) (2026-11-09) and [ADR-0003](0003-default-iem-entrypoint.md) default-entry correction (2026-11-10).
 
 ## Context
 

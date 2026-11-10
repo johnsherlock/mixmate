@@ -51,3 +51,7 @@ Final validation: `npm test` passes 97 tests; `npm run build` passes with 15 pre
 ## Subsequent F03-S03 integration
 
 The empty-shell observations above describe the S02 baseline. [F03-S03](iem-live-session.md) adds the separate explicit receive-only session and actual observed strips while preserving demo isolation, keyed DOM, gestures and entry-specific offline proof. Unknown/matrix fields do not become synthetic AUX values; no new parameter writer or meter decoder is added.
+
+## Default-entry amendment — F01-S04
+
+The root/test destinations above describe the historical S02 baseline. ADR-0003 / F01-S04 promotes the reviewed read-only IEM to `index.html` while retaining `iem.html` as the same-entry compatibility URL. The preserved input experiment/settings move to `connection-test.html`, labelled **Settings / test**; demo/reference remain separate. Version 0.3.0 and verified update notices use the existing bar. Four-entry proof/query handling replaces the original three-entry list without changing CSS/gestures or forcing an update/reconnect.
