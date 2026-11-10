@@ -2475,3 +2475,16 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-live-strip-state{position:absolute;width:1px;height:1px;min-height:0;max-height:1px;flex-basis:auto;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}
 
 #mixmate-iem-concept .mm-local-group-editor{display:flex;flex-direction:column;gap:7px;flex:1;min-height:0;height:100%;overflow:hidden}#mixmate-iem-concept .mm-group-rig-label{margin:0;overflow-wrap:anywhere;flex-shrink:0}#mixmate-iem-concept .mm-local-group-editor>.mm-caption{font-size:10px;margin:0;flex-shrink:0}#mixmate-iem-concept .mm-local-group-editor .mm-editor-feedback{max-width:none;flex:1;min-width:0}#mixmate-iem-concept .mm-member-checks [data-unresolved="true"]{border-style:dashed}#mixmate-iem-concept .mm-local-group-editor .mm-dialog-actions{flex-shrink:0}
+
+/* Local group navigation wraps without replacing the accepted source bank. */
+#mixmate-iem-concept[data-mode="live"] .mm-navigation{flex-wrap:wrap}
+#mixmate-iem-concept[data-mode="live"] .mm-group-switches{display:flex;flex:1 1 auto;min-width:0;flex-wrap:wrap;gap:4px;overflow:visible}
+#mixmate-iem-concept[data-mode="live"] .mm-group-switches>button:first-child{margin-inline-start:0}
+#mixmate-iem-concept[data-mode="live"] .mm-group-switches>button{flex:0 0 auto;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-switches{max-height:34px;overflow-y:auto;overscroll-behavior:contain;align-content:flex-start}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-group-switches{max-height:26px}
+#mixmate-iem-concept[data-mode="live"] .mm-group-level-placeholder{grid-column:1/-1;display:flex;align-items:center;justify-content:center;min-height:20px;width:100%;height:100%;color:#aebac2;font-size:12px;text-align:center;border:1px dashed #56636a;border-radius:3px}
+#mixmate-iem-concept[data-mode="live"] .mm-group-control-note{box-sizing:border-box;display:block;flex:0 0 28px;height:28px;line-height:12px;padding:2px 6px;font-size:10px;color:#aebac2;overflow:hidden}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-control-note{flex-basis:16px;height:16px;line-height:12px;padding:1px 5px}
+#mixmate-iem-concept[data-mode="live"] .mm-group-master-label{font-size:9px;color:var(--mm-mix-color);letter-spacing:.5px}
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-unresolved="true"]{border-style:dashed}

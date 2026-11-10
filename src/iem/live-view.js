@@ -5,7 +5,7 @@ import { outputColour, overviewColour } from './theme.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false;
@@ -31,17 +31,42 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   $('.mm-dirty').textContent = 'Read-only · no parameter writes';
   $('.mm-rec-state').textContent = 'Recording status unavailable';
   const shortcuts = $('.mm-group-switches');
-  if (shortcuts) {
-    const all = element('button', 'mm-all-channels mm-active', 'All Channels');
-    all.type = 'button'; all.disabled = true;
-    shortcuts.replaceChildren(all);
+  const shortcutNodes = new Map();
+  function renderShortcuts(model, selected) {
+    if (!shortcuts) return;
+    const choices = [...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })), { key: 'channels', name: 'All Channels' }];
+    const keys = new Set(choices.map(choice => choice.key));
+    for (const [key, button] of shortcutNodes) if (!keys.has(key)) { button.remove(); shortcutNodes.delete(key); }
+    for (const [index, choice] of choices.entries()) {
+      let button = shortcutNodes.get(choice.key);
+      if (!button) {
+        button = element('button', ''); button.type = 'button';
+        if (choice.id) button.dataset.toggleGroup = choice.id; else button.dataset.mode = 'channels';
+        shortcutNodes.set(choice.key, button); shortcuts.append(button);
+      }
+      if (shortcuts.children[index] !== button) shortcuts.insertBefore(button, shortcuts.children[index] || null);
+      if (button.textContent !== choice.name) button.textContent = choice.name;
+      const active = choice.id ? model.view === 'groups' && model.expandedGroupId === choice.id : model.view === 'channels' || model.view === undefined;
+      button.className = `${choice.id ? 'mm-group-shortcut' : 'mm-all-channels'}${active ? ' mm-active' : ''}`;
+      button.setAttribute('aria-pressed', String(active)); button.disabled = !selected;
+    }
+    shortcuts.hidden = !selected;
   }
   const gestures = installFaderGestures(root), layout = observeIemLayout(root, gestures.sync), stopClock = startLocalClock($('.mm-clock'));
   function createStrip(kind) {
-    const article = element('article', `mm-strip ${kind === 'source' ? 'mm-channel' : 'mm-master'}`);
+    const article = element('article', `mm-strip ${kind === 'source' ? 'mm-channel' : kind === 'group' ? 'mm-group' : 'mm-master'}`);
     const head = element('div', 'mm-strip-head'), name = element('button', 'mm-strip-name'), description = element('span', 'mm-strip-detail');
     name.type = 'button'; name.disabled = true; head.append(name, description);
     const output = element('output', 'mm-value'), space = element('div', 'mm-fader-space'), scale = element('span', 'mm-ruler', 'POSITION');
+    if (kind === 'group') {
+      const badge = element('span', 'mm-group-master-label', 'GROUP MASTER');
+      head.append(badge);
+      const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
+      unavailable.setAttribute('aria-label', 'Relative group level unavailable until group controls are implemented');
+      const state = element('span', 'mm-live-strip-state'), note = element('span', 'mm-group-control-note', 'Local definition · no group meter');
+      space.append(scale, unavailable); article.append(head, output, space, state, note);
+      return { kind, article, name, description, output, state };
+    }
     const input = element('input', 'mm-vertical');
     input.type = 'range'; input.min = '0'; input.max = '1'; input.step = '0.001'; input.disabled = true;
     if (kind === 'source') input.dataset.channel = ''; else input.dataset.master = '';
@@ -53,9 +78,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     meterCaption.append(meterLabel, meterStatus);
     const pan = element('span', 'mm-pan-button'), state = element('span', 'mm-live-strip-state');
     space.append(scale, input, meter); article.append(head, output, space, pan, state, meterCaption);
-    return { article, name, description, output, input, pan, state, meter, tracks, meterCaption, meterLabel, meterStatus };
+    return { kind, article, name, description, output, input, pan, state, meter, tracks, meterCaption, meterLabel, meterStatus };
   }
   function updateMeter(strip, model) {
+    if (strip.kind === 'group') return;
     const meter = model.meter || { status: 'missing', channelCount: 1, label: 'Meter', values: [], provenance: '' };
     // State frames may arrive alongside every VU packet. Existing fresh meter
     // fills/text publish only at the session cadence; missing/stale clears once.
@@ -83,12 +109,19 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     for (const [id, strip] of strips) if (!ids.has(id)) { strip.article.remove(); strips.delete(id); }
     for (const [index, model] of models.entries()) {
       let strip = strips.get(model.id);
-      if (!strip) { strip = createStrip(kind); strips.set(model.id, strip); container.append(strip.article); }
+      if (!strip) { strip = createStrip(model.kind === 'group' ? 'group' : kind); strips.set(model.id, strip); container.append(strip.article); }
       if (container.children[index] !== strip.article) container.insertBefore(strip.article, container.children[index] || null);
       strip.article.dataset.id = model.id;
       if (model.auxIndex !== undefined) strip.article.style.setProperty('--mm-strip-color', outputColour(model.themeIndex ?? model.auxIndex));
       strip.name.textContent = model.name; strip.description.textContent = model.detail;
-      strip.output.textContent = model.levelText ?? '—';
+      strip.output.textContent = model.kind === 'group' ? '—' : model.levelText ?? '—';
+      strip.article.dataset.unresolved = String(Boolean(model.unresolved));
+      if (strip.kind === 'group') {
+        strip.name.disabled = false; strip.name.dataset.toggleGroup = model.groupId;
+        strip.name.setAttribute('title', `${model.name} · group master`);
+        strip.output.setAttribute('aria-label', 'Group level unavailable'); strip.state.textContent = model.stateText;
+        continue;
+      }
       strip.pan.textContent = model.panText ?? 'Pan unavailable'; strip.state.textContent = model.stateText ?? '';
       strip.pan.setAttribute('title', strip.pan.textContent); strip.state.setAttribute('title', strip.state.textContent);
       strip.name.setAttribute('title', model.name);
@@ -110,20 +143,26 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     auxSelected = selected;
     $('.mm-local-tabs').hidden = !selected && !groupEditing;
     if ($('.mm-title')) $('.mm-title').textContent = model.selectedMix?.name ?? '';
-    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? 'Observed AUX sources · read-only' : 'Individual received outputs';
+    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? 'Expanded group · level unavailable' : 'Local group masters · level unavailable' : 'All observed AUX sources · read-only' : 'Individual received outputs';
     reconcile(grid, overviewStrips, model.mixes, 'master');
     reconcile(bank, sourceStrips, model.sources || [], 'source');
-    reconcile(pinned, pinnedStrips, model.selectedMix ? [model.selectedMix] : [], 'master');
+    reconcile(pinned, pinnedStrips, model.selectedMix && model.showAuxMaster !== false ? [model.selectedMix] : [], 'master');
     grid.hidden = selected; sends.hidden = !selected;
+    sends.className = `mm-sends-layout${model.expandedGroupId ? ' mm-no-master' : ''}`;
+    bank.className = `mm-strip-scroll${model.expandedGroupId ? ' mm-expanded' : ''}`;
+    pinned.hidden = Boolean(model.expandedGroupId);
     empty.hidden = selected || model.mixes.length > 0;
     sourceEmpty.hidden = !selected || (model.sources || []).length > 0;
-    if (shortcuts) { shortcuts.hidden = !selected; shortcuts.querySelector('button').disabled = !selected; }
+    sourceEmpty.textContent = model.view === 'groups' ? 'No local groups yet. Edit Groups to create one.' : 'No source sends received for this AUX yet.';
+    renderShortcuts(model, selected);
     gestures.prepare();
   }
   function click(event) {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
+    if (button.dataset.toggleGroup !== undefined) { gestures.cancel(); onToggleGroup(button.dataset.toggleGroup); }
+    if (button.dataset.mode === 'channels') { gestures.cancel(); onAllChannels(); }
     if (button.dataset.action === 'overview') { gestures.cancel(); onOverview(); }
     if (button.dataset.action === 'fullscreen') {
       const app = $('.mm-app');
