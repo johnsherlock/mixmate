@@ -6,6 +6,7 @@ import { installFaderGestures } from '../src/iem/gestures.js';
 import { mountReadOnlyView } from '../src/iem/live-view.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
+import { projectGroupNavigation } from '../src/iem/group-navigation.js';
 
 class Node {
   children = []; dataset = {}; style = { values: {}, calls: [], setProperty(name, value) { this.values[name] = value; this.calls.push([name, value]); } }; attributes = {}; value = ''; disabled = false;
@@ -184,6 +185,58 @@ test('mixed state/VU bursts throttle actual meter fill/text writes and preserve 
     session.disconnect(); assert.equal(bank.children.length, 0); assert.equal(jobs.size, 0);
   } finally {
     session.disconnect(); view?.destroy();
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+  }
+});
+
+
+test('group navigation keeps ordered unresolved strips, literal shortcuts and stable meter-only DOM without a synthetic group control', () => {
+  const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
+  const document = documentFixture(), root = new Node(document);
+  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-group-switches', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app']) {
+    const node = document.createElement('div'); node.className = name; root.append(node);
+  }
+  Object.assign(globalThis, { document, window: new Node(document), matchMedia: () => ({ matches: true }), innerHeight: 844, ResizeObserver: class { observe() {} disconnect() {} } });
+  let view;
+  try {
+    const actions = [];
+    view = mountReadOnlyView(root, { onToggleGroup: id => actions.push(id), onAllChannels: () => actions.push('all') });
+    const profile = { id: 'rig', groups: [{ id: '7_group-Z', name: '<svg> [Band]', members: ['f.1', 'i.20', 'i.0'] }, { id: 'empty', name: 'Empty', members: [] }] };
+    const selectedMix = { id: 'a.0', auxIndex: 0, name: 'AUX 1', position: 0.5, levelText: 'Received' };
+    const source = id => ({ id: `${id}@0`, sourceId: id, name: `<img>${id}`, position: 0.2, levelText: 'Received' });
+    const base = { status: 'Received', selectedAux: 0, selectedMix, mixes: [selectedMix], sources: [source('i.0'), source('f.1')] };
+    view.render(projectGroupNavigation(base, profile, null));
+    const bank = root.querySelector('.mm-strip-scroll'), shortcuts = root.querySelector('.mm-group-switches'), button = shortcuts.children[0];
+    const group = bank.children[0];
+    assert.equal(button.textContent, profile.groups[0].name); assert.equal(button.attributes.title, profile.groups[0].name); assert.equal(button.innerHTML, undefined);
+    assert.equal(shortcuts.children.length, 3); assert.equal(shortcuts.children[2].textContent, 'All Channels');
+    assert.equal(group.querySelector('input'), undefined); assert.equal(group.querySelector('.mm-meter-pair'), undefined);
+    assert.match(group.querySelector('.mm-group-level-placeholder').attributes['aria-label'], /read-only/);
+    root.emit('click', { target: { closest: selector => selector === 'button' ? button : null } }); assert.deepEqual(actions, ['7_group-Z']);
+    const expanded = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: '7_group-Z' });
+    view.render(expanded);
+    assert.equal(bank.children[0], group); assert.equal(shortcuts.children[0], button); assert.equal(button.attributes['aria-pressed'], 'true');
+    assert.equal(root.querySelector('.mm-pinned').hidden, true); assert.equal(root.querySelector('.mm-pinned').children.length, 0);
+    assert.equal(root.querySelector('.mm-sends-layout').classList.contains('mm-no-master'), true);
+    assert.deepEqual(bank.children.slice(1).map(node => node.dataset.id), ['f.1@0', 'i.20@0', 'i.0@0']);
+    const unresolved = bank.children[2], input = unresolved.querySelector('input'), cap = unresolved.querySelector('.mm-fader-hit');
+    assert.equal(unresolved.dataset.unresolved, 'true'); assert.equal(unresolved.dataset.unknown, 'true'); assert.equal(input.disabled, true);
+    assert.match(unresolved.querySelector('.mm-strip-name').textContent, /Unresolved/);
+    bank.scrollLeft = 83;
+    for (let n = 0; n < 30; n++) view.renderMeters(expanded);
+    assert.equal(bank.children[0], group); assert.equal(shortcuts.children[0], button); assert.equal(bank.scrollLeft, 83);
+    assert.equal(group.querySelector('.mm-meter-pair'), undefined);
+    const received = { ...base, sources: [...base.sources, source('i.20')] };
+    view.render(projectGroupNavigation(received, profile, { view: 'groups', expandedGroupId: '7_group-Z' }));
+    assert.equal(bank.children[2], unresolved); assert.equal(unresolved.querySelector('input'), input); assert.equal(unresolved.querySelector('.mm-fader-hit'), cap);
+    assert.equal(unresolved.dataset.unresolved, 'false'); assert.equal(unresolved.querySelector('.mm-strip-name').textContent, '<img>i.20');
+    root.emit('click', { target: { closest: selector => selector === 'button' ? shortcuts.children[2] : null } }); assert.deepEqual(actions, ['7_group-Z', 'all']);
+    view.render(projectGroupNavigation(base, profile, { view: 'channels' }));
+    assert.deepEqual(bank.children.map(node => node.dataset.id), ['i.0@0', 'f.1@0']); assert.equal(root.querySelector('.mm-pinned').children.length, 1);
+    view.render(projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'empty' }));
+    assert.equal(bank.children.length, 1); assert.equal(bank.children[0].querySelector('input'), undefined); assert.equal(root.querySelector('.mm-pinned').children.length, 0);
+  } finally {
+    view?.destroy();
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
   }
 });

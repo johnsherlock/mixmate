@@ -85,7 +85,7 @@ export function mountGroupEditor({
     if (saving || !context.ready || !profile()) return false;
     binding = { profileId: context.profileId, revision: context.revision };
     ui.show(profile().name);
-    selectGroup(id || profile().groups[0]?.id || null);
+    selectGroup(id || context.expandedGroupId || profile().groups[0]?.id || null);
     return true;
   }
   function toggle(id) {
