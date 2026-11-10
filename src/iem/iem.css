@@ -2481,7 +2481,12 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches{display:flex;flex:1 1 auto;min-width:0;flex-wrap:wrap;gap:4px;overflow:visible}
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches>button:first-child{margin-inline-start:0}
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches>button{flex:0 0 auto;max-width:100%;white-space:normal;overflow-wrap:anywhere}
-#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-switches{max-height:34px;overflow-y:auto;overscroll-behavior:contain;align-content:flex-start}
+/* A zero flex basis prevents long labels forcing another compact nav row. */
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-navigation{flex-wrap:nowrap}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-navigation .mm-heading{max-width:25%}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-local-tabs{flex-shrink:0}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-switches{flex:1 1 0;max-height:34px;overflow-y:auto;overscroll-behavior:contain;align-content:flex-start}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-switches>button{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-group-switches{max-height:26px}
 #mixmate-iem-concept[data-mode="live"] .mm-group-level-placeholder{grid-column:1/-1;display:flex;align-items:center;justify-content:center;min-height:20px;width:100%;height:100%;color:#aebac2;font-size:12px;text-align:center;border:1px dashed #56636a;border-radius:3px}
 #mixmate-iem-concept[data-mode="live"] .mm-group-control-note{box-sizing:border-box;display:block;flex:0 0 28px;height:28px;line-height:12px;padding:2px 6px;font-size:10px;color:#aebac2;overflow:hidden}

@@ -46,6 +46,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       }
       if (shortcuts.children[index] !== button) shortcuts.insertBefore(button, shortcuts.children[index] || null);
       if (button.textContent !== choice.name) button.textContent = choice.name;
+      button.setAttribute('title', choice.name);
       const active = choice.id ? model.view === 'groups' && model.expandedGroupId === choice.id : model.view === 'channels' || model.view === undefined;
       button.className = `${choice.id ? 'mm-group-shortcut' : 'mm-all-channels'}${active ? ' mm-active' : ''}`;
       button.setAttribute('aria-pressed', String(active)); button.disabled = !selected;
@@ -62,7 +63,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       const badge = element('span', 'mm-group-master-label', 'GROUP MASTER');
       head.append(badge);
       const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
-      unavailable.setAttribute('aria-label', 'Relative group level unavailable until group controls are implemented');
+      unavailable.setAttribute('aria-label', 'Relative group level unavailable · read-only');
       const state = element('span', 'mm-live-strip-state'), note = element('span', 'mm-group-control-note', 'Local definition · no group meter');
       space.append(scale, unavailable); article.append(head, output, space, state, note);
       return { kind, article, name, description, output, state };

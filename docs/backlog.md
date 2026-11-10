@@ -6,7 +6,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 
 | Feature | Outcome | Stories | Status |
 | --- | --- | --- | --- |
-| [F01](features/F01.md) | Offline distribution and device compatibility | 7 | Priority S04 default-entry fix awaiting review; qualification open in F08 |
+| [F01](features/F01.md) | Offline distribution and device compatibility | 7 | Done implementation checkpoint — S04 PR #21 merged; physical qualification open in F08 |
 | [F02](features/F02.md) | Device-local settings | 3 | Done — PRs #13–15 merged |
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Done implementation checkpoint — firmware/physical qualification open |
 | [F04](features/F04.md) | Groups and navigation | 2 | In progress |
@@ -37,4 +37,4 @@ Library/manual evidence describes candidate semantics; sanitized current-firmwar
 
 ## Priority dependency exception — 2026-11-10
 
-[F01-S04](stories/F01-S04.md) / [ADR-0003](adr/0003-default-iem-entrypoint.md) corrects the root/PWA default entry before resuming F04-S02. The user's screenshot exposed a delivery gap: IEM existed separately, while the advertised root remained the test. Work is isolated from reviewed main `61944be`; unfinished group navigation is preserved at its separate local checkpoint `6a10e55` and is not included. Only this priority story is active. After its green checks, affirmative Codex review and merge, resume/rebase F04-S02 as a separate story/PR. Physical qualification stays open in F08-S01; the user cannot test it now.
+[F01-S04](stories/F01-S04.md) / [ADR-0003](adr/0003-default-iem-entrypoint.md) corrects the root/PWA default entry before resuming F04-S02. The user's screenshot exposed a delivery gap: IEM existed separately, while the advertised root remained the test. Work is isolated from reviewed main `61944be`; unfinished group navigation is preserved at its separate local checkpoint `6a10e55` and is not included. F01-S04 subsequently merged in [PR #21](https://github.com/johnsherlock/mixmate/pull/21) at `96ee135` after 147 tests, a successful 17-asset build and affirmative Codex review of final head `9abaadc`. Its deployment succeeded with offline version `9a59683dde643264`. F04-S02 has now resumed/rebased as the only active implementation story, with group shortcuts/expanded banks and guarded local navigation complete pending its own review/merge. Physical qualification stays open in F08-S01; the user cannot test it now.

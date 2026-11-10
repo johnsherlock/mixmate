@@ -148,9 +148,32 @@ test('incoming state/meters never save navigation or override a chosen group, an
   for (let n = 0; n < 25; n++) { socket.receive(vu); app.timers.tick(4); }
   assert.equal(writes, 0); assert.equal(app.view.renders, before); assert.equal(app.view.meters.expandedGroupId, 'empty');
   socket.receive('3:::SETS^i.0.name^Synthetic rename'); assert.equal(writes, 0); assert.equal(app.view.last.expandedGroupId, 'empty');
-  const ui = { name: field(''), cancel: field(''), save: field(''), message: field(''), status: field(''), show() {}, hide() {}, members() {}, choices(groups, id) { this.selected = id; }, busy() {}, saved() {}, bind(actions) { this.actions = actions; }, destroy() {} };
+  const ui = { name: field(''), cancel: field(''), save: field(''), message: field(''), status: field(''), show() {}, hide() {}, members(sources, members) { this.catalog = sources; this.ordered = members; }, choices(groups, id) { this.selected = id; }, busy() {}, saved() {}, bind(actions) { this.actions = actions; }, destroy() {} };
   const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui });
-  editor.open(); assert.equal(ui.selected, 'empty'); ui.name.value = 'Renamed empty'; await ui.actions.save();
+  editor.open(); assert.equal(ui.selected, 'empty'); assert.deepEqual(ui.catalog.map(source => source.id), ['i.0', 'i.2', 'l.0', 'p.1', 'f.1']); assert.deepEqual(ui.ordered, []); ui.name.value = 'Renamed empty'; await ui.actions.save();
   assert.equal(app.view.last.expandedGroupId, 'empty'); assert.equal(app.view.last.sources[0].name, 'Renamed empty'); assert.equal(app.controller.context().profileId, 'rig-a'); assert.equal(app.sockets.length, 1);
   editor.destroy(); await app.close();
+});
+
+
+test('a reopened repository restores an expanded group only after explicit Connect and current model/AUX observations', async () => {
+  const factory = new IDBFactory(), first = await fixture({ factory });
+  first.connect(); first.controller.selectAux(0); await first.controller.whenNavigationIdle();
+  first.controller.toggleGroup('7_group-Z'); await first.controller.whenNavigationIdle(); await first.close();
+  const repository = new SettingsRepository({ indexedDB: factory });
+  const reopened = await fixture({ repository });
+  try {
+    assert.equal(reopened.sockets.length, 0); assert.equal(reopened.view.last.selectedAux, null); assert.equal(reopened.view.last.sources.length, 0);
+    const socket = reopened.connect(null);
+    assert.equal(reopened.view.last.expandedGroupId, null); assert.equal(reopened.view.last.sources.length, 0);
+    socket.receive('3:::SETD^a.0.mix^0.5\nSETD^a.0.matrix^0');
+    assert.equal(reopened.view.last.selectedAux, null); // Unknown model cannot restore a Ui24 view.
+    socket.receive('3:::SETS^model^ui24');
+    assert.equal(reopened.view.last.selectedAux, 0); assert.equal(reopened.view.last.expandedGroupId, '7_group-Z');
+    assert.equal(reopened.view.last.sources[0].kind, 'group'); assert.ok(reopened.view.last.sources.slice(1).every(source => source.unresolved));
+    assert.equal(reopened.view.last.showAuxMaster, false); assert.equal(reopened.sockets.length, 1);
+    socket.receive(state);
+    assert.deepEqual(reopened.view.last.sources.slice(1).map(source => source.sourceId), ['f.1', 'i.20', 'l.0', 'i.0']);
+    assert.equal(reopened.view.last.sources[2].unresolved, true);
+  } finally { await reopened.close(); await repository.close(); }
 });
