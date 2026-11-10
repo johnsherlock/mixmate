@@ -157,3 +157,35 @@ test('fresh receipts cannot confirm an incomplete dispatch and invalid journals 
     completed.receipts.set('a.1.mix', receipt); assert.equal(completed.guard.readback(final), 'invalidated');
   }
 });
+
+
+test('same-value pre-authorization receipts never confirm mono or sequential linked commands', () => {
+  for (const [target, linked] of [[master, false], [master, true], [send, true]]) {
+    const app = fixture({ linked }); app.guard.arm(target);
+    const plan = app.guard.prepare(0.4), paths = resolveAuxLevelTargets(app.observations, target).members.map(item => item.path);
+    // All these receipts happened after preparation but before any authorization.
+    for (const path of paths) app.receive(`3:::SETD^${path}^0.4`);
+    for (let ordinal = 0; ordinal < plan.count; ordinal++) {
+      // Also cover a later path arriving between earlier/later ordinals.
+      app.receive(`3:::SETD^${paths[ordinal]}^0.4`);
+      app.guard.authorizeNext(plan, ordinal);
+    }
+    assert.equal(app.guard.readback(plan), 'unconfirmed');
+    for (let ordinal = 0; ordinal < plan.count; ordinal++) {
+      app.receive(`3:::SETD^${paths[ordinal]}^0.4`);
+      assert.equal(app.guard.readback(plan), ordinal + 1 === plan.count ? 'observed-match' : 'unconfirmed');
+    }
+  }
+});
+
+test('each linked ordinal has its own receipt cutpoint while earlier fresh echoes remain valid', () => {
+  const app = fixture(); app.guard.arm(send); const plan = app.guard.prepare(0.4);
+  const paths = resolveAuxLevelTargets(app.observations, send).members.map(item => item.path);
+  for (let ordinal = 0; ordinal < plan.count; ordinal++) {
+    app.receive(`3:::SETD^${paths[ordinal]}^0.4`); // This path has not yet been authorized.
+    app.guard.authorizeNext(plan, ordinal);
+    if (ordinal + 1 < plan.count) app.receive(`3:::SETD^${paths[ordinal]}^0.4`); // Fresh echo for an earlier ordinal.
+  }
+  assert.equal(app.guard.readback(plan), 'unconfirmed'); // Only the last path still lacks a fresh receipt.
+  app.receive(`3:::SETD^${paths.at(-1)}^0.4`); assert.equal(app.guard.readback(plan), 'observed-match');
+});

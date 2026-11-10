@@ -48,7 +48,12 @@ export function createAuxLevelGuard({ readContext }) {
     authorizeNext(plan, ordinal) {
       const item = plans.get(plan);
       if (!item || item.epoch !== epoch || ordinal !== item.next || item.next >= item.commands.length) { disarm(); throw Error('Foreign, reordered, consumed or invalidated AUX plan.'); }
-      validLease();
+      const context = validLease(), index = item.next;
+      // Same-value receipts after prepare are still pre-dispatch observations.
+      // Cut each path's confirmation history immediately before its ordinal.
+      const receipt = context.receipts.get(item.members[index].path);
+      if (receipt < item.receipts[index]) { disarm(); throw Error('Target receipt sequence regressed.'); }
+      item.receipts[index] = receipt;
       const command = item.commands[item.next++];
       return Object.freeze({ command, message: encodeAuxLevelCommand(command) });
     },
