@@ -7,11 +7,11 @@ import { createGroupEditorUI } from './group-editor-ui.js';
 import { SettingsRepository } from '../settings.js';
 import { prepareEntryOffline } from './entry-offline.js';
 const root = mountShell(document.getElementById('iem-root'), 'live');
-const session = createAuxLevelSession(), repository = new SettingsRepository();
+const repository = new SettingsRepository(), session = createAuxLevelSession({ settingsRepository: repository });
 let controller;
 const view = mountReadOnlyView(root, { onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllChannels: () => controller.allChannels(),
-  onSelectLevel: target => controller.selectLevel(target), onToggleLevel: () => controller.toggleLevel(),
-  onBeginLevel: () => session.beginLevelGesture(), onCommitLevel: (token, value) => session.commitLevelGesture(token, value), onCancelLevel: () => session.cancelLevelGesture() });
+  onSelectGroupLevel: id => controller.selectGroupLevel(id), onSelectLevel: target => controller.selectLevel(target), onToggleLevel: () => controller.toggleLevel(),
+  onBeginLevel: () => session.beginLevelGesture(), onPreviewLevel: (token, value) => session.previewLevelGesture(token, value), onCommitLevel: (token, value) => session.commitLevelGesture(token, value), onCancelLevel: () => session.cancelLevelGesture() });
 const connectionUI = createLiveConnectionUI(root, { levels: true });
 controller = mountLiveController({ session, repository, view, ui: connectionUI });
 mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connectionUI), setEnabled: value => view.groupEditing(value),

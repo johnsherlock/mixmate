@@ -2508,3 +2508,15 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-offline-state{min-width:0;max-width:25%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"][data-level-controls="true"] .mm-local-tabs{display:flex}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-navigation .mm-local-tabs button{box-sizing:border-box;height:26px;min-height:26px;line-height:18px;padding:2px 7px}
+
+/* Relative command coordinate, never an invented aggregate level or VU. */
+#mixmate-iem-concept[data-mode="live"] .mm-group-selection{display:flex;align-items:center;justify-content:center;gap:3px}
+#mixmate-iem-concept[data-mode="live"] .mm-group-selection .mm-group-master-label{font-size:8px;line-height:9px;margin:0;white-space:nowrap}
+#mixmate-iem-concept[data-mode="live"] .mm-group-level-select{box-sizing:border-box;height:18px;min-height:18px;padding:0 3px;font-size:9px;line-height:14px;white-space:nowrap}
+#mixmate-iem-concept[data-mode="live"] .mm-group .mm-fader-space{position:relative}
+#mixmate-iem-concept[data-mode="live"] .mm-group .mm-group-level-placeholder{position:absolute;inset:5px;width:auto;height:auto;pointer-events:none}
+#mixmate-iem-concept[data-mode="live"] .mm-group .mm-fader-control{grid-column:2}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group .mm-fader-control{grid-column:1}
+
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-control-note.mm-group-selection{padding:0 2px}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-level-select{height:16px;min-height:16px;line-height:14px;padding:0 2px}

@@ -59,7 +59,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
   let touched = false, destroyed = false, profiles = [], selectedAux = null;
   let boundProfileId = null, contextRevision = 0, settingsReady = false, previousPhase = 'idle';
   let projected = { selectedAux: null, sources: [] }, requestedNavigation = null, restoreCandidate = null;
-  let navIntent = 0, navPending = Promise.resolve(), navigationMessage = '', previousExpanded = null;
+  let navIntent = 0, navPending = Promise.resolve(), navigationMessage = '', previousExpanded = null, previousControl = null;
   const profile = () => profiles.find(profile => profile.id === boundProfileId);
   const localNavigation = () => {
     const value = resolveGroupNavigation(profile()?.groups || [], requestedNavigation);
@@ -69,7 +69,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
   const context = () => ({ profileId: boundProfileId, revision: contextRevision, ready: settingsReady, selectedAux, expandedGroupId: selectedAux === null ? null : localNavigation().expandedGroupId,
     sources: (projected.sources || []).map(source => ({ sourceId: source.sourceId, name: source.name })) });
   let groupsSignature = '';
-  const emitContext = () => { groupsSignature = JSON.stringify([boundProfileId, profile()?.groups]); for (const listener of contextListeners) listener(context()); };
+  const emitContext = () => { session.bindGroupProfile?.(boundProfileId); groupsSignature = JSON.stringify([boundProfileId, profile()?.groups]); for (const listener of contextListeners) listener(context()); };
   const invalidateDraft = (detach = false) => { session.invalidateLevelContext?.(); contextRevision++; if (detach) boundProfileId = null; emitContext(); };
   const handlers = [];
   const listen = (target, type, callback) => { target.addEventListener(type, callback); handlers.push([target, type, callback]); };
@@ -92,8 +92,10 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (model.notice || navigationMessage) model.status += ` · ${[model.notice, navigationMessage].filter(Boolean).join(' · ')}`;
     if (isActive(previousPhase) && !isActive(snapshot.phase)) contextRevision++;
     previousPhase = snapshot.phase;
-    if (kind === 'meters' && view.renderMeters) view.renderMeters(model);
+    const controlSignature = JSON.stringify(snapshot.control);
+    if (kind === 'meters' && view.renderMeters && controlSignature === previousControl) view.renderMeters(model);
     else view.render(model);
+    previousControl = controlSignature;
     ui.connect.disabled = isActive(snapshot.phase); ui.disconnect.disabled = !isActive(snapshot.phase);
     ui.note.textContent = snapshot.detail;
     if (kind !== 'meters') emitContext();
@@ -191,6 +193,10 @@ export function mountLiveController({ session, repository, view, ui, document = 
     selectLevel(target) {
       if (target.kind === 'send' && target.auxIndex !== selectedAux) { session.disarmLevel?.(); return false; }
       return session.selectLevelTarget?.(target);
+    },
+    selectGroupLevel(groupId) {
+      if (selectedAux === null || !profile()?.groups.some(group => group.id === groupId)) { session.disarmLevel?.(); return false; }
+      return session.selectGroupTarget?.(groupId, selectedAux);
     },
     toggleLevel() { if (session.snapshot().control?.armed) session.disarmLevel(); else session.armLevel?.(); },
     clearLevelContext() { session.invalidateLevelContext?.(); render(); },
