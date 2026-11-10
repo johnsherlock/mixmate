@@ -59,3 +59,8 @@ Only explicit overview/AUX/group/All Channels choices call the settings updater.
 The editor receives the full underlying observed AUX catalog even when an expanded bank is filtered. Opening it chooses the expanded stable group ID; successful local definitions refresh the current projection without changing rig/target. Existing draft guards still invalidate on explicit and implicit AUX/context changes.
 
 Portrait shortcuts wrap. Compact landscape holds navigation to one row with a zero-basis flexible shortcut region, internal wrapping/vertical scrolling and ellipsized long labels with full accessible text/title. This keeps all controls reachable without sacrificing source travel, including the 64-group/80-character-name limit. Banks retain keyed nodes during readout/meter updates, preserve scroll and keep source faders disabled. Group controls do not participate in drag gestures. Automated evidence and browser geometry results belong to F04-S02; physical qualification remains F08-S01.
+
+
+## F05 relative controls
+
+After S02's confirmed merge, F05-S03 adds a separately selected/armed relative Δ command coordinate to eligible group masters; see the [relative contract](iem-relative-groups.md). Group names retain navigation and expanded banks still omit the AUX master. No aggregate level or VU is invented; empty/unresolved/silent/inconsistent members remain unavailable. Local ordered definitions remain canonical, and changes invalidate active gestures. The S01/S02 unavailable-control notes above record their earlier checkpoints.

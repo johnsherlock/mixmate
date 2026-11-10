@@ -1,7 +1,7 @@
 # ADR-0004: Typed AUX level authority and conservative linked controls
 
 Date: 2026-11-10
-Status: Accepted implementation direction under the user's explicit F05 orchestration authorization and ADR-0002; S01 merged in PR #23 at `c53a842` after green CI and affirmative final-head `1f07c8a` review. S02 private integration follows the [individual control contract](../iem-aux-level-controls.md); its review/merge gate remains separate.
+Status: Accepted implementation direction under the user's explicit F05 orchestration authorization and ADR-0002; S01 merged in PR #23 at `c53a842` after green CI and affirmative final-head `1f07c8a` review. S02 private integration follows the [individual control contract](../iem-aux-level-controls.md); S02 merged in PR #24 at `162aeb2` after green CI and affirmative final-head `4cf1d85` review. S03 relative controls follow the [relative group contract](../iem-relative-groups.md), with its review/merge gate still pending.
 
 ## Context
 
@@ -21,3 +21,10 @@ The F04 implementation checkpoint is merged at `de72fc7` in PR #22 after affirma
 ## Consequences
 
 S02/S03 receive narrow shared building blocks without prematurely granting a writer to the read-only view. Some linked/relative controls remain unavailable for inconsistent or silent baselines rather than losing balance. The exact current runtime versus reviewed-but-unwired AUX forms are explicit in AGENTS.md. No repeated feature-class scope permission is required; evidence, typed integration and each story's CI/affirmative review remain mandatory.
+
+
+## S03 implementation refinement — 2026-11-10
+
+The canonical repository supplies membership by bound stable profile/group ID; no IP inference, caller Map, raw member/value array or public sender establishes authority. Group leases deduplicate source/output closure and retain one continuous baseline. The curve coefficients are derived from the pinned MIT source with the complete notice bundled locally. A monotone upper-bracket inverse avoids rounded display/Newton output; the finite group capability window is conservatively -199 dB to the continuous normalized-1 endpoint, with below-window/silent baselines blocked. This is a supported control window, not a claimed desk floor.
+
+The group UI uses ±12 dB per-gesture local Δ coordinates, neutral zero at each explicit gesture, with separate Select level versus name navigation and no aggregate level/VU. One common delta limits all paths; only a shared numerical endpoint/no-op correction below 1e-12 dB is applied, never independent member rounding/clamping. Commit consumes the exact private cached preview delta despite native range sanitization. Pending, fresh path readback, partial-send interruption and no-replay behavior reuse S02; actual external edits/membership/order/context changes invalidate rather than rebaseline. Numerical tests are profile evidence, not firmware calibration. Compact Select level touchability remains a physical F08 check.

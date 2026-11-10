@@ -2,25 +2,28 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { mountLiveController } from '../src/iem/live-controller.js';
-import { emptySettings } from '../src/settings.js';
+import { parseIemStateFrame } from '../src/iem/protocol.js';
+import { continuousFaderDB, continuousDBToFader, GROUP_MIN_DB, GROUP_MAX_DB } from '../src/iem/relative-groups.js';
+import { SettingsRepository, emptySettings } from '../src/settings.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 const master = { kind: 'master', auxIndex: 0 }, send = { kind: 'send', auxIndex: 0, sourceId: 'i.0' };
 const LIVE = '3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a.0.stereoIndex^-1\nSETD^a.1.stereoIndex^-1\nSETD^a.0.mix^0.4\nSETD^a.1.mix^0.4\nSETD^i.0.stereoIndex^-1\nSETD^i.1.stereoIndex^-1\nSETD^i.0.aux.0.value^0.4\nSETD^i.1.aux.0.value^0.4\nSETD^i.0.aux.1.value^0.4\nSETD^i.1.aux.1.value^0.4';
-function setup(factory = createAuxLevelSession) {
+function setup(factory = createAuxLevelSession, options = {}) {
   let clock = 0, wall = 0, next = 0; const jobs = new Map(), sockets = [];
   const timers = { setTimeout(fn, delay) { const id = ++next; jobs.set(id, { fn, at: clock + delay }); return id; }, clearTimeout(id) { jobs.delete(id); }, setInterval() { return ++next; }, clearInterval() {} };
   class Socket {
     readyState = 0; sent = []; hook = null; throws = false;
     constructor(url) { this.url = url; sockets.push(this); }
     send(message) {
-      assert.ok(['3:::INIT', '3:::ALIVE', '2::'].includes(message) || /^3:::SETD\^(?:a\.[0-9]\.mix|(?:i\.(?:[0-9]|1[0-9]|2[0-3])|[lp]\.[01]|f\.[0-3])\.aux\.[0-9]\.value)\^(?:0(?:\.\d+)?|1)$/.test(message), message);
+      const parsed = parseIemStateFrame(message);
+      assert.ok(['3:::INIT', '3:::ALIVE', '2::'].includes(message) || parsed.length === 1 && parsed[0].field === 'level' && ['aux', 'send'].includes(parsed[0].kind), message);
       if (this.throws) throw Error('Unknown delivery'); this.sent.push(message); this.hook?.(message);
     }
     close() { this.readyState = 3; }
     open() { this.readyState = 1; this.onopen?.(); }
     receive(data) { this.onmessage?.({ data }); }
   }
-  const session = factory({ WebSocketClass: Socket, timers, now: () => clock, wallNow: () => wall, controlEnabled: true, write: true });
+  const session = factory({ WebSocketClass: Socket, timers, now: () => clock, wallNow: () => wall, controlEnabled: true, write: true, ...options });
   return { session, sockets, jobs, move(ms, wallMs = ms) { clock += ms; wall += wallMs; }, flush() { for (const [id, job] of [...jobs]) if (job.at <= clock) { jobs.delete(id); job.fn(); } },
     connect(frame = LIVE) { session.connect('192.168.0.60'); const socket = sockets.at(-1); socket.open(); socket.receive(frame); return socket; },
     begin(target = master) { session.selectLevelTarget(target); assert.equal(session.armLevel(), true); return session.beginLevelGesture(); } };
@@ -99,7 +102,7 @@ test('send throws leave unknown delivery/partial counts, clear state and never r
   const app = setup(), socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1'); const token = app.begin();
   socket.hook = message => { if (message.startsWith('3:::SETD')) socket.throws = true; };
   assert.equal(app.session.commitLevelGesture(token, 0.5), false); const state = app.session.snapshot();
-  assert.equal(state.phase, 'error'); assert.equal(state.observations.size, 0); assert.equal(state.control.authorized, 2); assert.equal(state.control.dispatched, 1); assert.match(state.detail, /unknown/);
+  assert.equal(state.phase, 'error'); assert.equal(state.observations.size, 0); assert.equal(state.control.authorized, 2); assert.equal(state.control.dispatched, 1); assert.match(state.detail, /some levels may have changed/);
   app.connect(); assert.equal(app.session.commitLevelGesture(token, 0.7), false); assert.equal(writes(app.sockets[1]).length, 0);
 });
 test('reentrant observers cannot retain an arm or gesture token after cancellation', () => {
@@ -156,4 +159,102 @@ test('closed socket or hidden document discovered before callbacks clears author
       globalThis.document = previous;
     }
   } finally { if (previous === undefined) delete globalThis.document; else globalThis.document = previous; }
+});
+
+async function groupFixture(members = ['i.0', 'f.0']) {
+  const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
+  settings.profiles = ['one', 'two'].map((id, n) => ({ id, name: id, address: '192.168.0.60', groups: [{ id: 'band', name: '<Band>', members: n ? ['p.0'] : members }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }));
+  settings.selectedProfileId = 'two'; await repository.replace(settings);
+  const app = setup(createAuxLevelSession, { settingsRepository: repository }), socket = app.connect();
+  socket.receive('3:::SETD^i.0.aux.0.value^0.35\nSETD^f.0.aux.0.value^0.65\nSETD^p.0.stereoIndex^-1\nSETD^p.0.aux.0.value^0.3');
+  app.session.bindGroupProfile('one');
+  return { ...app, repository, socket, beginGroup() { assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true); return app.session.beginLevelGesture(); } };
+}
+test('groups bind stable controller profile instead of saved selected-profile/IP and expose no member-array writer', async () => {
+  const app = await groupFixture(); const token = app.beginGroup();
+  assert.equal(app.session.snapshot().control.selected.kind, 'group'); assert.equal(writes(app.socket).length, 0);
+  assert.equal(app.session.previewLevelGesture(token, 3), 3); assert.equal(writes(app.socket).length, 0);
+  assert.equal(app.session.commitLevelGesture(token, 3), true);
+  const changes = writes(app.socket).map(message => parseIemStateFrame(message)[0]); assert.deepEqual(changes.map(item => item.sourceId), ['i.0', 'f.0']);
+  assert.ok(Math.abs(continuousFaderDB(changes[0].value) - continuousFaderDB(0.35) - 3) < 1e-10);
+  assert.ok(Math.abs(continuousFaderDB(changes[1].value) - continuousFaderDB(0.65) - 3) < 1e-10);
+  for (const message of writes(app.socket)) app.socket.receive(message);
+  assert.match(app.session.snapshot().control.status, /Last relative Δ \+3.00/); assert.equal(app.session.snapshot().control.previewDelta, 0);
+  app.session.bindGroupProfile(null); assert.equal(app.session.selectGroupTarget('band', 0), false); assert.equal(app.session.armLevel(), false);
+  app.session.bindGroupProfile('two'); const next = app.beginGroup(); app.session.previewLevelGesture(next, 1); app.session.commitLevelGesture(next, 1);
+  assert.match(writes(app.socket).at(-1), /^3:::SETD\^p\.0\.aux\.0\.value/);
+  assert.equal(app.session.selectGroupTarget(['i.0'], 0), false); assert.equal(app.session.commitLevelGesture({}, [0.5, 0.5]), false);
+  app.session.disconnect(); await app.repository.close();
+});
+test('exact cached common preview commits at non-step upper/lower boundaries despite native input sanitization', async () => {
+  for (const endpoint of ['upper', 'lower']) {
+    const app = await groupFixture();
+    const baseline = endpoint === 'upper' ? continuousDBToFader(GROUP_MAX_DB - 0.523456) : continuousDBToFader(GROUP_MIN_DB + 0.523456);
+    app.socket.receive(`3:::SETD^i.0.aux.0.value^${baseline}`);
+    const token = app.beginGroup(), delta = app.session.previewLevelGesture(token, endpoint === 'upper' ? 12 : -12);
+    assert.ok(Math.abs(Math.abs(delta) - 0.523456) < 1e-10);
+    const sanitized = Math.round(delta * 10) / 10;
+    assert.notEqual(sanitized, delta); app.session.commitLevelGesture(token, sanitized);
+    const changes = writes(app.socket).map(message => parseIemStateFrame(message)[0]);
+    const expected = endpoint === 'upper' ? GROUP_MAX_DB : GROUP_MIN_DB;
+    assert.ok(Math.abs(continuousFaderDB(changes[0].value) - expected) < 1e-9);
+    assert.ok(Math.abs(continuousFaderDB(changes[0].value) - continuousFaderDB(baseline) - delta) < 1e-9);
+    assert.ok(Math.abs(continuousFaderDB(changes[1].value) - continuousFaderDB(0.65) - delta) < 1e-9);
+    assert.equal(app.session.snapshot().control.lastDelta, delta);
+    app.session.disconnect(); await app.repository.close();
+  }
+});
+test('group overlap deduplicates source/output closure, preserves per-path expected values and waits for all echoes', async () => {
+  const app = await groupFixture(['i.0', 'i.1']);
+  app.socket.receive('3:::SETD^i.0.stereoIndex^0\nSETD^i.1.stereoIndex^1\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^i.0.aux.0.value^0.4\nSETD^i.0.aux.1.value^0.4\nSETD^i.1.aux.0.value^0.4\nSETD^i.1.aux.1.value^0.4');
+  const token = app.beginGroup(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2);
+  assert.equal(writes(app.socket).length, 4); assert.equal(new Set(writes(app.socket).map(message => parseIemStateFrame(message)[0].path)).size, 4);
+  for (const [index, message] of writes(app.socket).entries()) { app.socket.receive(message); assert.equal(app.session.snapshot().control.pending, index !== 3); }
+  assert.equal(app.session.snapshot().control.armed, true); app.session.disconnect(); await app.repository.close();
+});
+test('group identity/membership/order/profile/native away-back changes invalidate frozen gestures and never rebaseline', async () => {
+  for (const change of ['membership', 'order', 'profile', 'native', 'hidden']) {
+    const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 3);
+    if (change === 'membership') await app.repository.update(settings => { settings.profiles[0].groups[0].members = ['i.0']; });
+    if (change === 'order') await app.repository.update(settings => { settings.profiles[0].groups[0].members.reverse(); });
+    if (change === 'profile') app.session.bindGroupProfile('two');
+    if (change === 'native') app.socket.receive('3:::SETD^i.0.aux.0.value^0.4\nSETD^i.0.aux.0.value^0.35');
+    if (change === 'hidden') app.session.invalidateLevelContext();
+    assert.equal(app.session.commitLevelGesture(token, 3), false); assert.equal(writes(app.socket).length, 0); assert.equal(app.session.snapshot().control.armed, false);
+    app.session.disconnect(); await app.repository.close();
+  }
+});
+test('group zero delta is a no-op, while silent/unresolved/empty groups cannot arm', async () => {
+  const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 0);
+  assert.equal(app.session.commitLevelGesture(token, 0), false); assert.equal(writes(app.socket).length, 0); assert.match(app.session.snapshot().control.status, /no commands/);
+  app.socket.receive('3:::SETD^f.0.aux.0.value^0'); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
+  await app.repository.update(settings => { settings.profiles[0].groups[0].members = ['i.20']; }); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
+  await app.repository.update(settings => { settings.profiles[0].groups[0].members = []; }); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
+  assert.equal(writes(app.socket).length, 0); app.session.disconnect(); await app.repository.close();
+});
+test('group partial throws/timeout/reentrant membership changes reuse stop-and-disarm with no replay', async () => {
+  for (const failure of ['throw', 'timeout', 'membership']) {
+    const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 2);
+    if (failure === 'throw') app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.socket.throws = true; };
+    if (failure === 'membership') app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.session.bindGroupProfile('two'); };
+    app.session.commitLevelGesture(token, 2);
+    if (failure === 'timeout') { app.move(2600); app.flush(); }
+    const count = writes(app.socket).length; assert.equal(count, failure === 'timeout' ? 2 : 1); assert.equal(app.session.snapshot().control.armed, false);
+    app.move(3000); app.flush(); assert.equal(writes(app.socket).length, count); assert.equal(app.session.commitLevelGesture(token, 2), false);
+    app.session.disconnect(); await app.repository.close();
+  }
+});
+
+test('a control invalidation discovered on a meter-only publication updates disabled UI immediately without repeated bank renders', async () => {
+  const app = setup(); let publish; const adapter = { ...app.session, subscribe(listener) { publish = listener; return app.session.subscribe(listener); } };
+  const field = value => Object.assign(new Events(), { value });
+  const ui = { address: field('192.168.0.60'), profile: field(''), connect: field(''), disconnect: field(''), note: field(''), settings: field(''), form: new Events(), navigation: [], close() {}, profiles() {} };
+  const settings = emptySettings(), repository = { initialize: async () => ({ settings, status: { mode: 'memory' } }), snapshot: () => ({ settings, status: { mode: 'memory' } }) };
+  const view = { renders: 0, meters: 0, render(model) { this.model = model; this.renders++; }, renderMeters() { this.meters++; }, preferences() {}, destroy() {} };
+  const controller = mountLiveController({ session: adapter, repository, view, ui, document: Object.assign(new Events(), { hidden: false }), window: new Events() }); await controller.ready;
+  app.connect(); app.session.selectLevelTarget(master); app.session.armLevel(); const before = view.renders;
+  const snapshot = app.session.snapshot(); snapshot.control = { ...snapshot.control, armed: false, status: 'Unconfirmed; controls off.' };
+  publish(snapshot, 'meters'); assert.equal(view.renders, before + 1); assert.equal(view.model.control.armed, false);
+  publish(snapshot, 'meters'); assert.equal(view.renders, before + 1); assert.equal(view.meters, 1);
+  controller.destroy();
 });

@@ -46,6 +46,9 @@ test('production build precaches the exact emitted inventory and resolves instal
     // Identity must survive a future start URL change within this app's scope.
     assert.equal(new URL(manifest.id, new URL('connection-test.html', scope).origin).href, appID.href);
     for (const icon of manifest.icons) assert.ok(first.assets.includes(icon.src.replace(/^\.\//, '')));
+    const notice = 'third-party/soundcraft-ui-connection-LICENSE.txt';
+    assert.ok(first.assets.includes(notice));
+    assert.equal(await readFile(join(directory, notice), 'utf8'), await readFile(join('public', notice), 'utf8'));
     for (const entry of ['index.html', 'iem.html', 'demo.html', 'connection-test.html']) {
       const html = await readFile(join(directory, entry), 'utf8');
       assert.match(html, /name="mixmate-entry-proof" content="[a-f0-9]{64}"/);

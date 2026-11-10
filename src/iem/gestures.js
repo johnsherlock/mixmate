@@ -2,7 +2,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // Reusable touch policy: track touches stay available for native scrolling.
 // Only the cap captures a pointer; single track taps never change a value.
-export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onCommit = () => {}, onCancel = () => {} } = {}) {
+export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onPreview, onCommit = () => {}, onCancel = () => {} } = {}) {
   const all = (selector) => [...root.querySelectorAll(selector)];
   let gesture = null,
     lastTap = null;
@@ -60,12 +60,11 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onC
   }
   function setValue(active, value) {
     const input = active.input,
-      step = +input.step || 1;
-    input.value = clamp(
-      Math.round(value / step) * step,
-      +input.min,
-      +input.max,
-    );
+      step = +input.dataset.gestureStep || +input.step || 1;
+    const requested = clamp(Math.round(value / step) * step, +input.min, +input.max);
+    const preview = onPreview ? onPreview(input, active.token, requested) : requested;
+    if (typeof preview !== 'number' || !Number.isFinite(preview)) { cancel(); return; }
+    input.value = clamp(preview, +input.min, +input.max);
     input.dispatchEvent(new Event("input", { bubbles: true }));
     sync();
   }
@@ -163,6 +162,7 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onC
       if (!active.cap) {
         const token = onBegin ? onBegin(active.input) : true;
         if (!token) return;
+        active.token = token;
         const rect = active.input.getBoundingClientRect(),
           horizontal = active.input.classList.contains("mm-pan-large");
         const thumb = horizontal ? 16 : active.input.dataset.eqParam ? 24 : 29;
@@ -210,7 +210,7 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onC
         gesture = { input, token, keyboard: true, cap: false };
       }
       if (!gesture.keyboard || gesture.input !== input) return;
-      const value = event.key === 'Home' ? +input.min : event.key === 'End' ? +input.max : +input.value + direction[event.key] * (+input.step || 0.001);
+      const value = event.key === 'Home' ? +input.min : event.key === 'End' ? +input.max : +input.value + direction[event.key] * (+input.dataset.gestureStep || +input.step || 0.001);
       setValue(gesture, value);
       return;
     }

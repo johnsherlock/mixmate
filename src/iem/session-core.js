@@ -3,12 +3,14 @@ import { createLiveProvider } from './live-provider.js';
 import { decodeVu2Frame } from './meters.js';
 import { IEM_RECEIVE_LIMITS, parseIemStateFrame } from './protocol.js';
 import { createAuxLevelGuard } from './aux-level-safety.js';
+import { resolveRelativeGroup } from './relative-groups.js';
+import { validateSettings } from '../settings.js';
 import { resolveAuxLevelTargets, auxLevelPath } from './aux-level-protocol.js';
 
 // Private ownership: no socket, generic sender or queue escapes. The literal
 // read-only factory cannot acquire the typed level capability through options.
 function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, timers = globalThis, timeoutMs = 15000, idleMs = 30000, meterTtlMs = 2000, meterCadenceMs = 100,
-  now = () => globalThis.performance?.now() ?? Date.now(), wallNow = () => Date.now(), clockGraceMs = 1000, confirmationMs = 2500 } = {}) {
+  now = () => globalThis.performance?.now() ?? Date.now(), wallNow = () => Date.now(), clockGraceMs = 1000, confirmationMs = 2500, settingsRepository } = {}) {
   const provider = createLiveProvider(), listeners = new Set();
   let socket = null, generation = 0, deadline, keepalive, idle, meterExpiry, meterFlush;
   let meters = new Map(), meterStamp = null, meterRevision = 0, inspectCurrent = () => {};
@@ -23,8 +25,15 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   let phase = 'idle', detail = 'Not connected — no received mixer state';
   const observed = new Map(), receipts = new Map();
   let sequence = 0, revision = 0, levelRevision = 0, selected = null, armed = false, gesture = null, pending = null, confirmation;
-  let controlStatus = 'Select a level; controls are off.', lastOperation = null;
-  const guard = createAuxLevelGuard({ readContext: () => ({ generation, revision, levelRevision, observations: observed, receipts,
+  let controlStatus = 'Select a level; controls are off.', lastOperation = null, groupProfileId = null, selectedGroupSignature = null;
+  const readGroup = groupId => {
+    const settings = validateSettings(settingsRepository?.snapshot()?.settings);
+    const profile = settings.profiles.find(profile => profile.id === groupProfileId);
+    const group = profile?.groups.find(group => group.id === groupId);
+    if (!group) throw Error('Current bound local group is unavailable.');
+    return group;
+  };
+  const guard = createAuxLevelGuard({ readGroup, readContext: () => ({ generation, revision, levelRevision, observations: observed, receipts,
     open: socket?.readyState === 1, visible: globalThis.document?.hidden !== true }) });
   function cancelControl(message = 'Controls off; enable explicitly.') {
     revision++; guard.disarm(); armed = false; gesture = pending = null;
@@ -35,14 +44,21 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     const age = elapsed(pending.completed);
     if (invalidClock(age) || Math.max(age.mono, age.wall) >= confirmationMs) cancelControl('Level readback unconfirmed; controls off. No retry.');
   }
+  function syncGroupSelection() {
+    if (selected?.kind !== 'group') return;
+    try {
+      if (JSON.stringify([groupProfileId, readGroup(selected.groupId)]) === selectedGroupSignature) return;
+    } catch { /* Missing or invalid canonical definition invalidates authority too. */ }
+    cancelControl('Local group definition changed; select and enable again.'); selected = null; selectedGroupSignature = null;
+  }
   function controlSnapshot() {
-    inspectConfirmation();
-    let eligible = false, reason = 'Select an observed master or source send.';
+    syncGroupSelection(); inspectConfirmation();
+    let eligible = false, groupName, reason = 'Select an observed master or source send.';
     if (selected) {
-      try { resolveAuxLevelTargets(observed, selected); eligible = socket?.readyState === 1; reason = eligible ? '' : 'Socket is not open.'; }
+      try { if (selected.kind === 'group') { const group = readGroup(selected.groupId); groupName = group.name; resolveRelativeGroup(observed, group, selected.auxIndex); } else resolveAuxLevelTargets(observed, selected); eligible = socket?.readyState === 1; reason = eligible ? '' : 'Socket is not open.'; }
       catch (error) { reason = error.message; }
     }
-    return { selected: selected ? { ...selected } : null, eligible, reason, armed, gestureActive: Boolean(gesture), pending: Boolean(pending), status: controlStatus, dispatched: lastOperation?.dispatched || 0, authorized: lastOperation?.authorized || 0 };
+    return { ...(groupName ? { groupName } : {}), selected: selected ? { ...selected } : null, eligible, reason, armed, gestureActive: Boolean(gesture), pending: Boolean(pending), status: controlStatus, previewDelta: gesture?.delta ?? 0, lastDelta: lastOperation?.delta ?? null, dispatched: lastOperation?.dispatched || 0, authorized: lastOperation?.authorized || 0 };
   }
   function finishReadback() {
     inspectConfirmation();
@@ -50,7 +66,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     const result = guard.readback(pending.plan);
     if (result === 'unconfirmed') return;
     timers.clearTimeout(confirmation);
-    if (result === 'observed-match') { pending = null; controlStatus = 'Observed matching level readback; no correlated acknowledgement.'; }
+    if (result === 'observed-match') { const delta = pending.delta; pending = null; controlStatus = delta === undefined ? 'Observed matching level readback; no correlated acknowledgement.' : `Last relative Δ ${delta >= 0 ? '+' : ''}${delta.toFixed(2)} dB observed; next gesture starts at Δ 0.`; }
     else cancelControl(result === 'conflict' ? 'Conflicting level readback; controls off.' : 'Level operation invalidated; controls off.');
   }
   function journal(frame) {
@@ -71,8 +87,22 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if ((armed || gesture || pending) && (topology || unexpected || (changed && !pending))) cancelControl('Received context or native level changed; controls off.');
     else finishReadback();
   }
-  function canAct() { if (socket) inspectCurrent(); inspectConfirmation(); return controlEnabled && socket?.readyState === 1 && globalThis.document?.hidden !== true; }
+  function canAct() { if (socket) inspectCurrent(); syncGroupSelection(); inspectConfirmation(); return controlEnabled && socket?.readyState === 1 && globalThis.document?.hidden !== true; }
+  const armSelected = () => selected.kind === 'group' ? guard.armGroup(selected.groupId, selected.auxIndex) : guard.arm(selected);
   const controlAPI = {
+    bindGroupProfile(profileId) {
+      if (profileId === groupProfileId) return;
+      cancelControl(); selected = null; groupProfileId = typeof profileId === 'string' ? profileId : null;
+    },
+    selectGroupTarget(groupId, auxIndex) {
+      cancelControl(); selected = null;
+      try {
+        const group = readGroup(groupId);
+        selected = Object.freeze({ kind: 'group', groupId: group.id, auxIndex }); selectedGroupSignature = JSON.stringify([groupProfileId, group]);
+        resolveRelativeGroup(observed, group, auxIndex); controlStatus = 'Relative group selected; enable explicitly.';
+      } catch (error) { controlStatus = error.message; }
+      emit('controls'); return Boolean(selected && controlSnapshot().eligible);
+    },
     selectLevelTarget(target) {
       cancelControl(); selected = null;
       try { selected = resolveAuxLevelTargets(observed, target).target; controlStatus = 'Level selected; enable explicitly.'; }
@@ -85,30 +115,38 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     },
     armLevel() {
       if (!canAct() || !selected || pending || gesture) return false;
-      try { guard.arm(selected); armed = true; controlStatus = 'Level enabled; drag the cap and release to apply.'; emit('controls'); return armed; }
+      try { armSelected(); armed = true; controlStatus = 'Level enabled; drag the cap and release to apply.'; emit('controls'); return armed; }
       catch (error) { cancelControl(error.message); emit('controls'); return false; }
     },
     disarmLevel() { cancelControl(); emit('controls'); },
     invalidateLevelContext() { cancelControl(); selected = null; },
     beginLevelGesture() {
       if (!canAct() || !armed || pending || gesture || !selected) return null;
-      try { guard.arm(selected); } catch (error) { cancelControl(error.message); emit('controls'); return null; }
-      const token = Object.freeze({}); gesture = { token }; controlStatus = 'Preview only; release to apply. Readout remains received.'; emit('controls'); return gesture?.token === token && armed ? token : null;
+      try { armSelected(); } catch (error) { cancelControl(error.message); emit('controls'); return null; }
+      const token = Object.freeze({}); gesture = { token, delta: 0 }; controlStatus = 'Preview only; release to apply. Readout remains received.'; emit('controls'); return gesture?.token === token && armed ? token : null;
+    },
+    previewLevelGesture(token, value) {
+      if (!canAct() || !gesture || gesture.token !== token || !armed || pending) return null;
+      if (selected.kind !== 'group') return value;
+      try { gesture.delta = guard.previewRelative(value); gesture.previewed = true; return gesture.delta; }
+      catch (error) { cancelControl(error.message); emit('controls'); return null; }
     },
     cancelLevelGesture() { if (gesture) { cancelControl('Adjustment cancelled; controls off.'); emit('controls'); } },
     commitLevelGesture(token, value) {
       if (!canAct() || !armed || !gesture || gesture.token !== token || pending) return false;
+      if (typeof value !== 'number' || !Number.isFinite(value) || (selected.kind === 'group' && !gesture.previewed)) return false;
       let plan;
-      try { plan = guard.prepare(value); } catch (error) { cancelControl(error.message); emit('controls'); return false; }
+      try { plan = selected.kind === 'group' ? guard.prepareRelative(gesture.delta) : guard.prepare(value); } catch (error) { cancelControl(error.message); emit('controls'); return false; }
       gesture = null;
-      const operation = { plan, dispatching: true, expected: new Map(), dispatched: 0, authorized: 0 }, current = socket, tokenGeneration = generation;
+      if (plan.delta === 0) { lastOperation = null; controlStatus = 'Relative Δ 0 dB; no commands sent.'; emit('controls'); return false; }
+      const operation = { plan, dispatching: true, expected: new Map(), delta: plan.delta, dispatched: 0, authorized: 0 }, current = socket, tokenGeneration = generation;
       pending = lastOperation = operation;
       try {
         for (let ordinal = 0; ordinal < plan.count; ordinal++) {
           if (!canAct() || socket !== current || generation !== tokenGeneration || pending !== operation || !armed) throw Error('Dispatch interrupted.');
           const grant = guard.authorizeNext(plan, ordinal); operation.authorized++;
           const { value: ignored, ...target } = grant.command;
-          operation.expected.set(auxLevelPath(target), value);
+          operation.expected.set(auxLevelPath(target), grant.command.value);
           current.send(grant.message);
           // A send may synchronously trigger a fake/native callback. Never continue its old operation.
           operation.dispatched++;
@@ -118,10 +156,10 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
           }
         }
       } catch {
-        if (socket === current && generation === tokenGeneration) stop('error', 'Level dispatch interrupted; delivery may be partial/unknown. Reconnect explicitly.');
+        if (socket === current && generation === tokenGeneration) stop('error', 'Level adjustment interrupted; some levels may have changed. Reconnect explicitly.');
         return false;
       }
-      operation.dispatching = false; operation.completed = stamp(); controlStatus = 'Waiting for fresh level readback; delivery is not confirmed.';
+      operation.dispatching = false; operation.completed = stamp(); controlStatus = plan.delta === undefined ? 'Waiting for fresh level readback; delivery is not confirmed.' : `Relative Δ ${plan.delta >= 0 ? '+' : ''}${plan.delta.toFixed(2)} dB pending fresh member readback.`;
       confirmation = timers.setTimeout(() => {
         if (pending === operation && generation === tokenGeneration) { cancelControl('Level readback unconfirmed; controls off. No retry.'); emit('controls'); }
       }, confirmationMs);
