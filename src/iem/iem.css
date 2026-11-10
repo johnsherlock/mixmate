@@ -2493,3 +2493,18 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group-control-note{flex-basis:16px;height:16px;line-height:12px;padding:1px 5px}
 #mixmate-iem-concept[data-mode="live"] .mm-group-master-label{font-size:9px;color:var(--mm-mix-color);letter-spacing:.5px}
 #mixmate-iem-concept[data-mode="live"] .mm-strip[data-unresolved="true"]{border-style:dashed}
+
+/* Arming/selection uses existing strip and navigation geometry. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-level-selected="true"]{box-shadow:inset 0 0 0 2px var(--mm-mix-color)}
+#mixmate-iem-concept[data-mode="live"] .mm-level-enable{white-space:nowrap}
+#mixmate-iem-concept[data-mode="live"] .mm-dirty{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}
+
+/* Compact status text cannot wrap into another row and steal fader travel. */
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-preview{flex-wrap:nowrap;gap:5px 6px}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-preview .mm-feedback{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-mode-label,
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-preview>button,
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-entry-links{flex-shrink:0;white-space:nowrap;flex-wrap:nowrap}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-offline-state{min-width:0;max-width:25%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"][data-level-controls="true"] .mm-local-tabs{display:flex}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-navigation .mm-local-tabs button{box-sizing:border-box;height:26px;min-height:26px;line-height:18px;padding:2px 7px}

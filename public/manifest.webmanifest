@@ -2,7 +2,7 @@
   "id": "mixmate/",
   "name": "MixMate \u2014 IEM mixer",
   "short_name": "MixMate",
-  "description": "Offline read-only IEM monitoring for Soundcraft Ui24R.",
+  "description": "Offline IEM monitoring and explicitly armed AUX level controls for Soundcraft Ui24R.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

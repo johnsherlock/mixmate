@@ -1,7 +1,7 @@
 # ADR-0004: Typed AUX level authority and conservative linked controls
 
 Date: 2026-11-10
-Status: Accepted implementation direction under the user's explicit F05 orchestration authorization and ADR-0002; S01 review/merge pending.
+Status: Accepted implementation direction under the user's explicit F05 orchestration authorization and ADR-0002; S01 merged in PR #23 at `c53a842` after green CI and affirmative final-head `1f07c8a` review. S02 private integration follows the [individual control contract](../iem-aux-level-controls.md); its review/merge gate remains separate.
 
 ## Context
 

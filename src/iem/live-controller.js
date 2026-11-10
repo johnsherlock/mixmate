@@ -1,24 +1,24 @@
 import { projectLiveState } from './live-provider.js';
 import { projectGroupNavigation, resolveGroupNavigation } from './group-navigation.js';
 
-export function createLiveConnectionUI(root) {
+export function createLiveConnectionUI(root, { levels = false } = {}) {
   const document = root.ownerDocument, $ = selector => root.querySelector(selector);
   const make = (tag, text = '') => { const node = document.createElement(tag); node.textContent = text; return node; };
   const open = make('button', 'Connect to desk'), disconnect = make('button', 'Disconnect');
   open.type = disconnect.type = 'button'; open.className = 'mm-connect-toggle'; disconnect.className = 'mm-session-disconnect';
   $('.mm-preview').append(open, disconnect);
   const layer = $('.mm-layer'), form = make('form'); form.className = 'mm-live-connection';
-  const profile = make('select'), address = make('input'), connect = make('button', 'Connect read-only');
+  const profile = make('select'), address = make('input'), connect = make('button', levels ? 'Connect live IEM' : 'Connect read-only');
   address.value = '192.168.0.60'; address.required = true; address.autocomplete = 'off'; address.spellcheck = false;
   address.setAttribute('inputmode', 'decimal'); address.setAttribute('list', 'iem-known-addresses');
   const known = make('datalist'); known.id = 'iem-known-addresses';
   for (const value of ['192.168.0.60', '192.168.1.60']) { const option = make('option'); option.value = value; known.append(option); }
   const profileLabel = make('label', 'Saved local rig'), addressLabel = make('label', 'Mixer private IPv4 address');
   profileLabel.append(profile); addressLabel.append(address); connect.type = 'submit';
-  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', 'Only received state is shown. No mixer parameter writes.');
+  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? 'Levels start off. Select a level and enable it explicitly; only release applies a change.' : 'Only received state is shown. No mixer parameter writes.');
   settings.className = note.className = 'mm-caption'; note.setAttribute('role', 'status');
   form.append(profileLabel, addressLabel, known, settings, connect, note);
-  $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = 'Connect read-only IEM';
+  $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';
   const closeButton = $('.mm-dialog-head button'); closeButton.disabled = false;
   const openButtons = [open, $('.mm-brand'), $('.mm-desk')];
   for (const button of openButtons) button.disabled = false;
@@ -26,7 +26,7 @@ export function createLiveConnectionUI(root) {
   const show = () => {
     beforeOpen(); connectionVisible = true; focusBefore = document.activeElement;
     $('.mm-dialog').classList.remove('mm-group-dialog');
-    $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = 'Connect read-only IEM';
+    $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';
     layer.hidden = false; address.focus();
   };
   const close = () => { if (!connectionVisible) return; connectionVisible = false; layer.hidden = true; focusBefore?.focus?.(); };
@@ -68,8 +68,9 @@ export function mountLiveController({ session, repository, view, ui, document = 
   const contextListeners = new Set();
   const context = () => ({ profileId: boundProfileId, revision: contextRevision, ready: settingsReady, selectedAux, expandedGroupId: selectedAux === null ? null : localNavigation().expandedGroupId,
     sources: (projected.sources || []).map(source => ({ sourceId: source.sourceId, name: source.name })) });
-  const emitContext = () => { for (const listener of contextListeners) listener(context()); };
-  const invalidateDraft = (detach = false) => { contextRevision++; if (detach) boundProfileId = null; emitContext(); };
+  let groupsSignature = '';
+  const emitContext = () => { groupsSignature = JSON.stringify([boundProfileId, profile()?.groups]); for (const listener of contextListeners) listener(context()); };
+  const invalidateDraft = (detach = false) => { session.invalidateLevelContext?.(); contextRevision++; if (detach) boundProfileId = null; emitContext(); };
   const handlers = [];
   const listen = (target, type, callback) => { target.addEventListener(type, callback); handlers.push([target, type, callback]); };
   const isActive = phase => ['connecting', 'connected', 'partial', 'live'].includes(phase);
@@ -83,7 +84,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
       } else restoreCandidate = null;
     }
     const base = projectLiveState(snapshot, selectedAux);
-    if (selectedAux !== base.selectedAux) contextRevision++;
+    if (selectedAux !== base.selectedAux) { contextRevision++; session.invalidateLevelContext?.(); if (snapshot.control) base.control = session.snapshot().control; }
     selectedAux = base.selectedAux; projected = base;
     const model = projectGroupNavigation(base, profile(), requestedNavigation);
     if (previousExpanded !== model.expandedGroupId) contextRevision++;
@@ -128,6 +129,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
   const unsubscribeSettings = repository.subscribe?.(({ settings }) => {
     if (!settingsReady || destroyed) return;
     profiles = settings.profiles;
+    if (JSON.stringify([boundProfileId, profile()?.groups]) !== groupsSignature) session.invalidateLevelContext?.();
     if (boundProfileId && !profile()) { boundProfileId = null; navIntent++; restoreCandidate = requestedNavigation = null; invalidateDraft(); }
     render();
   }) || (() => {});
@@ -186,6 +188,12 @@ export function mountLiveController({ session, repository, view, ui, document = 
     },
     allChannels() { if (selectedAux !== null && localNavigation().view !== 'channels') chooseNavigation({ view: 'channels', expandedGroupId: null }); },
     overview() { selectedAux = null; chooseNavigation({ view: profile()?.groups.length ? 'groups' : 'channels', expandedGroupId: null }); },
+    selectLevel(target) {
+      if (target.kind === 'send' && target.auxIndex !== selectedAux) { session.disarmLevel?.(); return false; }
+      return session.selectLevelTarget?.(target);
+    },
+    toggleLevel() { if (session.snapshot().control?.armed) session.disarmLevel(); else session.armLevel?.(); },
+    clearLevelContext() { session.invalidateLevelContext?.(); render(); },
     whenNavigationIdle: () => navPending,
     destroy() { invalidateDraft(true); destroyed = true; contextListeners.clear(); navIntent++; unsubscribeSettings(); unsubscribe(); session.disconnect(); for (const [target, type, callback] of handlers) target.removeEventListener(type, callback); ui.destroy?.(); view.destroy(); },
   };
