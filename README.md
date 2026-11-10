@@ -1,25 +1,31 @@
 # Mixmate
 
-An offline-first Soundcraft Ui24R connection and input-fader test. It displays channel names, mute states and fader positions, and lets you explicitly enable level control for the selected input. Fader changes affect the real desk.
+An offline-first Soundcraft Ui24R IEM monitor using the accepted phone/tablet interface. The main app is read-only: connect explicitly to see received AUX levels, sends, pan and source-backed VU meters. Live controls remain disabled until their verified write stories are delivered. Demo is a separate simulation.
 
-**App:** https://johnsherlock.github.io/mixmate/
+**App:** https://johnsherlock.github.io/mixmate/ · **Version:** 0.3.0
 
 ## Try it
 
-1. While online, open the app and wait for **Saved for offline use**.
-2. Android Chrome: menu → Install app. iPhone/iPad Safari: Share → Add to Home Screen.
-3. Open the installed app once while online and check offline readiness there too.
-4. Close it, turn off mobile data and disconnect internet, but leave Wi-Fi enabled. Join the Swissonic router’s Wi-Fi. Keep this connection if the phone warns it has no internet.
-5. Reopen Mixmate, select a saved local rig or enter the mixer’s private LAN IPv4 address (default `192.168.0.60`), and tap Connect. Allow local network access if asked.
-6. Select an input and check Mixmate follows changes from the original Soundcraft UI. To send a level, check **Enable fader control**, adjust the slider, and release it (keyboard changes also send). The readout follows the desk’s reported level; the slider sends once per committed change. Stereo-linked inputs move together.
-7. Changing inputs, disconnecting or hiding the app disables control. Re-enable it for each selected input. No mute, gain, master, routing or scene controls are provided.
-8. Test closing/reopening and device sleep. Reconnect explicitly if the connection drops. Keep the original UI available.
+1. While online, open the main app. Check the small status bar shows **v0.3.0** and **Offline ready** (or **Updated**) with a verified offline version hash.
+2. Install through Android Chrome's menu → Install app, or iPhone/iPad Safari → Share → Add to Home Screen. Open the installed app once online and verify its offline status there too.
+3. Close the app, turn off mobile data and disconnect internet, but leave Wi-Fi enabled. Join the mixer's external router Wi-Fi and keep the connection if warned there is no internet.
+4. Open MixMate, choose **Connect to desk**, select a saved local rig or enter the private mixer address, then choose **Connect read-only**. Allow local-network access if asked. Nothing connects automatically.
+5. All Mixes follows received output state. Select a verified AUX to browse its observed sources. Missing/unsupported data stays unavailable; source VU is not measured AUX-send contribution.
+6. Disconnect, hiding, navigation and stale sessions clear received values. After sleep or a lost connection, reconnect explicitly. Keep the native UI available.
 
-No Mac or internet server is required during use. All app assets are cached on each device; the device connects directly to the mixer. Revisit online for updates. The offline panel shows the verified **Offline version** and a separate notice when an update is downloaded and waiting. Close all MixMate windows/tabs when finished to let it activate. A later successfully verified version change shows an in-app updated notice; the first version observation silently establishes a baseline. Version history is device-local and optional when storage is unavailable. Clearing browser/site data can remove the offline copy. Cache-first launch keeps the installed version stable during a session; allow the update worker to finish downloading online before closing the app. Missing or damaged cached files are repaired online only when they match that installed version. If a newer deployment prevents repair, close all app windows and reopen online to finish the update; check offline readiness again.
+**Settings / test** opens [rig settings and the preserved connection test](https://johnsherlock.github.io/mixmate/connection-test.html). Create/save local rigs, preferences and backups there. Its separate input fader can change the desk only after you explicitly enable it; the main IEM page has no input-fader writer.
+
+No Mac, account or internet server is required during intended gig use. All runtime assets are local. Actual Android/iOS installation, offline restart and local-network qualification remain open; see compatibility below.
+
+## Updating from the earlier connection-test homepage
+
+Earlier versions used the connection test as the homepage. Version 0.3.0 makes the read-only IEM interface the default and keeps the test at its own URL. The manifest ID, start URL and scope are unchanged. An existing cache can keep the older homepage until an update completes. Open online, let the update download, close all MixMate windows/tabs when finished, then reopen and check **v0.3.0** and verified offline readiness. No automatic reload or worker activation interrupts a session.
+
+The status bar shows the app version plus the verified offline asset hash. First verified observation seeds optional device-local history silently; a later verified change shows **Updated**. **Update waiting** means the downloaded worker is waiting for all MixMate windows/tabs to close. A new entry/asset proof must pass before offline readiness; a generic old-worker ready reply is insufficient. Do not clear browser/origin data or remove another app to obtain the new interface.
 
 ## Local rigs and preferences
 
-The connection test now saves named rigs on this device. **New rig** starts a draft; enter its name/address and choose **Save rig**. Save edits before switching rigs. Names identify your local profiles, not a verified desk identity; profiles can share an address. Selecting/deleting a rig or editing its target address disconnects and disables fader control. Connecting always requires a separate tap on Connect, using the address currently shown.
+**Settings / test** saves named rigs on this device. **New rig** starts a draft; enter its name/address and choose **Save rig**. Save edits before switching rigs. Names identify your local profiles, not a verified desk identity; profiles can share an address. Selecting/deleting a rig or editing its target address disconnects and disables fader control. Connecting always requires a separate tap on Connect, using the address currently shown.
 
 **IEM display preferences** stores orientation and meter visibility for the live IEM view; it does not add simulated meters or change this test's layout. Settings status distinguishes loading/saving/saved from temporary memory-only changes or a conflict with another app window. If storage fails, the connection test still works, but temporary changes disappear when closed. No received mixer names, levels, meters or armed controls are saved. An old saved address migrates only after validation; its legacy key is removed after a durable settings commit. Open **Settings backup & recovery** to download a local JSON backup, preview an import or reset MixMate's local definitions. Save rig first to include uncommitted editor changes. Import/reset disconnects MixMate only after confirmation and never changes the desk. A reset keeps the offline app files, offline version history and other apps' data; empty definitions stay empty after reopening. Temporary settings can be exported too. See the [backup and recovery guide](docs/settings-backup.md).
 
@@ -39,7 +45,7 @@ The manifest now identifies MixMate specifically as `/mixmate/`, correcting an e
 
 Loading offline and connecting to the mixer are independent tests. This app retains its HTTPS origin when installed, while the mixer uses unencrypted `ws://`. Some browsers block this mixed-content/local-network connection. Current Chrome documents local-network permission support for local WebSockets; Android/iOS versions must be tested on actual hardware. **iPhone and iPad compatibility is unverified.** Installation does not bypass browser restrictions. This prototype does not weaken browser security or require mixer configuration changes.
 
-If connection fails, expand diagnostics and copy the result. It includes the browser/device identification, app origin, target IP if reported in an error, and connection events. It contains no mixer state. Nothing is uploaded automatically.
+If the separate connection test fails, expand its diagnostics and copy the result. It includes the browser/device identification, app origin, target IP if reported in an error, and connection events. It contains no mixer state. Nothing is uploaded automatically.
 
 ## Protocol and scope
 
@@ -47,7 +53,7 @@ If connection fails, expand diagnostics and copy the result. It includes the bro
 
 Incoming name/mix/mute/stereoIndex state never triggers a write. No mute, gain, master, routing, scene, clock or network writes exist. The third-party `soundcraft-ui-connection` library supplies the fader-to-dB conversion, not its connection or control facade. Automated write tests use fake sockets and must not move real faders.
 
-The separate [read-only IEM view](https://johnsherlock.github.io/mixmate/iem.html) uses the [IEM receive schema](docs/iem-protocol-contract.md) and its own connection-only transport; it never calls this input writer. Current-firmware corroboration remains open.
+The [main read-only IEM app](https://johnsherlock.github.io/mixmate/) (also available at [the existing IEM URL](https://johnsherlock.github.io/mixmate/iem.html)) uses the [IEM receive schema](docs/iem-protocol-contract.md) and its own connection-only transport; it never calls this input writer. Current-firmware corroboration remains open.
 
 Reference: [community protocol documentation](https://fmalcher.github.io/soundcraft-ui/more/howitworks). Mixmate is an independent experiment, not a Soundcraft product.
 
@@ -71,7 +77,7 @@ Open a PR, request `@codex review`, resolve findings, and merge only once checks
 
 ## IEM destinations
 
-Open the [read-only IEM view](https://johnsherlock.github.io/mixmate/iem.html) or [interactive demo](https://johnsherlock.github.io/mixmate/demo.html). The read-only view starts disconnected with unavailable controls; its explicit session shows received AUX state and separately validated VU2 meters. Demo preserves the accepted simulated interactions and cannot connect to a desk. Its state stays in memory and never becomes live values. Mode labels and links remain visible in compact landscape too. The root connection/input-fader test remains available.
+Open the [main read-only IEM app](https://johnsherlock.github.io/mixmate/) or [interactive demo](https://johnsherlock.github.io/mixmate/demo.html). The read-only view starts disconnected with unavailable controls; its explicit session shows received AUX state and separately validated VU2 meters. Demo preserves the accepted simulated interactions and cannot connect to a desk. Its state stays in memory and never becomes live values. Mode labels and links remain visible in compact landscape too. The separate [Settings / test page](https://johnsherlock.github.io/mixmate/connection-test.html) retains local settings and the explicitly armed input-fader experiment. The existing `iem.html` URL remains a compatible alias of the main app.
 
 Offline readiness verifies the current page's HTML identity and actual module/style assets. An older worker's generic readiness cannot certify these new pages; allow its update to download, close all MixMate windows when finished and reopen online before relying on offline launch. All runtime assets remain bundled locally.
 
@@ -89,6 +95,6 @@ The accepted prototype is the target for the full IEM interface. See the [featur
 
 ## Read-only live IEM
 
-Open [Read-only IEM](https://johnsherlock.github.io/mixmate/iem.html), choose **Connect to desk**, select a saved local rig or enter the private mixer address, then choose **Connect read-only**. No connection starts automatically. Socket-open and received Ui24/AUX state are distinct; missing model/mode/link/name/level fields remain unavailable. All Mixes shows individual observed outputs with link indicators; tap a known AUX to browse all actually observed input/line/player/FX sends. Matrix and unknown-mode slots do not become normal AUX views. Linked readbacks stay separate, including unequal values.
+Open [MixMate](https://johnsherlock.github.io/mixmate/), choose **Connect to desk**, select a saved local rig or enter the private mixer address, then choose **Connect read-only**. No connection starts automatically. Socket-open and received Ui24/AUX state are distinct; missing model/mode/link/name/level fields remain unavailable. All Mixes shows individual observed outputs with link indicators; tap a known AUX to browse all actually observed input/line/player/FX sends. Matrix and unknown-mode slots do not become normal AUX views. Linked readbacks stay separate, including unequal values.
 
-Levels/pan are read-only: levels use the source-backed common Soundcraft conversion, including −∞ for received zero, while pan is explicitly normalized. Meters use the pinned library VU2 profile and display scale, with explicit post-fader tap labels: source-global VU is **not** measured AUX-send contribution. Received zero shows the −80 dB encoded floor; missing and stale (after two seconds) are separate. Matrix/unknown-mode output meters stay unavailable. Current-firmware calibration remains unverified. Groups/editing, EQ, snapshots, recording and native UI access remain unavailable until their later stories; Demo remains the independent clickable simulation. Saved profiles/preferences can be edited in the existing connection test; live mixer state is never saved. Disconnect, address/rig changes, hiding/navigation and connection/timeouts clear received values. Return/reopen requires an explicit Connect. See [session details](docs/iem-live-session.md) and [meter evidence/freshness limits](docs/iem-meter-contract.md).
+Levels/pan are read-only: levels use the source-backed common Soundcraft conversion, including −∞ for received zero, while pan is explicitly normalized. Meters use the pinned library VU2 profile and display scale, with explicit post-fader tap labels: source-global VU is **not** measured AUX-send contribution. Received zero shows the −80 dB encoded floor; missing and stale (after two seconds) are separate. Matrix/unknown-mode output meters stay unavailable. Current-firmware calibration remains unverified. Ordered local group editing is available for a bound saved rig; group browsing/expanded layouts, level controls, EQ, snapshots, recording and native UI access remain for later stories; Demo remains the independent clickable simulation. Saved profiles/preferences/backups are under Settings / test; live mixer state is never saved. Disconnect, address/rig changes, hiding/navigation and connection/timeouts clear received values. Return/reopen requires an explicit Connect. See [session details](docs/iem-live-session.md) and [meter evidence/freshness limits](docs/iem-meter-contract.md).

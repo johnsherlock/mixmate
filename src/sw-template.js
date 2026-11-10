@@ -47,7 +47,7 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (!url.href.startsWith(SCOPE)) return; // Never cache or proxy mixer traffic.
-  const knownEntry = ['index.html', 'iem.html', 'demo.html'].map(path => new URL(path, SCOPE)).find(entry => entry.pathname === url.pathname);
+  const knownEntry = ['index.html', 'iem.html', 'demo.html', 'connection-test.html'].map(path => new URL(path, SCOPE)).find(entry => entry.pathname === url.pathname);
   const target = request.mode === 'navigate'
     ? url.pathname === new URL(SCOPE).pathname ? new URL('index.html', SCOPE).href : knownEntry?.href || url.href
     : url.href;

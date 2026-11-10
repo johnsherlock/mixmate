@@ -1,9 +1,9 @@
 {
   "name": "mixmate",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Offline, Soundcraft Ui24R connection test",
+  "description": "Offline Soundcraft Ui24R IEM monitor",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build && node scripts/copy-preview.js && node scripts/build-sw.js",

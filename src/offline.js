@@ -135,7 +135,28 @@ export function currentEntryRequirements(document) {
         ).href,
     ),
   ];
-  for (const path of ["index.html", "iem.html", "demo.html"])
+  for (const path of ["index.html", "iem.html", "demo.html", "connection-test.html"])
     assets.push(new URL(path, document.baseURI).href);
   return { entry: entry.href, token, assets: [...new Set(assets)] };
+}
+
+// A version notice is optional metadata, never proof of offline readiness.
+export const isOfflineVersion = value => typeof value === 'string' && /^[a-f0-9]{16}$/.test(value);
+export function createOfflineVersionHistory(storage) {
+  const key = 'mixmate-offline-version';
+  let previous;
+  try {
+    const value = storage?.getItem(key);
+    if (isOfflineVersion(value)) previous = value;
+  } catch { /* Storage can be denied; readiness still works independently. */ }
+  return version => {
+    if (!isOfflineVersion(version)) return false;
+    const changed = Boolean(previous && previous !== version);
+    previous = version;
+    try {
+      if (!storage) return false;
+      storage.setItem(key, version);
+      return changed;
+    } catch { return false; } // A failed write must not repeat false update notices.
+  };
 }

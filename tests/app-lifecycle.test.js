@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { APP_VERSION } from '../src/app-version.js';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
@@ -55,7 +56,7 @@ function app({ offline, storage = new Map(), storageAccess, indexedDB, repositor
   const window = Object.assign(new Events(), { isSecureContext: true, confirm: () => confirmDelete });
   const navigator = { storage: storageManager, userAgent: 'fake browser', ...(offline ? { serviceWorker: new Events() } : {}) };
   vm.runInNewContext(source, {
-    document, window, navigator, location: { origin: 'https://example.test' },
+    APP_VERSION, document, window, navigator, location: { origin: 'https://example.test' },
     localStorage: storageAccess || { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     Option: function(text, value) { this.textContent = text; this.value = String(value); },
     MixerConnection: FakeConnection, FaderIntent, faderValueToDB, verifyOfflineCopy: offline, observeOfflineUpdates, currentEntryRequirements, SettingsRepository: FakeSettingsRepository,
@@ -885,4 +886,11 @@ test('an imported null selection remains unbound after preferences and reload de
   assert.equal(reopened.element('rig-name').value, '');
   assert.equal(reopened.repository().snapshot().settings.selectedProfileId, null);
   assert.equal(reopened.sockets.length, 0); await reopened.close();
+});
+
+
+test('secondary connection diagnostics report the bundled app version', async () => {
+  const view = app(); await view.settingsReady();
+  assert.ok(view.element('diagnostics').textContent.startsWith(`MixMate ${APP_VERSION}\n`));
+  await view.close();
 });

@@ -6,14 +6,14 @@ import { createHash, webcrypto } from 'node:crypto';
 
 const template = await readFile(new URL('../src/sw-template.js', import.meta.url), 'utf8');
 const scope = 'https://example.test/mixmate/';
-const bodies = { 'index.html': '<h1>MixMate</h1>', 'iem.html': 'empty read-only surface', 'demo.html': 'isolated simulation', 'assets/app.js': 'local app', 'mockups/iem.html': 'demo only' };
+const bodies = { 'index.html': '<h1>MixMate</h1>', 'iem.html': 'empty read-only surface', 'demo.html': 'isolated simulation', 'connection-test.html': 'explicit input-fader experiment', 'assets/app.js': 'local app', 'mockups/iem.html': 'demo only' };
 const digest = value => createHash('sha256').update(value).digest('hex');
 class MemoryCache {
   entries = new Map();
   async match(key) { return this.entries.get(String(key))?.clone(); }
   async put(key, response) { this.entries.set(String(key), response.clone()); }
 }
-function worker({ version = 'v1', network = bodies, storage = new Map() } = {}) {
+function worker({ version = 'v1', network = bodies, storage = new Map(), assets = Object.keys(bodies) } = {}) {
   const listeners = {}, requests = [];
   const fetch = async request => {
     const url = typeof request === 'string' ? request : request.url;
@@ -38,9 +38,9 @@ function worker({ version = 'v1', network = bodies, storage = new Map() } = {}) 
     async delete(key) { return storage.delete(key); },
   };
   let claimed = false;
-  const source = template.replace('__VERSION__', version).replace('__ASSETS__', JSON.stringify(Object.keys(bodies)))
+  const source = template.replace('__VERSION__', version).replace('__ASSETS__', JSON.stringify(assets))
     .replace('__HASHES__', JSON.stringify(Object.fromEntries(Object.entries(bodies).map(([path, body]) => [path, digest(body)]))))
-    .replace('__ENTRY_PROOFS__', JSON.stringify({ 'index.html': 'a'.repeat(64), 'iem.html': 'b'.repeat(64), 'demo.html': 'c'.repeat(64) }));
+    .replace('__ENTRY_PROOFS__', JSON.stringify({ 'index.html': 'a'.repeat(64), 'iem.html': 'b'.repeat(64), 'demo.html': 'c'.repeat(64), 'connection-test.html': 'd'.repeat(64) }));
   vm.runInNewContext(source, {
     self: { registration: { scope }, clients: { async claim() { claimed = true; } }, addEventListener(type, callback) { listeners[type] = callback; } },
     caches, fetch, URL, Request, Response, crypto: webcrypto,
@@ -155,11 +155,12 @@ test('install rejects HTTP errors, opaque/error responses and followed redirects
 });
 
 
-test('known IEM/demo navigation queries use their own cached entry while unknown routes remain unintercepted', async () => {
+test('known IEM/demo/connection-test navigation queries use their own cached entry while unknown routes remain unintercepted', async () => {
   const network = { ...bodies }, sw = worker({ network }); await sw.event('install');
   for (const path of Object.keys(network)) delete network[path];
   assert.equal(await (await sw.fetch('iem.html?rig=local')).text(), bodies['iem.html']);
   assert.equal(await (await sw.fetch('demo.html?mode=demo')).text(), bodies['demo.html']);
+  assert.equal(await (await sw.fetch('connection-test.html?launch=manual')).text(), bodies['connection-test.html']);
   assert.equal(await sw.fetch('unlisted.html?route=demo'), undefined);
 });
 
@@ -172,4 +173,19 @@ test('entry proof requires the actual HTML identity and every loaded module/styl
   assert.equal((await sw.verify({ ...required, token: 'd'.repeat(64) })).ready, false);
   assert.equal((await sw.verify({ ...required, assets: [...required.assets, new URL('assets/new-build.js', scope).href] })).ready, false);
   assert.equal((await sw.verify({ ...required, entry: 'https://outside.test/index.html' })).ready, false);
+});
+
+
+test('secondary connection entry requires its own proof and cannot borrow the old root identity', async () => {
+  const sw = worker(); await sw.event('install');
+  const required = { entry: new URL('connection-test.html', scope).href, token: 'd'.repeat(64), assets: [new URL('connection-test.html', scope).href, new URL('assets/app.js', scope).href] };
+  assert.equal((await sw.verify(required)).ready, true);
+  assert.equal((await sw.verify({ ...required, token: 'a'.repeat(64) })).ready, false);
+});
+
+
+test('an older three-entry inventory cannot certify the new four-entry default app even while online', async () => {
+  const sw = worker({ assets: Object.keys(bodies).filter(path => path !== 'connection-test.html') }); await sw.event('install');
+  const required = { entry: new URL('index.html', scope).href, token: 'a'.repeat(64), assets: ['index.html', 'iem.html', 'demo.html', 'connection-test.html'].map(path => new URL(path, scope).href) };
+  assert.equal((await sw.verify(required)).ready, false);
 });

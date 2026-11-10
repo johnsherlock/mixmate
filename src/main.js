@@ -1,4 +1,5 @@
 import './style.css';
+import { APP_VERSION } from './app-version.js';
 import { faderValueToDB } from 'soundcraft-ui-connection';
 import { MixerConnection } from './protocol.js';
 import { FaderIntent } from './fader-intent.js';
@@ -19,7 +20,7 @@ const logs = [];
 function log(message) {
   logs.push(`${new Date().toISOString()} ${message}`);
   if (logs.length > 35) logs.shift();
-  $('diagnostics').textContent = [`Mixmate 0.2.0`, navigator.userAgent, `Origin: ${location.origin}`, `Secure context: ${window.isSecureContext}`, ...logs].join('\n');
+  $('diagnostics').textContent = [`MixMate ${APP_VERSION}`, navigator.userAgent, `Origin: ${location.origin}`, `Secure context: ${window.isSecureContext}`, ...logs].join('\n');
 }
 for (let n = 1; n <= 24; n++) $('channel').add(new Option(`Channel ${String(n).padStart(2, '0')}`, n));
 

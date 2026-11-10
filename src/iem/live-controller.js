@@ -114,7 +114,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (rig) { ui.address.value = rig.address; boundProfileId = rig.id; }
     emitContext();
     view.preferences(settings.preferences);
-    ui.settings.textContent = status.mode === 'persistent' ? 'Saved local rig definitions. Edit/save rigs in the connection test.' : 'Local rigs are temporary/unavailable. Manual Connect still works.';
+    ui.settings.textContent = status.mode === 'persistent' ? 'Saved local rigs. Use Settings / test to edit rigs, preferences or backups.' : 'Local rigs are temporary/unavailable. Manual Connect still works.';
   }).catch(() => { if (!destroyed) ui.settings.textContent = 'Could not load local rigs. Manual Connect still works.'; });
   return {
     ready,
