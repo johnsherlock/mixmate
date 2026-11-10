@@ -191,7 +191,11 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onC
       };
   });
   listen("pointercancel", cancel);
-  listen("lostpointercapture", cancel);
+  listen("lostpointercapture", event => {
+    // Normal pointerup releases capture after completing the gesture. Its loss
+    // must preserve tap history for the accepted double-master-cap EQ action.
+    if (gesture?.cap && gesture.id === event.pointerId) cancel();
+  });
   listen("keydown", (event) => {
     if (onBegin && event.target.closest?.('.mm-fader-control')) {
       if (event.key === 'Escape') { event.preventDefault(); cancel(); return; }

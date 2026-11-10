@@ -298,3 +298,29 @@ test('selected armed level preview preserves cap/input/received readout across r
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
   }
 });
+
+
+test('normal capture release preserves demo double-master-cap taps while active capture loss cancels', () => {
+  for (const deferred of [false, true]) {
+    const document = documentFixture(), root = new Node(document), wrap = document.createElement('div'); wrap.className = 'mm-fader-control';
+    const input = document.createElement('input'); input.className = 'mm-vertical'; input.min = '0'; input.max = '1'; input.step = '0.001'; input.value = '0.4'; input.dataset.master = '2';
+    const cap = document.createElement('span'); cap.className = 'mm-fader-hit'; wrap.append(input, cap); root.append(wrap);
+    const losses = [], opened = [];
+    wrap.releasePointerCapture = pointerId => {
+      const lost = () => root.emit('lostpointercapture', { pointerId, target: wrap });
+      if (deferred) losses.push(lost); else lost();
+    };
+    const gestures = installFaderGestures(root, { onMasterEQ: index => opened.push(index) });
+    const event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
+    try {
+      for (let n = 0; n < 2; n++) {
+        root.emit('pointerdown', event(100)); root.emit('pointerup', event(100));
+        for (const loss of losses.splice(0)) loss();
+      }
+      assert.deepEqual(opened, [2]); assert.deepEqual(input.events, undefined);
+      root.emit('pointerdown', event(100)); root.emit('pointermove', event(70));
+      root.emit('lostpointercapture', { pointerId: 1, target: wrap }); root.emit('pointerup', event(70));
+      assert.deepEqual(input.events, ['input']); assert.deepEqual(opened, [2]); // Interrupted drag never commits change/EQ.
+    } finally { gestures.destroy(); }
+  }
+});
