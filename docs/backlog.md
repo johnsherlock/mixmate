@@ -11,7 +11,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Done implementation checkpoint — firmware/physical qualification open |
 | [F04](features/F04.md) | Groups and navigation | 2 | Done implementation — PR #22 merged; physical qualification open in F08 |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Done implementation checkpoint — PRs #23–25 merged; physical F08 open |
-| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | In progress — S01 merged; S02 awaiting review/merge |
+| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | In progress — S02 merged; S03 evidence checkpoint/budget stop |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 2 | Planned |
 
@@ -45,3 +45,7 @@ Library/manual evidence describes candidate semantics; sanitized current-firmwar
 ## F06 current work — 2026-11-11
 
 The user explicitly authorized sequential orchestration of all F06 stories, each through PR/green CI/affirmative exact-head Codex review before merge. F05 is closed as a merged implementation checkpoint (PRs #23–25, closure PR #26/main `0d9b326`; physical F08 remains open). F06-S01 supplies the [normalized pan evidence/typed lease contract](iem-aux-pan-safety.md) and ADR-0005 with 215 passing tests and unchanged 18-asset build `7e24c1d1c7d7292b`. S01 merged in [PR #27](https://github.com/johnsherlock/mixmate/pull/27) at `4857346` after green CI and [affirmative final-head `4ddc5c3` review](https://github.com/johnsherlock/mixmate/pull/27#issuecomment-6791479358). S02 supplies the [qualified normalized pan runtime/UI](iem-pan-controls.md) in app 0.5.0, implementation complete awaiting its own review/merge. S03/S04 AUX EQ remain planned behind this sequential gate. Direction and stereo-source/FX balance are explicitly parked instead of guessed; normalized receive state remains visible. No real desk actuation or new probe is performed by this story.
+
+### F06-S03 budget checkpoint — 2026-11-11
+
+S02 [PR #28](https://github.com/johnsherlock/mixmate/pull/28) merged at `0667753` after236 tests/green CI and [affirmative `45ea7a1` review](https://github.com/johnsherlock/mixmate/pull/28#issuecomment-6792056829); deployment42994585075 published app0.5.0/verified worker `f5c4f38ebcaec5d2`. S03 [read-only evidence and resume plan](iem-aux-eq-contract.md) records verified native GEQ facts, proposed display-centre approximation and parked shelves/actual DSP qualification. It remains **in progress, unfinished** with no EQ code or active permission changes. The user requested a conservative natural budget stop; no percentage is inferred. Commit/push this docs-only checkpoint without a PR. Resume S03 pure implementation/tests/build/PR/affirmative review/merge before S04; S04 remains planned/unstarted. Physical F08 checks stay open.
