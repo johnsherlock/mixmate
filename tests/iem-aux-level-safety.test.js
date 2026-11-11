@@ -137,7 +137,7 @@ test('pinned display conversion distinguishes silence and finite positions; AUX 
   assert.equal(faderValueToDB(0), -Infinity); assert.equal(DBToFaderValue(-200), 0); assert.equal(DBToFaderValue(10), 1);
   assert.ok(Number.isFinite(faderValueToDB(0.5))); assert.equal(faderValueToDB(1), 10);
   const entry = await readFile(new URL('../src/iem/live-entry.js', import.meta.url), 'utf8');
-  assert.match(entry, /createAuxLevelSession/); assert.doesNotMatch(entry, /setInputFader|MixerConnection|fader-intent/);
+  assert.match(entry, /createAuxControlSession/); assert.doesNotMatch(entry, /setInputFader|MixerConnection|fader-intent/);
   const session = await readFile(new URL('../src/iem/live-session.js', import.meta.url), 'utf8');
   assert.doesNotMatch(session, /SETD|aux-level|authorizeNext/);
 });

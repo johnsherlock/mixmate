@@ -109,8 +109,8 @@ test('fresh wrong readback conflicts; malformed receipt journals cannot authoriz
     const item = fixture(); item.guard.arm(target); const next = item.guard.prepare(0.6); item.context.receipts.set('i.2.aux.1.pan', invalid); assert.throws(() => item.guard.authorizeNext(next, 0));
   }
 });
-test('current pan modules are not wired into production session/entry, and unsupported readbacks remain parseable', async () => {
-  for (const file of ['live-entry.js', 'session-core.js', 'live-session.js']) { const text = await readFile(new URL(`../src/iem/${file}`, import.meta.url), 'utf8'); assert.doesNotMatch(text, /aux-pan|createAuxPanGuard|encodeAuxPanCommand/); }
+test('old capability entry points do not export combined pan authority, and unsupported readbacks remain parseable', async () => {
+  for (const file of ['live-session.js', 'aux-level-session.js']) { const text = await readFile(new URL(`../src/iem/${file}`, import.meta.url), 'utf8'); assert.doesNotMatch(text, /createAuxControlSession|createAuxPanGuard|encodeAuxPanCommand/); }
   assert.equal(parseIemStateFrame('3:::SETD^f.0.aux.0.pan^0.25\nSETD^i.2.aux.0.pan^0.75').length, 2);
   assert.throws(() => createAuxPanGuard({}));
 });
