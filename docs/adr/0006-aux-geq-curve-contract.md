@@ -1,0 +1,22 @@
+# ADR-0006: Qualified AUX GEQ requested-curve contract
+
+Date: 2026-11-11
+Status: Accepted implementation direction under ADR-0002/user S03-only resumption; implementation review/merge required.
+
+## Context
+
+F06-S02 is merged/published in PR #28 at `0667753`, app 0.5.0/worker `f5c4f38ebcaec5d2`. Official manual and read-only inspection of the publicly linked firmware establish output GEQ rather than input PEQ. The [evidence contract](../iem-aux-eq-contract.md) pins the archive/image/resource hashes, Qt resource provenance and native functions. Native labels include 32 Hz; actual DSP centres/inter-band response and dedicated shelves remain unverified. The user resumed S03 only after the budget checkpoint; S04 is not authorized to start in this run.
+
+## Decisions
+
+1. S03 adds separate pure receive/protocol, curve and safety modules, with no production imports, socket ownership or UI. Permit only the unwired typed serializer `3:::SETD^a.<0..9>.eq.peak.<0..30>^<value>`, strict finite numeric 0–1, preserving actual serialized precision. Do not borrow pan's three-decimal rounding. Read-only `eq.bypass` parses only 0/1. No bypass/filter/shelf/AFS/preset/input/main/source EQ writer.
+2. The normalized band mapping is `30 × value − 15` dB, inverse `(dB + 15) / 30`, flat .5. Use the 31 native displayed centres from 20 Hz through 20 kHz, explicitly an approximation basis, not calibrated DSP frequencies. The extra 22k native array label is not a 32nd band.
+3. Requested point/draw intents stay distinct and separate from actual received values. Accept bounded data-only ordered log-frequency samples with full exact endpoint coverage; interpolate at displayed centres. Reject incomplete, duplicate, nonfinite or out-of-range requests as a whole rather than silently clipping each band. Never reconstruct three parametric points from native edits or claim additional hardware DSP.
+4. Pure arming requires current owned Ui24/AUX-mode/link metadata and every band plus bypass observation/receipt. Mono output uses 31 paths; a reciprocal non-conflicting pair uses 62 deduplicated paths. Require exactly equal raw linked band/bypass profiles, never average or equalize. Both-bypassed equal profiles can be edited without unbypassing; later UI must show bypass honestly.
+5. Freeze one baseline per explicit gesture. The future owner supplies private generation, context revision, EQ-native revision, processing revision, selected AUX and path receipts. Selected output must match the arm descriptor. Native away/back changes remain invalidating through revisions. Processing changes must be observed conservatively even for unsupported read-only parameters; parsing their semantics or inventing write forms is unnecessary. S04 must demonstrate complete owner-side invalidation coverage before integration, or keep EQ unavailable.
+6. Plans are opaque, ordered, latest-intent and single-use for authorization. Every new prepare attempt supersedes the previous plan. Capture each path's receipt immediately before authorization, not at prepare time. Partial expected echoes after complete dispatch may temporarily produce unequal stereo values; they remain unconfirmed until all paths freshly match. Changed topology, bypass, missing bands, native/context changes or wrong fresh values invalidate/conflict. A match is not an ACK. S04 must combine this with actual successful send accounting, bounded deadline and reentrant stop; authorization count alone cannot prove delivery. No retries, rollback, replay, automatic sends/arming or restored permission.
+7. Reset is a typed all-band .5 plan for selected output(s), preserving bypass/filter/AFS/dynamics/preset state. Do not call native `resetGraphEQ`, which has broader side effects. Shelves/cuts remain parked, not replaced by verified HPF/LPF or a mock filter law.
+
+## Consequences and gates
+
+This supplies a source-backed GEQ-only implementation checkpoint while leaving production behavior unchanged. S04 remains planned after S03's required tests/build, PR, affirmative exact-head Codex review and merge; do not start it automatically after this run. Native/DSP calibration, firmware precision/field completeness/automatic mirroring/fresh echoes, dedicated shelves/filter behavior and physical Android/iOS/sleep/human actuation remain F08 checks. No real mixer probe or actuation, vendor code/assets, firmware installation or temporary inspection dependency is bundled.
