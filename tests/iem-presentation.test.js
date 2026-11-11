@@ -287,12 +287,12 @@ test('selected armed level preview preserves cap/input/received readout across r
     model.control.armed = true; model.control.gestureActive = true; view.render(model); assert.equal(input.disabled, false);
     const targetNode = { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null };
     const pointer = y => ({ target: targetNode, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
-    root.emit('pointerdown', pointer(100)); root.emit('pointermove', pointer(60)); const draft = input.value;
+    root.querySelector('.mm-content').emit('pointerdown', pointer(100)); root.querySelector('.mm-content').emit('pointermove', pointer(60)); const draft = input.value;
     assert.notEqual(Number(draft), 0.4); assert.equal(article.querySelector('.mm-value').textContent, '-20.0 dB');
     view.render({ ...model, sources: [{ ...source, name: 'Renamed' }] }); view.renderMeters(model);
     assert.equal(input.value, draft); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(commits, 0);
     model.control.armed = false; model.control.gestureActive = false; view.render(model);
-    assert.equal(input.disabled, true); assert.equal(Number(input.value), 0.4); root.emit('pointerup', pointer(60)); assert.equal(commits, 0);
+    assert.equal(input.disabled, true); assert.equal(Number(input.value), 0.4); root.querySelector('.mm-content').emit('pointerup', pointer(60)); assert.equal(commits, 0);
   } finally {
     view?.destroy();
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
@@ -345,7 +345,7 @@ test('group controls keep navigation separate, show only relative delta without 
     const name = article.querySelector('.mm-strip-name'), select = article.querySelector('.mm-group-level-select');
     root.emit('click', { target: { closest: selector => selector === 'button' ? name : null } }); root.emit('click', { target: { closest: selector => selector === 'button' ? select : null } }); assert.deepEqual(actions, ['nav:band', 'level:band']);
     const wrap = input.parentElement, event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
-    root.emit('pointerdown', event(100)); root.emit('pointermove', event(60)); assert.equal(Number(input.value), 0.523456); assert.match(article.querySelector('.mm-value').textContent, /\+0.52/);
+    root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60)); assert.equal(Number(input.value), 0.523456); assert.match(article.querySelector('.mm-value').textContent, /\+0.52/);
     bank.scrollLeft = 87; control.previewDelta = 0.523456; view.render(model); view.renderMeters(model);
     assert.equal(bank.children[0], article); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(bank.scrollLeft, 87);
     control.armed = false; control.gestureActive = false; view.render(model); assert.equal(Number(input.value), 0); assert.equal(input.disabled, true); assert.equal(article.querySelector('.mm-meter-pair'), undefined);

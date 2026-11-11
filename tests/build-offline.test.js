@@ -84,7 +84,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.match(rootHTML, /connect-src ws:/);
     const metadata = JSON.parse(await readFile('package.json', 'utf8'));
     const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
-    assert.equal(metadata.version, '0.4.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
+    assert.equal(metadata.version, '0.5.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
     assert.ok(live.includes(metadata.version) && connection.includes(metadata.version));
     assert.equal(manifest.name, 'MixMate — IEM mixer'); assert.equal(manifest.id, 'mixmate/'); assert.equal(manifest.start_url, './'); assert.equal(manifest.scope, './');
     const shell = await readFile('src/iem/shell.html', 'utf8');
@@ -107,6 +107,9 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.match(transport, /createReadOnlySession\(options\) \{ return createSession\(false, options\)/);
     assert.match(transport, /createAuxLevelSession\(options\) \{ return createSession\(true, options\)/);
     assert.doesNotMatch(transport, /export function createSession/);
+    assert.match(transport, /createAuxControlSession\(options\) \{ return createSession\(true, options, true\)/);
+    assert.ok(live.includes('selectPanTarget') && live.includes('commitPanGesture'));
+    assert.ok(!demo.includes('selectPanTarget') && !connection.includes('selectPanTarget'));
     const generated = await readFile(join(directory, 'sw.js'), 'utf8');
     assert.ok(!/__VERSION__|__ASSETS__|__HASHES__|__ENTRY_PROOFS__/.test(generated));
     assert.match(generated, /cache: 'reload'/);

@@ -1,3 +1,4 @@
+import { restoreDialogFocus } from "./dialog-owner.js";
 import { sourceLabel } from "./live-provider.js";
 
 export function createGroupEditorUI(root, connectionUI) {
@@ -45,7 +46,7 @@ export function createGroupEditorUI(root, connectionUI) {
     focusBefore,
     active = false,
     busy = false,
-    rigName = "";
+    rigName = "", dialogLease = null, replacing = false;
   const nodes = new Map(),
     listeners = [];
   const listen = (target, type, callback) => {
@@ -57,14 +58,14 @@ export function createGroupEditorUI(root, connectionUI) {
     if (!openButton.disabled) handlers?.open();
   });
   listen(cancel, "click", () => handlers?.close());
-  listen(closeButton, "click", () => {
-    if (active) handlers?.close();
+  listen(closeButton, "click", (event) => {
+    if (active && (!connectionUI.dialogOwner || connectionUI.dialogOwner.owns(dialogLease))) { event.stopImmediatePropagation?.(); handlers?.close(); }
   });
   listen(clear, "click", () => handlers?.clear());
   listen(save, "click", () => handlers?.save());
   listen(root, "keydown", (event) => {
-    if (active && event.key === "Escape") {
-      event.preventDefault();
+    if (active && (!connectionUI.dialogOwner || connectionUI.dialogOwner.owns(dialogLease)) && event.key === "Escape") {
+      event.preventDefault(); event.stopImmediatePropagation?.();
       handlers?.close();
     }
   });
@@ -91,10 +92,16 @@ export function createGroupEditorUI(root, connectionUI) {
       handlers = value;
     },
     show(profileName) {
-      connectionUI.close();
+      if (connectionUI.dialogOwner && !connectionUI.dialogOwner.owns(dialogLease)) {
+        const next = connectionUI.dialogOwner.claim('groups', reason => {
+          replacing = reason?.replaced === true;
+          handlers?.close(); replacing = false;
+        });
+        if (!next) return; dialogLease = next;
+      } else if (!connectionUI.dialogOwner) connectionUI.close();
       focusBefore = document.activeElement;
       active = true;
-      dialog.classList.add("mm-group-dialog");
+      dialog.classList.remove("mm-pan-dialog"); dialog.classList.add("mm-group-dialog");
       $("#mm-dialog-title").textContent = "Edit groups";
       rigName = profileName;
       rigLabel.textContent = `Local rig: ${profileName}. Definitions only; no mixer changes.`;
@@ -109,10 +116,11 @@ export function createGroupEditorUI(root, connectionUI) {
     hide() {
       if (!active) return;
       active = false;
-      layer.hidden = true;
+      connectionUI.dialogOwner?.release(dialogLease);
+      if (!connectionUI.dialogOwner?.active()) layer.hidden = true;
       name.remove();
       dialog.classList.remove("mm-group-dialog");
-      focusBefore?.focus?.();
+      if (!replacing && !connectionUI.dialogOwner?.active()) restoreDialogFocus(focusBefore);
     },
     choices(groups, selectedID) {
       picks.replaceChildren();

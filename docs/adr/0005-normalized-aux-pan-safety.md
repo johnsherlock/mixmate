@@ -21,3 +21,7 @@ F05 implementation is merged in PRs #23–25 and its closure PR #26/main `0d9b32
 ## Evidence and consequences
 
 The [exact contract](../iem-aux-pan-safety.md) records pinned source/test locations, maintainer/manual evidence and unavailable native observation. AGENTS.md distinguishes permitted pure serializer forms from still-unwired pan runtime. Narrow verified mono-source behavior can proceed sequentially while unsupported semantics remain explicit. EQ verification remains S03 and must use actual AUX output processing evidence rather than input PEQ assumptions.
+
+## S02 runtime integration — 2026-11-11
+
+S01 merged in PR #27 at `4857346` after affirmative final-head `4ddc5c3` review. S02 implements decision 7 through a new literal combined `createAuxControlSession`; the original read-only and level/group-only factories cannot be upgraded through options. One private union context owns level/group/pan permissions and operations. Exclusive dialog leases and separately scoped bank/modal gesture roots prevent stale owner or duplicate input handling. Numeric presets are deliberate opaque gestures with actual three-decimal wire expectations; raw per-output received precision remains separate. Legacy `disarmLevel`/`invalidateLevelContext` remain broad safety cancellation aliases; level begin/preview/commit/cancel methods reject a pan gesture. See the [runtime contract](../iem-pan-controls.md). This adds no direction/balance/EQ claim or real-device qualification.

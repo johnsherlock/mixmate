@@ -7,7 +7,7 @@ import { outputColour, overviewColour } from './theme.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false;
@@ -61,7 +61,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     }
     shortcuts.hidden = !selected;
   }
-  const gestures = installFaderGestures(root, {
+  const gestures = installFaderGestures(content, {
     onBegin(input) {
       const token = onBeginLevel();
       if (token) preview = { input, token };
@@ -116,9 +116,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     });
     const meterCaption = element('span', 'mm-live-meter-caption'), meterLabel = element('span', 'mm-live-meter-label'), meterStatus = element('span', 'mm-live-meter-status');
     meterCaption.append(meterLabel, meterStatus);
-    const pan = element('span', 'mm-pan-button'), state = element('span', 'mm-live-strip-state');
+    const pan = element(control?.panCapable && kind === 'source' ? 'button' : 'span', 'mm-pan-button'), state = element('span', 'mm-live-strip-state');
+    let panReadout;
+    if (control?.panCapable && kind === 'source') {
+      panReadout = element('span', 'mm-pan-readout'); pan.append(element('span', 'mm-pan-short', 'Pan'), panReadout);
+      article.dataset.panBrowse = 'true';
+    }
     space.append(scale, input, meter); article.append(head, output, space, pan, state, meterCaption);
-    return { kind, article, name, description, output, input, pan, state, meter, tracks, meterCaption, meterLabel, meterStatus };
+    return { kind, article, name, description, output, input, pan, panReadout, state, meter, tracks, meterCaption, meterLabel, meterStatus };
   }
   function updateMeter(strip, model) {
     if (strip.kind === 'group') return;
@@ -177,8 +182,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         strip.state.textContent = chosen ? control.reason || control.status : model.stateText;
         continue;
       }
-      strip.pan.textContent = model.panText ?? 'Pan unavailable'; strip.state.textContent = model.stateText ?? '';
-      strip.pan.setAttribute('title', strip.pan.textContent); strip.state.setAttribute('title', strip.state.textContent);
+      (strip.panReadout || strip.pan).textContent = model.panText ?? 'Pan unavailable';
+      if (control?.panCapable && model.sourceId && model.auxIndex !== undefined) { strip.pan.type = 'button'; strip.pan.disabled = false; strip.pan.dataset.openPan = model.sourceId; strip.pan.dataset.panAux = String(model.auxIndex); strip.pan.setAttribute('aria-label', `Inspect normalized AUX pan for ${model.name}`); strip.pan.setAttribute('aria-haspopup', 'dialog'); }
+      else if (strip.panReadout) { strip.pan.disabled = true; delete strip.pan.dataset.openPan; delete strip.pan.dataset.panAux; strip.pan.setAttribute('aria-label', 'Pan unavailable for unresolved member'); } strip.state.textContent = model.stateText ?? '';
+      strip.pan.setAttribute('title', model.panText ?? 'Pan unavailable'); strip.state.setAttribute('title', strip.state.textContent);
       strip.name.setAttribute('title', model.name);
       const levelTarget = model.sourceId && model.auxIndex !== undefined ? { kind: 'send', auxIndex: model.auxIndex, sourceId: model.sourceId }
         : model.auxIndex !== undefined ? { kind: 'master', auxIndex: model.auxIndex } : null;
@@ -203,11 +210,12 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if (!control?.gestureActive && preview) { preview = null; gestures.cancel(); }
     const targetLabel = control?.selected ? `${control.selected.kind === 'group' ? `Group ${control.groupName || control.selected.groupId}` : control.selected.kind === 'master' ? 'Master' : sourceLabel(control.selected.sourceId)} → AUX ${control.selected.auxIndex + 1}` : 'no selected level';
     enableLevel.hidden = !control;
-    enableLevel.disabled = !control?.selected || !control.eligible || control.pending;
-    enableLevel.textContent = control?.armed ? 'Disable level' : 'Enable level';
-    enableLevel.setAttribute('aria-label', `${control?.armed ? 'Disable' : 'Enable'} level for ${targetLabel}`);
+    const levelArmed = control?.armed && control.operation !== 'pan';
+    enableLevel.disabled = !control?.selected || control.operation === 'pan' || !control.eligible || control.pending;
+    enableLevel.textContent = levelArmed ? 'Disable level' : 'Enable level';
+    enableLevel.setAttribute('aria-label', `${levelArmed ? 'Disable' : 'Enable'} level for ${targetLabel}`);
     enableLevel.setAttribute('title', `${targetLabel}: ${control?.reason || control?.status || ''}`);
-    $('.mm-mode-label').textContent = control ? `LIVE IEM · LEVELS ${control.pending ? 'PENDING' : control.armed ? 'ENABLED' : 'OFF'}` : 'READ-ONLY IEM';
+    $('.mm-mode-label').textContent = control ? `LIVE IEM · ${control.operation === 'pan' ? 'PAN' : control.panCapable && !control.selected ? 'CONTROLS' : 'LEVELS'} ${control.pending ? 'PENDING' : control.armed ? 'ENABLED' : 'OFF'}` : 'READ-ONLY IEM';
     $('.mm-dirty').textContent = control ? control.status : 'Read-only · no parameter writes';
     $('.mm-dirty').setAttribute('title', control?.status || 'Read-only');
     const terminal = ['error', 'closed', 'timeout', 'blocked', 'unsupported', 'invalid'].includes(model.connectionPhase);
@@ -240,6 +248,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   function click(event) {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
+    if (button.dataset.openPan !== undefined) { gestures.cancel(); onOpenPan({ sourceId: button.dataset.openPan, auxIndex: Number(button.dataset.panAux) }); }
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
     if (control && levelTargets.has(button)) { gestures.cancel(); onSelectLevel(levelTargets.get(button)); }
     if (button === enableLevel) { gestures.cancel(); onToggleLevel(); }

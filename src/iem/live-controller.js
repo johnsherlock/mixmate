@@ -1,7 +1,8 @@
+import { restoreDialogFocus } from './dialog-owner.js';
 import { projectLiveState } from './live-provider.js';
 import { projectGroupNavigation, resolveGroupNavigation } from './group-navigation.js';
 
-export function createLiveConnectionUI(root, { levels = false } = {}) {
+export function createLiveConnectionUI(root, { levels = false, pan = false, dialogOwner } = {}) {
   const document = root.ownerDocument, $ = selector => root.querySelector(selector);
   const make = (tag, text = '') => { const node = document.createElement(tag); node.textContent = text; return node; };
   const open = make('button', 'Connect to desk'), disconnect = make('button', 'Disconnect');
@@ -15,24 +16,36 @@ export function createLiveConnectionUI(root, { levels = false } = {}) {
   for (const value of ['192.168.0.60', '192.168.1.60']) { const option = make('option'); option.value = value; known.append(option); }
   const profileLabel = make('label', 'Saved local rig'), addressLabel = make('label', 'Mixer private IPv4 address');
   profileLabel.append(profile); addressLabel.append(address); connect.type = 'submit';
-  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? 'Levels start off. Select a level and enable it explicitly; only release applies a change.' : 'Only received state is shown. No mixer parameter writes.');
+  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? pan ? 'Controls start off. Select and enable a level or normalized pan explicitly; only release applies a change.' : 'Levels start off. Select a level and enable it explicitly; only release applies a change.' : 'Only received state is shown. No mixer parameter writes.');
   settings.className = note.className = 'mm-caption'; note.setAttribute('role', 'status');
   form.append(profileLabel, addressLabel, known, settings, connect, note);
   $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';
   const closeButton = $('.mm-dialog-head button'); closeButton.disabled = false;
   const openButtons = [open, $('.mm-brand'), $('.mm-desk')];
   for (const button of openButtons) button.disabled = false;
-  let focusBefore, beforeOpen = () => {}, connectionVisible = false;
+  let focusBefore, beforeOpen = () => {}, connectionVisible = false, dialogLease = null;
   const show = () => {
-    beforeOpen(); connectionVisible = true; focusBefore = document.activeElement;
-    $('.mm-dialog').classList.remove('mm-group-dialog');
+    if (dialogOwner && !dialogOwner.owns(dialogLease)) {
+      const next = dialogOwner.claim('connection', reason => closeFor(next, reason, true));
+      if (!next) return; dialogLease = next;
+    }
+    beforeOpen();
+    if (dialogOwner && !dialogOwner.owns(dialogLease)) return;
+    connectionVisible = true; focusBefore = document.activeElement;
+    $('.mm-dialog').classList.remove('mm-group-dialog', 'mm-pan-dialog');
     $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';
     layer.hidden = false; address.focus();
   };
-  const close = () => { if (!connectionVisible) return; connectionVisible = false; layer.hidden = true; focusBefore?.focus?.(); };
+  const closeFor = (lease, reason = {}, fromOwner = false) => {
+    if (!connectionVisible || lease !== dialogLease || dialogOwner && !fromOwner && !dialogOwner.owns(lease)) return;
+    connectionVisible = false; dialogOwner?.release(lease);
+    if (!dialogOwner?.active()) layer.hidden = true;
+    if (!reason.replaced && !dialogOwner?.active()) restoreDialogFocus(focusBefore);
+  };
+  const close = () => closeFor(dialogLease);
   const onKey = event => {
     if (layer.hidden) return;
-    if (event.key === 'Escape') close();
+    if (event.key === 'Escape' && connectionVisible && (!dialogOwner || dialogOwner.owns(dialogLease))) { event.preventDefault(); event.stopImmediatePropagation?.(); close(); return; }
     if (event.key === 'Tab') {
       const nodes = [...layer.querySelectorAll('button,input,select')].filter(node => !node.disabled), first = nodes[0], last = nodes.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
@@ -41,9 +54,10 @@ export function createLiveConnectionUI(root, { levels = false } = {}) {
   };
   root.addEventListener('keydown', onKey);
   for (const button of openButtons) button.addEventListener('click', show);
-  closeButton.addEventListener('click', close);
+  const onCloseClick = event => { if (connectionVisible && (!dialogOwner || dialogOwner.owns(dialogLease))) { event.stopImmediatePropagation?.(); close(); } };
+  closeButton.addEventListener('click', onCloseClick);
   return {
-    form, profile, address, connect, disconnect, settings, note, close, beforeOpen(callback) { beforeOpen = callback; },
+    form, profile, address, connect, disconnect, settings, note, close, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
     navigation: [...root.querySelectorAll('.mm-entry-links a')],
     profiles(profiles, selectedId = '') {
       const option = make('option', 'Manual address — not a saved rig'); option.value = '';
@@ -51,7 +65,7 @@ export function createLiveConnectionUI(root, { levels = false } = {}) {
       for (const rig of profiles) { const option = make('option', rig.name); option.value = rig.id; profile.append(option); }
       profile.value = selectedId;
     },
-    destroy() { root.removeEventListener('keydown', onKey); for (const button of openButtons) button.removeEventListener('click', show); closeButton.removeEventListener('click', close); },
+    destroy() { root.removeEventListener('keydown', onKey); for (const button of openButtons) button.removeEventListener('click', show); closeButton.removeEventListener('click', onCloseClick); },
   };
 }
 
