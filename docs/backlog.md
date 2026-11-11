@@ -11,7 +11,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 | [F03](features/F03.md) | Read-only live IEM view | 4 | Done implementation checkpoint — firmware/physical qualification open |
 | [F04](features/F04.md) | Groups and navigation | 2 | Done implementation — PR #22 merged; physical qualification open in F08 |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Done implementation checkpoint — PRs #23–25 merged; physical F08 open |
-| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | Planned |
+| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | In progress — S01 awaiting review/merge |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 2 | Planned |
 
@@ -40,3 +40,8 @@ Library/manual evidence describes candidate semantics; sanitized current-firmwar
 ## Priority dependency exception — 2026-11-10
 
 [F01-S04](stories/F01-S04.md) / [ADR-0003](adr/0003-default-iem-entrypoint.md) corrects the root/PWA default entry before resuming F04-S02. The user's screenshot exposed a delivery gap: IEM existed separately, while the advertised root remained the test. Work is isolated from reviewed main `61944be`; unfinished group navigation is preserved at its separate local checkpoint `6a10e55` and is not included. F01-S04 subsequently merged in [PR #21](https://github.com/johnsherlock/mixmate/pull/21) at `96ee135` after 147 tests, a successful 17-asset build and affirmative Codex review of final head `9abaadc`. Its deployment succeeded with offline version `9a59683dde643264`. F04-S02 resumed/rebased as a separate story and is now done implementation in [PR #22](https://github.com/johnsherlock/mixmate/pull/22): group shortcuts/expanded banks and guarded local navigation passed 157 tests/build and [affirmative Codex review](https://github.com/johnsherlock/mixmate/pull/22#issuecomment-6755354185) of implementation head `5c036e2`. It subsequently merged at `de72fc7` after green CI and affirmative final-head review of `17a102e`. Physical qualification stays open in F08-S01; the user cannot test it now.
+
+
+## F06 current work — 2026-11-11
+
+The user explicitly authorized sequential orchestration of all F06 stories, each through PR/green CI/affirmative exact-head Codex review before merge. F05 is closed as a merged implementation checkpoint (PRs #23–25, closure PR #26/main `0d9b326`; physical F08 remains open). F06-S01 supplies the [normalized pan evidence/typed lease contract](iem-aux-pan-safety.md) and ADR-0005 with 215 passing tests and unchanged 18-asset build `7e24c1d1c7d7292b`, pending its review/merge. Production pan remains unwired; S02 runtime/UI and S03/S04 AUX EQ remain planned. Direction and stereo-source/FX balance are explicitly parked instead of guessed; normalized receive state remains visible. No real desk actuation or new probe is performed by this story.
