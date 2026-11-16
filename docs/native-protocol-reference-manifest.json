@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "reference": "F09-S01",
+  "acquiredUtcDate": "2026-11-16",
+  "privateDirectory": "output/native-reference/2026-11-16",
+  "sourceVersion": "3.5.8328",
+  "mixerGitRevision": "097f10a732b5e1e43c45e80d9b58ee4acb3db4c7",
+  "method": "Static ZIP/extfs/Qt resource inspection only; no installation, mount or execution",
+  "tools": {
+    "python": "3.9.6",
+    "dissect.extfs": "3.14",
+    "dissect.cstruct": "4.6",
+    "dissect.util": "3.22"
+  },
+  "files": [
+    {
+      "file": "uiupdate-k-3.5.8328-ui24v3.zip",
+      "origin": "https://adn.harmanpro.com/softwares/wares/2299_1720650520/uiupdate-k-3.5.8328-ui24v3.zip",
+      "bytes": 181615932,
+      "sha256": "16f3b23a42cdc1d882f8b8a60e146b4b58313564f7669a9f63de78f5e3626298"
+    },
+    {
+      "file": "200-mixer.img",
+      "origin": "zip:200-mixer.img",
+      "bytes": 21389312,
+      "sha256": "593d5a9c3d47dab3247689ece55c3e38247a27f19d24802e26ca6c148899e4d4"
+    },
+    {
+      "file": "umixsrv",
+      "origin": "200-mixer.img:/mixer/umixsrv",
+      "bytes": 19559892,
+      "sha256": "06d2b63736fee0c0bac92385e7734f37064610f2deb20aafb758dade40a444cc"
+    },
+    {
+      "file": "mixer.version",
+      "origin": "200-mixer.img:/etc/mixer.version",
+      "bytes": 8,
+      "sha256": "49f4c3b1cc886d3b967c34e220439ee82f64ecdc9ebce8d081c30249e1ef78cc"
+    },
+    {
+      "file": "mixer-3.5.8328.html",
+      "origin": "umixsrv:Qt:/webapp/mixer.html",
+      "bytes": 1292140,
+      "sha256": "9279507d99832442b4c1544594348e7647887a52910267d87457171700304bf6"
+    }
+  ],
+  "qtResource": {
+    "resourceNameTableByteOffset": 18964800,
+    "structureTableByteOffset": 18964872,
+    "mixerNameOffset": 18,
+    "mixerDataOffset": 0,
+    "dataByteOffset": 18429536,
+    "compressedBlockBytes": 322559,
+    "uncompressedLengthByteOffset": 18429540,
+    "zlibByteOffset": 18429544,
+    "zlibBytes": 322555,
+    "uncompressedBytes": 1292140
+  },
+  "locators": {
+    "unit": "zero-based UTF-8 decoded character offset, preserving original CR/LF; unformatted mixer HTML",
+    "socketIoVersion": 150368,
+    "packetEncoder": 158212,
+    "heartbeat": 161234,
+    "prepareUrl": 161484,
+    "handshake": 162948,
+    "sessionIdAssignment": 164718,
+    "namespaceSend": 169075,
+    "websocketOpen": 170919,
+    "windowOnload": 292090,
+    "init": 294177,
+    "setValue": 474311,
+    "setValueX": 477642,
+    "putValue": 477776,
+    "alive": 530837,
+    "onDataINIT": 533779,
+    "netInit": 557582,
+    "netStart": 557766,
+    "ioConnect": 558066,
+    "sendMessage": 559030,
+    "sendTimeNetwork": 559567,
+    "receiveMessage2": 559782,
+    "receiveMessage": 560232
+  },
+  "servedFirmware": {
+    "version": "3.0.7865-ui24",
+    "origin": "http://192.168.0.60/mixer.html",
+    "externalScriptObserved": "http://192.168.0.60/js/initparams.js",
+    "fullBlob": "unavailable",
+    "sha256": null,
+    "reason": "Known mixer.html GET: sandbox connect failure, one escalated connect timeout after 3.005s; no response body. No further mixer requests.",
+    "evidence": "f08-s03-native-transport-evidence.md"
+  }
+}

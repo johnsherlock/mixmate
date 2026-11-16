@@ -14,7 +14,7 @@ Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | New priority foundation; all unstarted |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01 reference/decision checkpoint; S02–S04 unstarted |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -22,7 +22,7 @@ Feature numbers do not determine execution priority. Previously merged implement
 
 | Order | Story / gate | Dependency and purpose |
 | --- | --- | --- |
-| 1 | [F09-S01](stories/F09-S01.md) | Merged F08-S03 evidence → native protocol reference and adapter decision |
+| 1 | [F09-S01](stories/F09-S01.md) | [Reference/adapter decision checkpoint](iem-native-protocol-reference.md); exact served-source gap parked; delivery in containing PR/history |
 | 2 | [F09-S02](stories/F09-S02.md) | S01 → reviewed state/confirmation ADR and pure model |
 | 3 | [F09-S03](stories/F09-S03.md) | S02 → integrate existing level/group/pan model and coherent UI |
 | 4 | [F09-S04](stories/F09-S04.md) | S03 → separately authorized targeted firmware validation; explicit applicable EQ readiness decision |
@@ -38,7 +38,7 @@ This is the intended sequence, not a hardware waiver: if F09-S04 is blocked, par
 
 ## Current capability and evidence
 
-The live IEM owns its WebSocket/session. `soundcraft-ui-connection` 7.1.0 currently supplies imported display converters; related meter/relative math and protocol references are distinct from instantiating its connection/control facade. A library replacement is not an established remedy.
+The live IEM owns its WebSocket/session. `soundcraft-ui-connection` 7.1.0 currently supplies imported display converters; related meter/relative math and protocol references are distinct from instantiating its connection/control facade. [ADR-0007](adr/0007-owned-protocol-adapter.md) selects owned transport plus existing helper-only retention; the [versioned reference/manifest](iem-native-protocol-reference.md) indexes portable official source and explicitly parks unavailable served-source provenance. A library replacement is not an established remedy.
 
 Reviewed runtime capability is AUX master/send levels, relative groups and eligible normalized mono-source pan into verified reciprocal stereo AUX pairs. Current confirmation requires fresh own per-path receipt within 2.5 seconds; intent/send return is not received state or a correlated ACK. Read-only factories remain connection-only. GEQ serializers/curve/leases are pure and **unwired**; shelves/filters are unverified. Snapshots/recording remain unwired. [AGENTS](../AGENTS.md) and linked contracts define authority.
 
