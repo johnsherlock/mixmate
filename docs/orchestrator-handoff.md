@@ -1,10 +1,19 @@
 # Orchestrator handoff — 2026-11-16
 
-Read [AGENTS](../AGENTS.md), [backlog](backlog.md), assigned story/feature and relevant contracts first. Baseline for this replan is main `28bb2875ba62fae7f98da279ed79f06461f1318d` (PR #34). Recheck Git status, current HEAD and GitHub before action. Preserve the unrelated untracked `docs/iem-integration-handoff.md`; it is an early historical baseline, not current authority, and is excluded from this delivery.
+Read [AGENTS](../AGENTS.md), [backlog](backlog.md), assigned story/feature and relevant contracts first. Lifecycle-run baseline is main `ce9d0db95244797654e47ed3819e327c823503d0` (planning PR #35). Recheck Git status, current HEAD and GitHub before action. Preserve the unrelated untracked `docs/iem-integration-handoff.md`; it is an early historical baseline, not current authority, and is excluded from this delivery.
 
 ## Current delivery and next work
 
-The user requested stories, reprioritization and a status summary. This turn is planning/documentation delivery only; stop after its reviewed delivery and summary without automatically starting implementation or hardware work. Nine features now contain 37 stories; all seven new stories are planned/unstarted.
+The user authorized a lifecycle-rule delivery followed by **F09-S01 and F09-S02**, sequentially and autonomously through review/merge. This supersedes the earlier planning-only stop. **Do not begin F09-S03.** End after S02 with a reviewed repository handoff; its implementation deserves a fresh orchestrator context. Nine features contain 37 stories; the seven new stories are currently planned/unstarted.
+
+| Batch item | Current checkpoint |
+| --- | --- |
+| Lifecycle rules | Prepared in this documentation PR; [canonical rules](orchestration.md) |
+| F09-S01 | Authorized; next after lifecycle rules merge |
+| F09-S02 | Authorized after S01 merge |
+| F09-S03 | Excluded; next run only |
+
+At each story boundary record readiness/reliability and continue within scope unless a real blocker or early handoff is necessary. Current telemetry sampled from the root rollout on 2026-11-16: model `gpt-6.1-sol`, effort medium, 279,448 last-request input tokens (278,400 cached), exposed context capacity 475,000; no recorded compaction event. This is a sampled context observation, not account allowance. No reliability blocker is currently identified. Re-evaluate after each story; do not infer exact remaining capacity from this sample.
 
 The next intended sequence is **F09-S01 → S02 → S03 → S04 → F04-S03 → S04 → F02-S04 → F06-S04 → F07-S01–S04 → F08-S01 → S02**. F09 establishes native evidence/adapter decision, reviewed state model, integration for existing controls, then targeted firmware validation and explicit EQ readiness. UX follow-ups separately cover logical stereo mixes, compact detail and saved-rig/persistence feedback. Numeric feature order is not priority. See the [dependency table](backlog.md).
 
@@ -22,7 +31,7 @@ Live IEM owns its WebSocket/session. Community `soundcraft-ui-connection` 7.1.0 
 
 Current contracts remain authoritative until a deliberate reviewed integration: AUX master/send levels, relative groups and qualified normalized mono-source pan only through private owners/typed guards/opaque gestures. Fresh own per-path receipt within 2.5 seconds is still the confirmation rule. Send return and intent are not received state or correlated ACK. No observer-socket authority, retry, rollback or replay is implied. Preserve explicit connect/arm, cancellation/disarm, current generation, actual stereo sides and unequal-linked read-only behavior. Read-only factories remain connection-only.
 
-GEQ serializers/curves/leases remain pure/unwired; no shelf/filter/bypass/AFS/preset writer, no verified DSP-centre claim. Snapshots/recording remain unwired. ADR-0002 already authorizes named feature classes, not unverified exact commands or current hardware actuation. Recent diagnostic SAVE prohibition remains applicable to those sessions; F07 future scope is not erased. Record existing applicable bounded user authorization and request only missing/new scope for future live checks. This replan grants no hardware permission.
+GEQ serializers/curves/leases remain pure/unwired; no shelf/filter/bypass/AFS/preset writer, no verified DSP-centre claim. Snapshots/recording remain unwired. ADR-0002 already authorizes named feature classes, not unverified exact commands or current hardware actuation. Recent diagnostic SAVE prohibition remains applicable to those sessions; F07 future scope is not erased. Record existing applicable bounded user authorization and request only missing/new scope for future live checks. This batch adds no parameter-changing hardware permission; source acquisition is read-only and existing applicable diagnostic bounds must be checked before any live experiment.
 
 Settings/groups remain device/origin-local stable-profile definitions, never live-state backups; manual same-IP connection cannot bind a profile. Preserve unresolved IDs, commit semantics and temporary/conflict feedback. Keep local runtime assets and `/mixmate/` offline scope; do not hand-edit dist or force active-session reloads. Preserve keyed controls, accepted touch gestures, portrait three columns and compact landscape travel.
 
@@ -30,4 +39,4 @@ F08-S01 remains open across supported Android/iOS installation, current-entry/as
 
 ## Sequential workflow
 
-Use one fresh-context Sol/medium story agent at a time with concise repository brief, current baseline, scope, contracts, acceptance, validation and stop conditions; no further delegation or sidebar chats. One `codex/` branch/PR per story; do not start the next implementation while review is outstanding. Run `npm ci`, `npm test`, `npm run build` (CI Node24; local Node26.13.1 must be disclosed), request `@codex review`, resolve findings and obtain affirmative review covering final changes plus passing required checks. Confirm GitHub merge before recording merged status. Keep story/feature/backlog and [follow-ups](user-follow-up.md) current. Existing evidence baseline is 256 passing tests, app0.5.0, 18 assets, worker `f5c4f38ebcaec5d2`; rerun required checks for delivery and report actual results.
+Follow the canonical [orchestrator lifecycle](orchestration.md) and AGENTS. One fresh-context Sol Medium story agent and one reviewed PR at a time; automatically continue only through the authorized S01/S02 batch. Check story/feature/backlog and context reliability at each boundary. CI targets Node24; local Node26.13.1 must be disclosed. Current verification baseline: 256 tests, app0.5.0, 18 assets, worker `f5c4f38ebcaec5d2`. At the end verify Git/PR/CI state, commit the handoff through review, report new-session readiness, then stop. No desktop chat is created or responsibility transferred by this repository update.

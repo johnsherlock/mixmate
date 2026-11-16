@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. This delivery reprioritizes documentation only: no implementation or hardware action automatically starts.
+Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The active authorized batch is recorded in the handoff; backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -60,7 +60,7 @@ Earlier implementation receipts remain in individual stories and Git history (F0
 
 ## Orchestration and release gates
 
-Use one sequential fresh-context Sol/medium story agent with a concise authoritative repository brief; no further delegation or sidebar chats. One `codex/` branch and PR per story. Run `npm ci`, `npm test`, `npm run build`; request `@codex review`, resolve findings and obtain affirmative review covering final changes plus passing required checks before merge. Confirm merge before recording it and starting the next implementation story. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
+Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The current batch is F09-S01 then F09-S02; F09-S03 is excluded from this run. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
 
 [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) already authorizes the named feature classes; exact forms/types/ranges and deliberate reviewed typed-guard/allowlist changes remain mandatory. It does not authorize automatic real-desk tests. Snapshot SAVE was explicitly forbidden in recent live diagnostics; future F07 feature-class scope does not override that session restriction or create current hardware permission.
 
