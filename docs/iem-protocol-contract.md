@@ -12,6 +12,8 @@ Date: 2026-11-09. Status: source-backed receive schema implemented; current-firm
 
 The fixture at `tests/fixtures/iem-state.json` is hand-authored **synthetic** data using the source-backed wire forms. Names, levels, pans, mode and links are not copied from the desk or the accepted mockup. Its firmware label is explicitly synthetic. No real capture is checked into the repository. Current-firmware/read-only native-client confirmation remains an open follow-up, and unsupported fields stay unknown until received.
 
+Later evidence is indexed by the [F09-S01 native reference](iem-native-protocol-reference.md) and [ADR-0007](adr/0007-owned-protocol-adapter.md): served 3.0 trial/function evidence is separate from reproducible official 3.5 static source and unavailable full served-source provenance. This follow-up changes no receive schema, parser bound, transport authority or confirmation policy.
+
 ## Accepted receive fields
 
 Wire framing is the small Socket.IO 0.9 text subset: `3:::` followed by `SETD^path^number` or `SETS^path^string`, optionally newline-batched. Split at the first two carets only; subsequent carets belong to a string value. `SETD` input is strictly decimal/scientific finite numeric syntax; booleans are received only as numeric zero/one. `SETS` names remain untrusted strings for a later renderer to assign via `textContent`.

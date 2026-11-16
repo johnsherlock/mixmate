@@ -1,19 +1,19 @@
 # Orchestrator handoff — 2026-11-16
 
-Read [AGENTS](../AGENTS.md), [backlog](backlog.md), assigned story/feature and relevant contracts first. Lifecycle-run baseline is main `ce9d0db95244797654e47ed3819e327c823503d0` (planning PR #35). Recheck Git status, current HEAD and GitHub before action. Preserve the unrelated untracked `docs/iem-integration-handoff.md`; it is an early historical baseline, not current authority, and is excluded from this delivery.
+Read [AGENTS](../AGENTS.md), [backlog](backlog.md), assigned story/feature and relevant contracts first. S01 preparation baseline is main `c27f0d3f468887dcc8cf9e4382db7215d4d955a9` (lifecycle PR #36, confirmed merged by the orchestrator). Recheck Git status, current HEAD and GitHub before action. Preserve the unrelated untracked `docs/iem-integration-handoff.md`; it is an early historical baseline, not current authority, and is excluded from this delivery.
 
 ## Current delivery and next work
 
-The user authorized a lifecycle-rule delivery followed by **F09-S01 and F09-S02**, sequentially and autonomously through review/merge. This supersedes the earlier planning-only stop. **Do not begin F09-S03.** End after S02 with a reviewed repository handoff; its implementation deserves a fresh orchestrator context. Nine features contain 37 stories; the seven new stories are currently planned/unstarted.
+The user authorized a lifecycle-rule delivery followed by **F09-S01 and F09-S02**, sequentially and autonomously through review/merge. This supersedes the earlier planning-only stop. **Do not begin F09-S03.** End after S02 with a reviewed repository handoff; its implementation deserves a fresh orchestrator context. Nine features contain 37 stories; S01 now delivers its reference/decision checkpoint, with the six other new stories unstarted.
 
 | Batch item | Current checkpoint |
 | --- | --- |
-| Lifecycle rules | Prepared in this documentation PR; [canonical rules](orchestration.md) |
-| F09-S01 | Authorized; next after lifecycle rules merge |
-| F09-S02 | Authorized after S01 merge |
+| Lifecycle rules | PR [#36](https://github.com/johnsherlock/mixmate/pull/36) confirmed merged at `c27f0d3`; [canonical rules](orchestration.md) |
+| F09-S01 | Reference/ADR/manifest prepared on `codex/f09-s01-native-protocol-reference`; containing PR/history owns final review/checks/merge receipts |
+| F09-S02 | Authorized after confirmed S01 merge; not started by S01 agent |
 | F09-S03 | Excluded; next run only |
 
-At each story boundary record readiness/reliability and continue within scope unless a real blocker or early handoff is necessary. Current telemetry sampled from the root rollout on 2026-11-16: model `gpt-6.1-sol`, effort medium, 279,448 last-request input tokens (278,400 cached), exposed context capacity 475,000; no recorded compaction event. This is a sampled context observation, not account allowance. No reliability blocker is currently identified. Re-evaluate after each story; do not infer exact remaining capacity from this sample.
+At each story boundary record readiness/reliability and continue within scope unless a real blocker or early handoff is necessary. S01 boundary assessment belongs to the root orchestrator after independent acceptance, final-change review, CI and merge verification. No story-agent account/context measurement is asserted here; root records available telemetry and readiness before starting fresh-context S02. S01 has no production changes; exact served-source gap is parked with a portable fallback as described below. No identified protocol fact blocks a generic S02 uncertainty design, but its chosen model must not depend on unknown precision/session behavior. Root continuation to S02 remains pending confirmed S01 merge; S01 preparation is not approval or a merge receipt.
 
 The next intended sequence is **F09-S01 → S02 → S03 → S04 → F04-S03 → S04 → F02-S04 → F06-S04 → F07-S01–S04 → F08-S01 → S02**. F09 establishes native evidence/adapter decision, reviewed state model, integration for existing controls, then targeted firmware validation and explicit EQ readiness. UX follow-ups separately cover logical stereo mixes, compact detail and saved-rig/persistence feedback. Numeric feature order is not priority. See the [dependency table](backlog.md).
 
@@ -25,7 +25,7 @@ F06-S01/S02 pan and F06-S03 pure GEQ are merged; S04 is unstarted. PR #29 merged
 
 [Offline findings](f08-s03-offline-investigation.md), [passive validation](f08-s03-passive-validation.md), [controlled master trial](f08-s03-controlled-level-validation.md) and [native trial](f08-s03-native-transport-evidence.md) separate source/fake evidence from observed hardware. Firmware `3.0.7865-ui24` native one-pair master move got no own target path for 38.883s while a read-only peer got both about 11ms after dispatch with shorter decimals. Native source is local-first with no established correlated ACK callback. Endpoint/session and causal explanations remain unproven; this does not verify source sends, groups, pan, EQ or other firmware. Last observed `a.0/a.1` were `0.3961953345` each, left applied. Instrumentation/own diagnostic sessions were cleaned up; user's native app was left connected. No snapshot save/recall/delete occurred.
 
-Live IEM owns its WebSocket/session. Community `soundcraft-ui-connection` 7.1.0 supplies imported display conversions, derived math/reference evidence; its connection/control facade is not instantiated by the live app. No automatic native/library transplant is planned. Served native code has global UI/reconnect/startup side effects; S01 evaluates exact roles and provenance with private ignored source archives, no runtime bundling/execution by default.
+Live IEM owns its WebSocket/session. Community `soundcraft-ui-connection` 7.1.0 supplies imported display conversions, derived math/reference evidence; its connection/control facade is not instantiated by the live app. No automatic native/library transplant is planned. [ADR-0007](adr/0007-owned-protocol-adapter.md) retains the owned adapter/helper-only dependency. The [native reference](iem-native-protocol-reference.md) and [manifest](native-protocol-reference-manifest.json) index newly reacquired official 3.5.8328 static source under ignored output, not bundled/executed. Exact served 3.0 full source/hash remains unavailable after a bounded known-URL timeout; orchestrator accepted portable reproducibility as the S01 fallback. This is a parked provenance gap, not proof of current served semantics. Archive HTTP-derived session ID does not resolve the served 3.0 handshake or endpoint causality. S02 can model uncertainty without importing unverified firmware facts.
 
 ## Current authority and release gates
 
