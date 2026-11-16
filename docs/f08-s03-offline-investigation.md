@@ -1,6 +1,6 @@
 # F08-S03 offline investigation — 2026-11-16
 
-Baseline: reviewed main `bc2a1b5e709f1d593dd70a71168e2e84f1d4179f` (documentation PR #30 after application PR #29). Scope: repository inspection, fake transports/storage and loopback browser evidence only. Production source, protocol allowlist and confirmation contract are unchanged. The mixer is absent; no mixer connection, probe or actuation was attempted. F08-S03 is **offline investigation complete, hardware validation parked**, not fully validated; delivery status is tracked in the story/PR. F08-S01 remains the physical release gate.
+Baseline: reviewed main `bc2a1b5e709f1d593dd70a71168e2e84f1d4179f` (documentation PR #30 after application PR #29). Scope: repository inspection, fake transports/storage and loopback browser evidence only. Production source, protocol allowlist and confirmation contract are unchanged. The mixer is absent; no mixer connection, probe or actuation was attempted. F08-S03 is **offline investigation complete, hardware validation parked**, not fully validated; delivery status is tracked in the story and [PR #31](https://github.com/johnsherlock/mixmate/pull/31). F08-S01 remains the physical release gate.
 
 ## Findings and evidence classes
 

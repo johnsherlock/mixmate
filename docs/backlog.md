@@ -13,7 +13,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 | [F05](features/F05.md) | Safe AUX level control | 3 | Done implementation checkpoint — PRs #23–25 merged; physical F08 open |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | In progress — S03 PR #29 merged; S04 planned/unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
-| [F08](features/F08.md) | Release validation | 3 | In progress — S03 offline investigation awaiting review; hardware parked |
+| [F08](features/F08.md) | Release validation | 3 | In progress — S03 offline evidence checkpoint; hardware parked |
 
 ## Orchestration contract
 
@@ -70,4 +70,4 @@ Continue from the concise [orchestrator handoff](orchestrator-handoff.md). Curre
 
 ## Authorized readback-first resumption — 2026-11-16
 
-The user resumed F08-S03 ahead of F06-S04 for feasible offline investigation/tests/docs only. [Report](f08-s03-offline-investigation.md): five findings diagnosed/proposed, seven fake diagnostics, 256/256 local tests and unchanged app0.5.0/18-asset worker `f5c4f38ebcaec5d2` build pass (Node26.13.1; CI Node24 pending). Offline scope awaits PR/review/CI/merge; no runtime change, no hardware validation, no merged/completed physical claim. F06-S04 remains planned/unstarted pending reviewed readback/ownership prerequisites. F08-S03 hardware acceptance and F08-S01 physical release gate stay open. This supersedes earlier documentation-only/deferred/next-choice authorization text; do not automatically start another story or live test.
+The user resumed F08-S03 ahead of F06-S04 for feasible offline investigation/tests/docs only. [Report](f08-s03-offline-investigation.md): five findings diagnosed/proposed, seven fake diagnostics, 256/256 local tests and unchanged app0.5.0/18-asset worker `f5c4f38ebcaec5d2` build pass (Node26.13.1; CI Node24 tracked in PR #31). Offline delivery is tracked in [PR #31](https://github.com/johnsherlock/mixmate/pull/31); no runtime change, no hardware validation, no merged/completed physical claim. F06-S04 remains planned/unstarted pending reviewed readback/ownership prerequisites. F08-S03 hardware acceptance and F08-S01 physical release gate stay open. This supersedes earlier documentation-only/deferred/next-choice authorization text; do not automatically start another story or live test.
