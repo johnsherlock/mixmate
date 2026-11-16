@@ -28,6 +28,71 @@ function fixture(factory = createAuxControlSession, frame = LIVE) {
     begin() { assert.equal(session.selectPanTarget(target), true); assert.equal(session.armPan(), true); return session.beginPanGesture(); } };
 }
 const writes = socket => socket.sent.filter(message => message.startsWith('3:::SETD'));
+
+// F08-S03 diagnostics: the fake sender deliberately does NOT echo its writes.
+for (const kind of ['level', 'pan']) {
+  test(`F08-S03 ${kind}: no sender echo stays live/unconfirmed; explicit fresh socket reads applied state without replay`, () => {
+    const initial = LIVE.replace('a.1.mix^0.6', 'a.1.mix^0.5');
+    const app = fixture(createAuxControlSession, initial), socket = app.connect();
+    const paths = kind === 'level' ? ['a.0.mix', 'a.1.mix'] : ['i.0.aux.0.pan', 'i.0.aux.1.pan'];
+    const before = kind === 'level' ? 0.5 : 0.4;
+    let token;
+    if (kind === 'level') {
+      assert.equal(app.session.selectLevelTarget({ kind: 'master', auxIndex: 0 }), true);
+      assert.equal(app.session.armLevel(), true); token = app.session.beginLevelGesture();
+      assert.equal(app.session.commitLevelGesture(token, 0.601), true);
+    } else {
+      token = app.begin(); app.session.previewPanGesture(token, 0.601);
+      assert.equal(app.session.commitPanGesture(token), true);
+    }
+    assert.deepEqual(writes(socket), paths.map(path => `3:::SETD^${path}^0.601`));
+    assert.equal(app.session.snapshot().control.pending, true);
+    for (const path of paths) assert.equal(app.session.snapshot().observations.get(path), before);
+    socket.receive('2::'); app.move(2499);
+    assert.equal(app.session.snapshot().control.pending, true);
+    app.move(1); app.flush();
+    const timedOut = app.session.snapshot();
+    assert.equal(timedOut.phase, 'live'); assert.equal(socket.readyState, 1);
+    assert.equal(timedOut.control.pending, false); assert.equal(timedOut.control.armed, false);
+    assert.match(timedOut.control.status, /readback unconfirmed.*No retry/);
+    assert.equal(writes(socket).length, 2);
+    app.session.disconnect(); assert.equal(app.session.snapshot().observations.size, 0);
+    app.session.connect('192.168.0.60'); const fresh = app.sockets.at(-1); fresh.open();
+    assert.equal(app.session.snapshot().observations.size, 0);
+    fresh.receive(initial + '\n' + paths.map(path => `SETD^${path}^0.601`).join('\n'));
+    // Queued old-generation messages must not contaminate the fresh socket.
+    socket.receive('3:::SETD^' + paths[0] + '^0.9');
+    for (const path of paths) assert.equal(app.session.snapshot().observations.get(path), 0.601);
+    assert.equal(app.session.snapshot().control.armed, false);
+    assert.equal(kind === 'level' ? app.session.commitLevelGesture(token, 0.7) : app.session.commitPanGesture(token), false);
+    assert.equal(writes(fresh).length, 0); assert.equal(writes(socket).length, 2);
+  });
+}
+
+test('F08-S03 partial pan echo plus live heartbeat cannot confirm the missing partner; late receipt stays disarmed', () => {
+  const app = fixture(), socket = app.connect(), token = app.begin();
+  app.session.previewPanGesture(token, 0.601); app.session.commitPanGesture(token);
+  socket.receive(writes(socket)[0]); socket.receive('2::');
+  assert.equal(app.session.snapshot().control.pending, true);
+  assert.equal(app.session.snapshot().observations.get('i.0.aux.0.pan'), 0.601);
+  assert.equal(app.session.snapshot().observations.get('i.0.aux.1.pan'), 0.4);
+  app.move(2500); app.flush(); socket.receive(writes(socket)[1]);
+  assert.equal(app.session.snapshot().phase, 'live');
+  assert.equal(app.session.snapshot().control.armed, false);
+  assert.match(app.session.snapshot().control.status, /unconfirmed/);
+  assert.equal(writes(socket).length, 2);
+});
+
+test('F08-S03 visually identical rounded pan readback invalidates rather than confirming', () => {
+  const app = fixture(), socket = app.connect(), token = app.begin();
+  app.session.previewPanGesture(token, 0.601); app.session.commitPanGesture(token);
+  socket.receive('3:::SETD^i.0.aux.0.pan^0.6010000001');
+  const state = app.session.snapshot();
+  assert.equal(state.observations.get('i.0.aux.0.pan'), 0.6010000001);
+  assert.match(state.control.status, /native control changed/); assert.equal(state.control.armed, false);
+  assert.equal(state.control.pending, false);
+  assert.equal(state.phase, 'live'); assert.equal(writes(socket).length, 2);
+});
 test('literal factories preserve read-only and level-only capabilities despite malicious upgrade options', () => {
   const read = fixture(createReadOnlySession); read.connect(); assert.deepEqual(Object.keys(read.session).sort(), ['connect', 'disconnect', 'snapshot', 'subscribe']);
   const levels = fixture(createAuxLevelSession); levels.connect(); assert.equal(levels.session.selectPanTarget, undefined); assert.equal(levels.session.armPan, undefined); assert.equal(levels.session.snapshot().control.panCapable, undefined);

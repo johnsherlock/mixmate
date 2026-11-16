@@ -69,6 +69,23 @@ test('group projection preserves exact ordered IDs with unresolved placeholders,
   const empty = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'empty' }); assert.equal(empty.sources.length, 1); assert.equal(empty.showAuxMaster, false);
   assert.equal(projectGroupNavigation({ ...base, selectedAux: null }, profile, null).view, 'overview');
 });
+
+test('F08-S03 manual same-IP connect cannot grant editor eligibility; explicit saved-rig selection restores it without connecting', async () => {
+  const app = await fixture(); let enabled;
+  const ui = { name: field(''), cancel: field(''), message: field(''), status: field(''), show() {}, hide() {}, members() {}, choices() {}, busy() {}, bind() {}, destroy() {} };
+  const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui, setEnabled: value => { enabled = value; } });
+  try {
+    assert.equal(enabled, true); assert.equal(app.controller.context().profileId, 'rig-a');
+    app.ui.address.emit('input'); // The string still equals both saved rig addresses.
+    assert.equal(app.controller.context().profileId, null); assert.equal(enabled, false);
+    app.connect(); assert.equal(app.session.snapshot().phase, 'live');
+    assert.equal(editor.open(), false); assert.equal(enabled, false);
+    app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change');
+    assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(enabled, true);
+    assert.equal(app.session.snapshot().observations.size, 0); assert.equal(app.sockets.length, 1);
+    assert.equal(editor.open(), true);
+  } finally { editor.destroy(); await app.close(); }
+});
 test('unsupported EQ/missing group preferences fall back without mutating saved definitions', () => {
   const groups = definitions().profiles[0].groups, preference = { view: 'eq', expandedGroupId: '7_group-Z' }, before = structuredClone(preference);
   assert.equal(resolveGroupNavigation(groups, preference).view, 'groups'); assert.match(resolveGroupNavigation(groups, preference).notice, /EQ.*unavailable/);

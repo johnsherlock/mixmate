@@ -7,6 +7,20 @@ import { mountReadOnlyView } from '../src/iem/live-view.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
+import { parseIemStateFrame } from '../src/iem/protocol.js';
+
+test('F08-S03 current overview retains ten individual readbacks for five reciprocal pairs, including unequal sides', () => {
+  const frame = '3:::SETS^model^ui24\n' + Array.from({ length: 10 }, (_, index) =>
+    `SETD^a.${index}.matrix^0\nSETD^a.${index}.stereoIndex^${index % 2}\nSETD^a.${index}.mix^${index === 1 ? 0.6 : 0.4}`).join('\n');
+  const observations = new Map(parseIemStateFrame(frame).map(({ path, value }) => [path, value]));
+  const model = projectLiveState({ observations, phase: 'live' });
+  assert.equal(model.mixes.length, 10); // Characterization, not acceptance of the requested five-card UI.
+  assert.deepEqual(model.mixes.map(mix => mix.themeIndex), [0, 0, 2, 2, 4, 4, 6, 6, 8, 8]);
+  assert.ok(model.mixes.every(mix => mix.detail.includes('individual readback')));
+  assert.equal(model.mixes[0].position, 0.4); assert.equal(model.mixes[1].position, 0.6);
+  const selected = projectLiveState({ observations, phase: 'live' }, 1);
+  assert.equal(selected.selectedMix.id, 'a.1'); assert.equal(selected.selectedMix.position, 0.6);
+});
 
 class Node {
   children = []; dataset = {}; style = { values: {}, calls: [], setProperty(name, value) { this.values[name] = value; this.calls.push([name, value]); } }; attributes = {}; value = ''; disabled = false;
