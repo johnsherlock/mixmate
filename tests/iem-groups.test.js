@@ -108,6 +108,44 @@ test('temporary/conflicting group saves remain visibly unsaved and never overwri
   await reopened.close(); await other.close(); await app.close();
 });
 
+test('F08-S03 editor reports transaction abort after put success as temporary and reopen retains durable group', async () => {
+  const factory = new IDBFactory(), open = factory.open.bind(factory); let fail = false;
+  factory.open = (...args) => {
+    const request = open(...args);
+    request.addEventListener('success', () => {
+      const db = request.result, transaction = db.transaction.bind(db);
+      db.transaction = (...args) => {
+        const tx = transaction(...args);
+        if (fail && tx.mode === 'readwrite') {
+          const objectStore = tx.objectStore.bind(tx);
+          tx.objectStore = (...args) => {
+            const store = objectStore(...args), put = store.put.bind(store);
+            store.put = (...args) => {
+              const request = put(...args);
+              request.addEventListener('success', () => tx.abort());
+              return request;
+            };
+            return store;
+          };
+        }
+        return tx;
+      };
+    });
+    return request;
+  };
+  const app = await fixture({ factory }); let reopened;
+  try {
+    app.editor.open(); app.ui.name.value = 'Accepted only in memory'; fail = true;
+    await app.ui.actions.save();
+    assert.equal(app.ui.visible, true); assert.equal(app.ui.cancel.textContent, 'Close');
+    assert.match(app.ui.message.textContent, /temporary.*not saved/);
+    assert.equal(app.ui.savedMessage, undefined);
+    assert.equal(app.repository.snapshot().settings.profiles[0].groups[0].name, 'Accepted only in memory');
+    reopened = new SettingsRepository({ indexedDB: factory });
+    assert.equal((await reopened.initialize()).settings.profiles[0].groups[0].name, 'Original');
+  } finally { await reopened?.close(); await app.close(); }
+});
+
 test('invalid names, duplicate Save and stale same-repository edits cannot silently replace groups', async () => {
   const app = await fixture(); app.editor.open(); app.ui.name.value = ' ';
   await app.ui.actions.save(); assert.match(app.ui.message.textContent, /not saved/);
