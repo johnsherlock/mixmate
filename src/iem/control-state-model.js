@@ -131,14 +131,39 @@ function validatedEvent(input, state) {
   }
   return event;
 }
+function outstandingOutcome(s, event) {
+  const op = s.operation?.id === event.id ? s.operation : s.retired.find(x => x.id === event.id);
+  if (!op || op.flight !== event.ordinal || event.ordinal !== op.returned) throw Error('Outcome must belong to exact outstanding send.');
+  return op;
+}
+function settleOutcome(s, event, now, allowProgress) {
+  const op = outstandingOutcome(s, event);
+  op.flight = null;
+  if (event.type === 'threw') {
+    op.unknownDelivery = true;
+    if (allowProgress) {
+      if (op === s.operation && owns(s, op)) stop(s, 'interrupted'); else op.status = 'interrupted';
+    }
+  } else {
+    op.returned++;
+    if (allowProgress && op === s.operation && owns(s, op) && op.status === 'dispatching' && op.returned === op.expected.length) {
+      op.status = 'pending'; op.completed = now; s.status = 'pending';
+      s.chain = { ...s.chain, delta: op.delta, requested: op.expected.map(({ path, target, value }) => ({ path, target, value })), touched: true };
+      complete(s);
+    }
+  }
+}
 const elapsed = (now, start) => Math.max(now.mono - start.mono, now.wall - start.wall);
 export function transitionControl(state, input) {
   const event = validatedEvent(input, state), now = stamp(event.now);
   if (event.type === 'receive' && event.generation < state.generation) return state;
-  const s = copy(state);
+  const s = copy(state), outcome = ['returned', 'threw'].includes(event.type);
+  if (outcome) outstandingOutcome(s, event); // Validate identity before any clock transition.
   const origin = active(s) ? (s.operation.completed ?? s.operation.started) : s.now;
   if (now.mono < s.now.mono || now.wall < s.now.wall || Math.abs((now.mono - origin.mono) - (now.wall - origin.wall)) > 1000) {
-    stop(s, 'clock-invalidated'); s.scopeCurrent = false; s.now = now; return freeze(s);
+    stop(s, 'clock-invalidated'); s.scopeCurrent = false; s.now = now;
+    if (outcome) settleOutcome(s, event, now, false);
+    return freeze(s);
   }
   s.now = now;
   if (owns(s, s.operation) && s.operation.status === 'dispatching' && elapsed(now, s.operation.started) >= OBSERVATION_WINDOW_MS) stop(s, 'dispatch-expired');
@@ -190,21 +215,8 @@ export function transitionControl(state, input) {
       op.flight = ordinal; op.authorized++; s.chain.touched = true; break;
     }
     case 'returned':
-    case 'threw': {
-      const { id, ordinal } = fields(['id', 'ordinal']), op = s.operation?.id === id ? s.operation : s.retired.find(x => x.id === id);
-      if (id !== op?.id || !uint(ordinal) || op.flight !== ordinal || ordinal !== op.returned) throw Error('Outcome must belong to exact outstanding send.');
-      op.flight = null;
-      if (event.type === 'threw') { op.unknownDelivery = true; if (op === s.operation && owns(s, op)) stop(s, 'interrupted'); else op.status = 'interrupted'; }
-      else {
-        op.returned++;
-        if (op === s.operation && owns(s, op) && op.status === 'dispatching' && op.returned === op.expected.length) {
-          op.status = 'pending'; op.completed = now; s.status = 'pending';
-          s.chain = { ...s.chain, delta: op.delta, requested: op.expected.map(({ path, target, value }) => ({ path, target, value })), touched: true };
-          complete(s);
-        }
-      }
-      break;
-    }
+    case 'threw':
+      settleOutcome(s, event, now, true); break;
     case 'receive': {
       const { generation, path, value, receipt } = fields(['generation', 'path', 'value', 'receipt']);
       if (!uint(generation) || !uint(receipt) || !unit(value) || typeof path !== 'string' || path.length > 64) throw Error('Invalid receipt event.');
@@ -213,6 +225,7 @@ export function transitionControl(state, input) {
       s.lastReceipt = receipt;
       const actual = row(s, path); if (!actual) break; // unrelated path cannot match
       const previous = actual.value; actual.value = value; actual.receipt = receipt;
+      if (!s.scope.members.some(member => member.path === path)) break; // Historical disjoint actual data grants no current invalidation authority.
       const op = owns(s, s.operation) ? s.operation : null, expectation = op?.expected.find(x => x.path === path);
       if (active(s) && expectation?.cutpoint !== null && receipt > expectation?.cutpoint) {
         if (op.status === 'dispatching') stop(s, 'reentrant-invalidated');

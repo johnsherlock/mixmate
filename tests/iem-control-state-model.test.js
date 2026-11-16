@@ -330,3 +330,46 @@ test('reentrant generation replacement preserves new ownership and records late 
   b.step('returned', { id: prior, ordinal: 0 });
   assert.equal(b.state.operation, null); assert.equal(b.state.retired.at(-1).returned, 1); assert.equal(b.state.armed, false);
 });
+
+test('clock-invalid current and retired send outcomes settle exactly once without restoring authority', () => {
+  for (const retired of [false, true]) for (const type of ['returned', 'threw']) for (const clock of ['backward', 'skew']) {
+    const a = fixture('level', true); a.step('arm'); const id = a.gesture(0.8); a.step('authorize', { id, ordinal: 0 });
+    if (retired) {
+      a.step('new-generation', { generation: 2, revision: 2, scope: a.scope() }); a.step('arm'); a.gesture(0.9);
+    }
+    const before = a.state, now = clock === 'backward' ? { mono: before.now.mono - 1, wall: before.now.wall - 1 } : { mono: before.now.mono + 1, wall: before.now.wall + 2000 };
+    for (const wrong of [{ id: id + 100, ordinal: 0 }, { id, ordinal: 1 }, { id, ordinal: NaN }, { id, ordinal: '0' }]) {
+      assert.throws(() => transitionControl(before, { type, now, ...wrong }));
+    }
+    const after = transitionControl(before, { type, id, ordinal: 0, now });
+    const op = retired ? after.retired.find(x => x.id === id) : after.operation;
+    assert.equal(op.flight, null); assert.equal(op.returned, type === 'returned' ? 1 : 0); assert.equal(op.unknownDelivery, type === 'threw');
+    assert.equal(after.status, 'clock-invalidated'); assert.equal(after.armed, false); assert.equal(after.chain, null);
+    if (retired) {
+      assert.notEqual(after.operation.id, id); assert.equal(after.operation.returned, 0); assert.equal(after.operation.unknownDelivery, false);
+      assert.equal(op.status, 'generation-invalidated');
+    } else assert.equal(op.status, 'clock-invalidated');
+    assert.throws(() => transitionControl(after, { type, id, ordinal: 0, now }));
+    // The input state remains immutable; rejected outcomes cannot silently settle it.
+    const original = retired ? before.retired.find(x => x.id === id) : before.operation;
+    assert.equal(original.flight, 0); assert.equal(original.returned, 0); assert.equal(original.unknownDelivery, false);
+  }
+});
+
+test('changed historical disjoint readbacks preserve current permission and old uncertainty barriers', () => {
+  const a = fixture(); a.step('arm'); a.gesture(0.7); a.dispatch(); a.step('tick', {}, 2500);
+  a.received.set('a.2.stereoIndex', -1); a.received.set('a.2.matrix', false); a.received.set('a.2.mix', 0.3); a.receipts.set('a.2.mix', 1);
+  const other = createControlScope({ kind: 'level', received: a.received, receipts: a.receipts, target: { kind: 'master', auxIndex: 2 }, group: undefined });
+  a.step('select', { scope: other, revision: 2 }); a.step('arm'); const chain = a.state.chain, barriers = a.state.barriers;
+  a.receive('a.0.mix', 0.8); // Previously selected and stored, but now disjoint.
+  assert.equal(a.state.actual.find(x => x.path === 'a.0.mix').value, 0.8);
+  assert.equal(a.state.armed, true); assert.deepEqual(a.state.chain, chain); assert.deepEqual(a.state.barriers, barriers);
+  a.receive('a.9.mix', 0.9); // Never selected: same effect on current authority.
+  assert.equal(a.state.armed, true); assert.deepEqual(a.state.chain, chain); assert.deepEqual(a.state.barriers, barriers);
+  a.receive('a.2.mix', 0.4); assert.equal(a.state.armed, false); assert.equal(a.state.status, 'native-invalidated');
+  // Membership overlap is relevant even when the path was also in an old scope.
+  const b = fixture('group'); const groupScope = b.scope();
+  const single = createControlScope({ kind: 'level', received: b.received, receipts: b.receipts, target: { kind: 'send', sourceId: 'i.0', auxIndex: 0 }, group: undefined });
+  b.step('select', { scope: single, revision: 2 }); b.step('select', { scope: groupScope, revision: 3 }); b.step('arm');
+  b.receive('i.0.aux.0.value', 0.7); assert.equal(b.state.armed, false); assert.equal(b.state.status, 'native-invalidated');
+});
