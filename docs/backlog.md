@@ -13,7 +13,7 @@ Approved direction: 2026-11-08. The accepted responsive clickable prototype in `
 | [F05](features/F05.md) | Safe AUX level control | 3 | Done implementation checkpoint — PRs #23–25 merged; physical F08 open |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | In progress — S03 PR #29 merged; S04 planned/unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
-| [F08](features/F08.md) | Release validation | 3 | In progress — S03 offline evidence checkpoint; hardware parked |
+| [F08](features/F08.md) | Release validation | 3 | In progress — S03 controlled master symptom reproduced; design/qualification open |
 
 ## Orchestration contract
 
@@ -75,3 +75,8 @@ The user resumed F08-S03 ahead of F06-S04 for feasible offline investigation/tes
 ## Passive F08-S03 checkpoint — 2026-11-16
 
 One production-browser passive connection failed before open with `net::ERR_ADDRESS_UNREACHABLE`, zero incoming/outgoing application frames. Browser cause remains unresolved; no security weakening/retry. Successful separately authorized Node read-only fallback: [passive checkpoint](f08-s03-passive-validation.md). At 17:54:55Z, firmware `3.0.7865-ui24`/model `ui24`, all ten AUXs as five reciprocal equal-master pairs, mono `i.0` with equal pair pans; eight-second session closed cleanly and state cleared. Browser error remains unexplained. Captured outbound strings were connection-only, but the 100-message cap omitted 24 later records; factory source supplies the additional connection-only boundary. A tiny downward `a.0/a.1` master candidate is proposed only, not executed; no parameter changes occurred. Sender echo and physical acceptance remain open, F06-S04 unstarted.
+
+
+## Controlled F08-S03 checkpoint — 2026-11-16
+
+[Report](f08-s03-controlled-level-validation.md): later explicit user permission allowed one tiny downward AUX1/2 master UI release, expressly no snapshot save. Sender sent only the two 0.415 master commands, received no updated target paths in the recorded trial, and stayed live while 2.5s timeout disarmed. One separately authorized fresh connection received 0.415/0.415, corroborating application without acknowledging the old operation. Reduction remains applied; own sessions closed/instrumentation removed, no runtime/contract change or other writes. This supersedes the passive-only stop solely for that bounded trial. Readback design and other S03 findings remain open; F08-S01 gate unchanged, F06-S04 planned/unstarted. Evidence delivery review/CI/merge pending.
