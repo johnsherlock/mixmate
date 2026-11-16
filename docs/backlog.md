@@ -1,86 +1,67 @@
 # MixMate implementation backlog
 
-Approved direction: 2026-11-08. The accepted responsive clickable prototype in `mockups/iem.html` is the product target. Delivery uses sequential features and stories, with explicit protocol verification and release-qualification gates. [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) records the user's 2026-11-09 authorization and qualification deferral.
+Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. This delivery reprioritizes documentation only: no implementation or hardware action automatically starts.
 
-## Feature order
+## Feature status
 
-| Feature | Outcome | Stories | Status |
+| Feature | Outcome | Stories | Current status |
 | --- | --- | --- | --- |
-| [F01](features/F01.md) | Offline distribution and device compatibility | 7 | Done implementation checkpoint — S04 PR #21 merged; physical qualification open in F08 |
-| [F02](features/F02.md) | Device-local settings | 3 | Done — PRs #13–15 merged |
-| [F03](features/F03.md) | Read-only live IEM view | 4 | Done implementation checkpoint — firmware/physical qualification open |
-| [F04](features/F04.md) | Groups and navigation | 2 | Done implementation — PR #22 merged; physical qualification open in F08 |
-| [F05](features/F05.md) | Safe AUX level control | 3 | Done implementation checkpoint — PRs #23–25 merged; physical F08 open |
-| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | In progress — S03 PR #29 merged; S04 planned/unstarted |
+| [F01](features/F01.md) | Offline distribution and compatibility | 7 | Merged implementation checkpoint; physical F08 qualification open |
+| [F02](features/F02.md) | Device-local settings | 4 | S01–S03 merged; new S04 planned |
+| [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
+| [F04](features/F04.md) | Groups and navigation | 4 | S01–S02 merged; new S03–S04 planned |
+| [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
+| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
-| [F08](features/F08.md) | Release validation | 3 | In progress — S03 controlled master symptom reproduced; design/qualification open |
+| [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | New priority foundation; all unstarted |
 
-## Orchestration contract
+Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
-- The master chat selects the next eligible story and delegates to one story agent at a time, in sequence. Do not create sidebar chats unless the user asks for them.
-- Work in this repository on `codex/` branches. Preserve pre-existing user changes, including the uncommitted integration handoff; do not stage it implicitly.
-- Each story has a PR, passing tests/build and affirmative `@codex review` before merge. Fix review findings and repeat review as needed; no parallel story implementation or starting the next story while review is outstanding.
-- Record completion in story, feature and backlog documents. When preparing a merge, status may say implementation complete / awaiting review; only report merged when GitHub confirms it.
-- New findings may split a story or add a dependency; record the scope change. Under ADR-0002, park blocked hardware-dependent acceptance honestly and record a dependency exception before independent coding. Do not start parallel implementation or silently reduce support targets.
-- Track real-device checks and unresolved decisions in [user-follow-up.md](user-follow-up.md). The user approved deferring remaining F01 qualification to F08-S01; implementation may continue while hardware stays unverified. Arrange later exact device checks without inferring passes.
-- Planned AUX levels/groups, pan, output GEQ/shelf curve mapping, snapshot recall/save and recording start/stop are user-authorized in ADR-0002. Verify exact wire forms, types/ranges, stereo/current-socket prerequisites and typed guards, then deliberately update the active allowlist through the feature PR; no repeated permission request for these approved feature classes. Other operation classes remain outside scope. No real-desk actuation during development.
+## Cross-feature execution priority
 
-## Current work
+| Order | Story / gate | Dependency and purpose |
+| --- | --- | --- |
+| 1 | [F09-S01](stories/F09-S01.md) | Merged F08-S03 evidence → native protocol reference and adapter decision |
+| 2 | [F09-S02](stories/F09-S02.md) | S01 → reviewed state/confirmation ADR and pure model |
+| 3 | [F09-S03](stories/F09-S03.md) | S02 → integrate existing level/group/pan model and coherent UI |
+| 4 | [F09-S04](stories/F09-S04.md) | S03 → separately authorized targeted firmware validation; explicit applicable EQ readiness decision |
+| 5 | [F04-S03](stories/F04-S03.md) | Passed and affirmatively reviewed/merged applicable foundation gate → logical stereo mix overview |
+| 6 | [F04-S04](stories/F04-S04.md) | F04-S03 → compact accessible channel detail |
+| 7 | [F02-S04](stories/F02-S04.md) | F04-S04 delivery order → discoverable saved-rig setup and persistence feedback |
+| 8 | [F06-S04](stories/F06-S04.md) | F06-S03 + passed and affirmatively reviewed/merged applicable F09 readiness criteria → separately reviewed GEQ runtime/UI |
+| 9 | [F07](features/F07.md) S01 → S02 → S03 → S04 | F06-S04 → exact snapshot contract, operations, recording, native access |
+| 10 | [F08-S01](stories/F08-S01.md) | All release implementation → supported physical devices, both rigs, offline/sleep/control gate |
+| 11 | [F08-S02](stories/F08-S02.md) | F08-S01 → release/recovery documentation |
 
-F01 implementation/evidence scope is complete: PRs [#7](https://github.com/johnsherlock/mixmate/pull/7), [#8](https://github.com/johnsherlock/mixmate/pull/8), [#10](https://github.com/johnsherlock/mixmate/pull/10), [#11](https://github.com/johnsherlock/mixmate/pull/11), [#12](https://github.com/johnsherlock/mixmate/pull/12) and [#9](https://github.com/johnsherlock/mixmate/pull/9) merged after passing checks and affirmative Codex review. The S03 checkpoint merged at `b949430`, reviewed final head `bdf130b`. Physical Pixel/Android/iOS/offline qualification remains open in [F08-S01](stories/F08-S01.md); the tablet's targeted version/name pass does not qualify the full device workflow.
+This is the intended sequence, not a hardware waiver: if F09-S04 is blocked, park exact unrun rows; downstream work remains blocked until its applicable gate is met or an explicit reviewed dependency exception establishes that the proposed work is independent. ADR-0002 alone does not waive the F09 readiness gate. A checklist alone does not make F06-S04 eligible. F08-S03 is an evidence checkpoint with successors, not an indefinite catch-all dependency. Logical overview precedes compact detail so detail uses stable mix identity; saved-rig feedback then closes the remaining usability finding before EQ expansion.
 
-F02-S01 merged the versioned repository in [PR #13](https://github.com/johnsherlock/mixmate/pull/13) at `6b2e859` after passing CI and affirmative Codex review. F02-S02 merged named local rigs/preferences and safe target migration in [PR #14](https://github.com/johnsherlock/mixmate/pull/14) at `c89a845` after passing CI and affirmative Codex review. F02-S03 merged local backup/import/reset and storage-protection status in [PR #15](https://github.com/johnsherlock/mixmate/pull/15) at `cd1bddc` after passing CI and affirmative Codex review. F02 implementation scope is complete. F03-S01 merged source-backed bounded receive schemas in [PR #16](https://github.com/johnsherlock/mixmate/pull/16) at `c721b9f`; its [contract](iem-protocol-contract.md) keeps current-firmware corroboration parked after the bounded timeout. F03-S02 merged the extracted presentation and separate demo/read-only entries in [PR #17](https://github.com/johnsherlock/mixmate/pull/17) at `9ce2647` after passing CI and affirmative Codex review. F03-S03 merged explicit current-socket read-only sessions in [PR #18](https://github.com/johnsherlock/mixmate/pull/18) at `8c887a0` after passing CI and affirmative final-head review. F03-S04 merged source-backed VU2 decoding, separate freshness and stable rendering in [PR #19](https://github.com/johnsherlock/mixmate/pull/19) at `14cf968` after green CI and affirmative review of final head `c3fb9c4`. F04-S01 merged the ordered local group editor in [PR #20](https://github.com/johnsherlock/mixmate/pull/20) at `61944be` after green CI and affirmative final-head review (`a5d3…`). F03 is an implementation checkpoint; with S04 reviewed and merged, independent F04 local groups/navigation may proceed sequentially under ADR-0002 and user autonomy. Firmware corroboration and physical qualification remain open in F08-S01 as release gates, not silently passed dependencies. F01–F04 preserved the existing connection experiment without new runtime writers; F05-S02 deliberately adds only its reviewed typed AUX level forms in AGENTS.md. Routine decisions and parked dependencies are in [the follow-up log](user-follow-up.md). Eight features contain 30 stories including priority F01-S04 and investigation F08-S03.
+## Current capability and evidence
 
-F04 implementation is accepted in PR #22 after affirmative Codex review of `5c036e2` ([receipt](https://github.com/johnsherlock/mixmate/pull/22#issuecomment-6755354185)); PR #22 subsequently merged at `de72fc7` after green CI and [affirmative final-head `17a102e` review](https://github.com/johnsherlock/mixmate/pull/22#issuecomment-6755393302). Physical F08 qualification is open. The user explicitly authorized orchestration of all F05 stories sequentially; F05-S01 now supplies the [exact AUX level safety contract](iem-aux-level-safety.md), narrow pure serializers/leases and ADR-0004, with 172 passing tests and unchanged 17-asset build `7b27d73cb681ce9c`. S01 subsequently merged in [PR #23](https://github.com/johnsherlock/mixmate/pull/23) at `c53a842` after green CI and [affirmative final-head `1f07c8a` review](https://github.com/johnsherlock/mixmate/pull/23#issuecomment-6755724630). S02 adds the [private individual AUX controls](iem-aux-level-controls.md) in app 0.4.0, with explicit arming/release-only gestures/current-state guards and a preserved connection-only factory. S02 subsequently merged in [PR #24](https://github.com/johnsherlock/mixmate/pull/24) at `162aeb2` after green CI and [affirmative final-head `4cf1d85` review](https://github.com/johnsherlock/mixmate/pull/24#issuecomment-6781046593). S03 completes the implementation scope with [relative groups](iem-relative-groups.md): continuous finite baseline, common clamp/dedup, canonical identity and release-only controls. [Delivery PR #25](https://github.com/johnsherlock/mixmate/pull/25) records the complete F05 implementation checkpoint, 203 passing tests and build18/version `7e24c1d1c7d7292b`. PR #25 merged at `a9b9005` after green CI and [affirmative final-head `92865c2` review](https://github.com/johnsherlock/mixmate/pull/25#issuecomment-6781501736). F05 physical qualification stays open in F08-S01.
+The live IEM owns its WebSocket/session. `soundcraft-ui-connection` 7.1.0 currently supplies imported display converters; related meter/relative math and protocol references are distinct from instantiating its connection/control facade. A library replacement is not an established remedy.
 
-## Evidence rules
+Reviewed runtime capability is AUX master/send levels, relative groups and eligible normalized mono-source pan into verified reciprocal stereo AUX pairs. Current confirmation requires fresh own per-path receipt within 2.5 seconds; intent/send return is not received state or a correlated ACK. Read-only factories remain connection-only. GEQ serializers/curve/leases are pure and **unwired**; shelves/filters are unverified. Snapshots/recording remain unwired. [AGENTS](../AGENTS.md) and linked contracts define authority.
 
-Library/manual evidence describes candidate semantics; sanitized current-firmware observations validate receive paths. Physical-device checks establish install/offline/local-network behavior. Automated tests use fake mixers and cannot certify mobile support. Received desk state is transient and never a settings backup.
+Bounded trials on firmware `3.0.7865-ui24` applied changes without sender target echoes. The native paired-master trial likewise received no own target path for 38.883 seconds; a read-only peer received both approximately 11ms after dispatch at shorter decimal precision. Native source shows local-first state with no established correlated ACK callback. This is one firmware/operation observation, not proof of all fields, endpoints or causality. Last observed `a.0/a.1` values were `0.3961953345` each, left applied. No snapshot save/recall/delete occurred. Existing diagnostic authorization applies only within its recorded scope and bounds; this replan does not expand it. Record applicable prior permission and seek only missing scope.
 
-## Priority dependency exception — 2026-11-10
+## Verified delivery checkpoints
 
-[F01-S04](stories/F01-S04.md) / [ADR-0003](adr/0003-default-iem-entrypoint.md) corrects the root/PWA default entry before resuming F04-S02. The user's screenshot exposed a delivery gap: IEM existed separately, while the advertised root remained the test. Work is isolated from reviewed main `61944be`; unfinished group navigation is preserved at its separate local checkpoint `6a10e55` and is not included. F01-S04 subsequently merged in [PR #21](https://github.com/johnsherlock/mixmate/pull/21) at `96ee135` after 147 tests, a successful 17-asset build and affirmative Codex review of final head `9abaadc`. Its deployment succeeded with offline version `9a59683dde643264`. F04-S02 resumed/rebased as a separate story and is now done implementation in [PR #22](https://github.com/johnsherlock/mixmate/pull/22): group shortcuts/expanded banks and guarded local navigation passed 157 tests/build and [affirmative Codex review](https://github.com/johnsherlock/mixmate/pull/22#issuecomment-6755354185) of implementation head `5c036e2`. It subsequently merged at `de72fc7` after green CI and affirmative final-head review of `17a102e`. Physical qualification stays open in F08-S01; the user cannot test it now.
+Baseline for this replan: `28bb2875ba62fae7f98da279ed79f06461f1318d` on main. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16:
 
+| PR | Delivery | Merge commit |
+| --- | --- | --- |
+| [#29](https://github.com/johnsherlock/mixmate/pull/29) | F06-S03 pure GEQ primitives | `af4f23026f4f412250bef3fb91168f21db91e017` |
+| [#31](https://github.com/johnsherlock/mixmate/pull/31) | F08-S03 offline investigation/fake diagnostics | `820702013b76e969f32b3d381cb080f1f62b4ed1` |
+| [#32](https://github.com/johnsherlock/mixmate/pull/32) | Passive firmware evidence | `847b892b89a74d4c888505b76ab06c5fa50d7918` |
+| [#33](https://github.com/johnsherlock/mixmate/pull/33) | Controlled linked-master evidence | `78bd267d4ca2da0252f180b70b70b4dcc8db845e` |
+| [#34](https://github.com/johnsherlock/mixmate/pull/34) | Native transport evidence | `28bb2875ba62fae7f98da279ed79f06461f1318d` |
 
-## F06 historical checkpoints — 2026-11-11
+Earlier implementation receipts remain in individual stories and Git history (F01–F05; F06-S01/S02). Historical pending/stop wording in evidence reports describes those checkpoints, not current PR state. F08-S03 is not fully validated and no physical support pass follows from these merges.
 
-These checkpoints preserve the earlier sequence and pending gates; the 2026-11-16 verified merge receipt below supersedes their status claims.
+## Orchestration and release gates
 
-The user explicitly authorized sequential orchestration of all F06 stories, each through PR/green CI/affirmative exact-head Codex review before merge. F05 is closed as a merged implementation checkpoint (PRs #23–25, closure PR #26/main `0d9b326`; physical F08 remains open). F06-S01 supplies the [normalized pan evidence/typed lease contract](iem-aux-pan-safety.md) and ADR-0005 with 215 passing tests and unchanged 18-asset build `7e24c1d1c7d7292b`. S01 merged in [PR #27](https://github.com/johnsherlock/mixmate/pull/27) at `4857346` after green CI and [affirmative final-head `4ddc5c3` review](https://github.com/johnsherlock/mixmate/pull/27#issuecomment-6791479358). S02 supplies the [qualified normalized pan runtime/UI](iem-pan-controls.md) in app 0.5.0, implementation complete awaiting its own review/merge. S03/S04 AUX EQ remain planned behind this sequential gate. Direction and stereo-source/FX balance are explicitly parked instead of guessed; normalized receive state remains visible. No real desk actuation or new probe is performed by this story.
+Use one sequential fresh-context Sol/medium story agent with a concise authoritative repository brief; no further delegation or sidebar chats. One `codex/` branch and PR per story. Run `npm ci`, `npm test`, `npm run build`; request `@codex review`, resolve findings and obtain affirmative review covering final changes plus passing required checks before merge. Confirm merge before recording it and starting the next implementation story. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
 
-### Historical F06-S03 budget checkpoint — 2026-11-11
+[ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) already authorizes the named feature classes; exact forms/types/ranges and deliberate reviewed typed-guard/allowlist changes remain mandatory. It does not authorize automatic real-desk tests. Snapshot SAVE was explicitly forbidden in recent live diagnostics; future F07 feature-class scope does not override that session restriction or create current hardware permission.
 
-S02 [PR #28](https://github.com/johnsherlock/mixmate/pull/28) merged at `0667753` after236 tests/green CI and [affirmative `45ea7a1` review](https://github.com/johnsherlock/mixmate/pull/28#issuecomment-6792056829); deployment42994585075 published app0.5.0/verified worker `f5c4f38ebcaec5d2`. S03 [read-only evidence and resume plan](iem-aux-eq-contract.md) records verified native GEQ facts, proposed display-centre approximation and parked shelves/actual DSP qualification. It remains **in progress, unfinished** with no EQ code or active permission changes. The user requested a conservative natural budget stop; no percentage is inferred. Commit/push this docs-only checkpoint without a PR. Resume S03 pure implementation/tests/build/PR/affirmative review/merge before S04; S04 remains planned/unstarted. Physical F08 checks stay open.
-
-S03-only resumption: user explicitly asked to complete S03 and reassess usage. Pure [GEQ contract](iem-aux-eq-contract.md) modules/tests and ADR-0006 are implemented, awaiting this story’s PR/green CI/affirmative exact-head review/merge. No production EQ import/session/UI capability or hardware action is added. S04 remains planned and unstarted; do not continue into it after S03. Historical budget checkpoint above remains an accurate record of that earlier stop.
-
-S03 implementation delivery: [PR #29](https://github.com/johnsherlock/mixmate/pull/29); 249 tests and unchanged app0.5.0/18-asset offline `f5c4f38ebcaec5d2` pass. Review/CI/merge gate remains pending; no already-merged claim. S04 remains planned/unstarted for the post-S03 usage check.
-
-
-## Verified F06 status and handoff — 2026-11-16
-
-F06-S03 [PR #29](https://github.com/johnsherlock/mixmate/pull/29) is confirmed merged at `af4f23026f4f412250bef3fb91168f21db91e017`, following [affirmative final-head `c76df2025e019b92f8a89dc7679d619848b023f7` review](https://github.com/johnsherlock/mixmate/pull/29#issuecomment-6801756622), the [no-findings summary](https://github.com/johnsherlock/mixmate/pull/29#issuecomment-6801718657) and [passing CI](https://github.com/johnsherlock/mixmate/actions/runs/43061533809). Its pure GEQ primitives are unwired; this merge grants no production EQ capability. Earlier pending checkpoints above are historical.
-
-Continue from the concise [orchestrator handoff](orchestrator-handoff.md). Current authorization is documentation preparation/review/delivery only. F06-S04 stays planned/unstarted and F08-S03 deferred; the next story is the user's decision. Investigating sender readback before EQ integration is a recommendation, not an authorized reorder or resumption. Physical F08-S01 qualification remains open.
-
-
-## Deferred live-feedback investigation — 2026-11-11
-
-[F08-S03](stories/F08-S03.md) records missing level/pan sender readback, stereo-linked overview consolidation (five logical mixes for five pairs), excessive channel detail/vertical space, and tablet group-save versus Mac group-creation issues. User requested documentation only and investigation later in the week after usage allowance refreshes. Do not start coding, further desk testing or automatic resumption. Diagnostic triage may precede F07/full F08 qualification; outstanding review/merge gates still apply before implementation. This does not complete or waive F08-S01.
-
-## Authorized readback-first resumption — 2026-11-16
-
-The user resumed F08-S03 ahead of F06-S04 for feasible offline investigation/tests/docs only. [Report](f08-s03-offline-investigation.md): five findings diagnosed/proposed, seven fake diagnostics, 256/256 local tests and unchanged app0.5.0/18-asset worker `f5c4f38ebcaec5d2` build pass (Node26.13.1; CI Node24 tracked in PR #31). Offline delivery is tracked in [PR #31](https://github.com/johnsherlock/mixmate/pull/31); no runtime change, no hardware validation, no merged/completed physical claim. F06-S04 remains planned/unstarted pending reviewed readback/ownership prerequisites. F08-S03 hardware acceptance and F08-S01 physical release gate stay open. This supersedes earlier documentation-only/deferred/next-choice authorization text; do not automatically start another story or live test.
-
-## Passive F08-S03 checkpoint — 2026-11-16
-
-One production-browser passive connection failed before open with `net::ERR_ADDRESS_UNREACHABLE`, zero incoming/outgoing application frames. Browser cause remains unresolved; no security weakening/retry. Successful separately authorized Node read-only fallback: [passive checkpoint](f08-s03-passive-validation.md). At 17:54:55Z, firmware `3.0.7865-ui24`/model `ui24`, all ten AUXs as five reciprocal equal-master pairs, mono `i.0` with equal pair pans; eight-second session closed cleanly and state cleared. Browser error remains unexplained. Captured outbound strings were connection-only, but the 100-message cap omitted 24 later records; factory source supplies the additional connection-only boundary. A tiny downward `a.0/a.1` master candidate is proposed only, not executed; no parameter changes occurred. Sender echo and physical acceptance remain open, F06-S04 unstarted.
-
-
-## Controlled F08-S03 checkpoint — 2026-11-16
-
-[Report](f08-s03-controlled-level-validation.md): later explicit user permission allowed one tiny downward AUX1/2 master UI release, expressly no snapshot save. Sender sent only the two 0.415 master commands, received no updated target paths in the recorded trial, and stayed live while 2.5s timeout disarmed. One separately authorized fresh connection received 0.415/0.415, corroborating application without acknowledging the old operation. Reduction remains applied; own sessions closed/instrumentation removed, no runtime/contract change or other writes. This supersedes the passive-only stop solely for that bounded trial. Readback design and other S03 findings remain open; F08-S01 gate unchanged, F06-S04 planned/unstarted. Evidence delivery review/CI/merge pending.
-
-## Native transport checkpoint — 2026-11-16
-
-[Native transport evidence](f08-s03-native-transport-evidence.md): one authorized tiny native AUX1L cap-down gesture emitted two linked master writes at 0.39619533446252725. Native own socket received no selected target path through 38.883s while live; an already-connected literal read-only observer received both at 0.3961953345 about 11ms after dispatch. Native source/send-time samples show local-first updates without a correlated ACK callback. This corroborates other-client delivery and precision differences in one firmware trial, not a universal rule or production observer authority. Reduction remains applied; native instrumentation removed, own Node sessions closed, user's native app left connected. No snapshot save/recall/delete or runtime/contract change. Reviewed readback design and remaining S03 findings/F08-S01 qualification stay open; F06-S04 remains unstarted. Review/CI/merge pending for this evidence delivery.
+Library/native source evidence, fake tests, observed device/firmware trials and hypotheses must remain distinct. [F08-S01](stories/F08-S01.md) retains Android/iOS, installation/current-asset offline proof, local-network permissions, sleep/recovery, both rigs and all implemented controls as a physical release gate. Record unresolved findings and dependency exceptions in [follow-ups](user-follow-up.md). Start from the concise [handoff](orchestrator-handoff.md).
