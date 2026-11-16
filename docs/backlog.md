@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The active authorized batch is recorded in the handoff; backlog priority alone does not authorize execution.
+Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S01/S02 batch is complete; the handoff records its stop boundary. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -14,7 +14,7 @@ Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01 merged reference/decision checkpoint; S02 pure model prepared; S03–S04 unstarted |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S02 merged reference/design checkpoints; S03–S04 unstarted |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -22,8 +22,8 @@ Feature numbers do not determine execution priority. Previously merged implement
 
 | Order | Story / gate | Dependency and purpose |
 | --- | --- | --- |
-| 1 | [F09-S01](stories/F09-S01.md) | [Reference/adapter decision checkpoint](iem-native-protocol-reference.md); exact served-source gap parked; delivery in containing PR/history |
-| 2 | [F09-S02](stories/F09-S02.md) | S01 merged → [ADR-0008](adr/0008-control-state-model.md)/pure model prepared; pending review/CI/merge |
+| 1 | [F09-S01](stories/F09-S01.md) | [Reference/adapter decision](iem-native-protocol-reference.md) merged in PR #37; exact served-source gap parked |
+| 2 | [F09-S02](stories/F09-S02.md) | [ADR-0008](adr/0008-control-state-model.md)/pure model merged in PR #38; unwired |
 | 3 | [F09-S03](stories/F09-S03.md) | S02 → integrate existing level/group/pan model and coherent UI |
 | 4 | [F09-S04](stories/F09-S04.md) | S03 → separately authorized targeted firmware validation; explicit applicable EQ readiness decision |
 | 5 | [F04-S03](stories/F04-S03.md) | Passed and affirmatively reviewed/merged applicable foundation gate → logical stereo mix overview |
@@ -46,7 +46,7 @@ Bounded trials on firmware `3.0.7865-ui24` applied changes without sender target
 
 ## Verified delivery checkpoints
 
-Baseline for this replan: `28bb2875ba62fae7f98da279ed79f06461f1318d` on main. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16:
+Last verified story baseline: `2e7edcba19e25d0d8b08e5f7825a33a7a0bc8231` on main; final handoff delivery is identified by its containing reviewed PR/history. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16:
 
 | PR | Delivery | Merge commit |
 | --- | --- | --- |
@@ -55,12 +55,15 @@ Baseline for this replan: `28bb2875ba62fae7f98da279ed79f06461f1318d` on main. Ro
 | [#32](https://github.com/johnsherlock/mixmate/pull/32) | Passive firmware evidence | `847b892b89a74d4c888505b76ab06c5fa50d7918` |
 | [#33](https://github.com/johnsherlock/mixmate/pull/33) | Controlled linked-master evidence | `78bd267d4ca2da0252f180b70b70b4dcc8db845e` |
 | [#34](https://github.com/johnsherlock/mixmate/pull/34) | Native transport evidence | `28bb2875ba62fae7f98da279ed79f06461f1318d` |
+| [#36](https://github.com/johnsherlock/mixmate/pull/36) | Orchestrator lifecycle / batch | `c27f0d3f468887dcc8cf9e4382db7215d4d955a9` |
+| [#37](https://github.com/johnsherlock/mixmate/pull/37) | F09-S01 reference / ADR-0007 | `5bdf2c667aeffc50919e8e26aad5b09a63888d59` |
+| [#38](https://github.com/johnsherlock/mixmate/pull/38) | F09-S02 pure model / ADR-0008 | `2e7edcba19e25d0d8b08e5f7825a33a7a0bc8231` |
 
 Earlier implementation receipts remain in individual stories and Git history (F01–F05; F06-S01/S02). Historical pending/stop wording in evidence reports describes those checkpoints, not current PR state. F08-S03 is not fully validated and no physical support pass follows from these merges.
 
 ## Orchestration and release gates
 
-Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The current batch is F09-S01 then F09-S02; F09-S03 is excluded from this run. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
+Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The authorized F09-S01/S02 batch is complete. Stop after the reviewed handoff; F09-S03 is next intended work for a fresh orchestrator, excluded from this run. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
 
 [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) already authorizes the named feature classes; exact forms/types/ranges and deliberate reviewed typed-guard/allowlist changes remain mandatory. It does not authorize automatic real-desk tests. Snapshot SAVE was explicitly forbidden in recent live diagnostics; future F07 feature-class scope does not override that session restriction or create current hardware permission.
 
