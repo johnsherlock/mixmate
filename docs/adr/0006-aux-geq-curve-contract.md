@@ -1,7 +1,7 @@
 # ADR-0006: Qualified AUX GEQ requested-curve contract
 
 Date: 2026-11-11
-Status: Accepted implementation direction under ADR-0002/user S03-only resumption; implementation review/merge required.
+Status: Accepted; pure implementation merged in [PR #29](https://github.com/johnsherlock/mixmate/pull/29) at `af4f230`. Runtime integration remains planned.
 
 ## Context
 
