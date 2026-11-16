@@ -41,3 +41,8 @@ Group name/shortcuts keep expand/collapse. The separate Select level button and 
 ## Open release qualification
 
 No real mixer access/actuation occurred. F08-S01 still requires actual firmware continuous/quantized normalization, echo precision/order, native linked edits and automatic firmware fan-out behavior, human partial-operation recovery, physical Android/iOS offline/local-network/sleep and real group actuation checks. The supported mapping/precision is library-derived; matching fake echoes do not calibrate the desk or acknowledge a transaction. Compact Select level is visually 16px (portrait observed 18px); physical touchability remains an explicit check. An invisible larger hit region was not added over the adjacent cap. No platform support or hardware gate is declared passed.
+
+
+## F09-S02 future integration mapping — current contract unchanged
+
+[ADR-0008](adr/0008-control-state-model.md) and its pure unwired model propose terminal all-returned `sent-unverified`, retained same-scope permission, separate requested command coordinates and complete post-invalidation recovery barriers. Relative groups retain an immutable finite actual anchor and cumulative common command delta, preserving requested offsets only, never proof of hardware balance. Exact raw precision remains conservative. These are design inputs for deliberately reviewed F09-S03 level/group/pan integration, **not changes to this active runtime contract**. Existing 2.5s fresh-path/disarm behavior and all guards remain active. GEQ stays unwired; later F06-S04 must separately reconcile ADR-0006 processing/bypass/full-profile requirements after applicable F09 readiness. No hardware permission or new wire command is granted.

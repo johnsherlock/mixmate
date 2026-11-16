@@ -14,7 +14,7 @@ Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01 reference/decision checkpoint; S02–S04 unstarted |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01 merged reference/decision checkpoint; S02 pure model prepared; S03–S04 unstarted |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -23,7 +23,7 @@ Feature numbers do not determine execution priority. Previously merged implement
 | Order | Story / gate | Dependency and purpose |
 | --- | --- | --- |
 | 1 | [F09-S01](stories/F09-S01.md) | [Reference/adapter decision checkpoint](iem-native-protocol-reference.md); exact served-source gap parked; delivery in containing PR/history |
-| 2 | [F09-S02](stories/F09-S02.md) | S01 → reviewed state/confirmation ADR and pure model |
+| 2 | [F09-S02](stories/F09-S02.md) | S01 merged → [ADR-0008](adr/0008-control-state-model.md)/pure model prepared; pending review/CI/merge |
 | 3 | [F09-S03](stories/F09-S03.md) | S02 → integrate existing level/group/pan model and coherent UI |
 | 4 | [F09-S04](stories/F09-S04.md) | S03 → separately authorized targeted firmware validation; explicit applicable EQ readiness decision |
 | 5 | [F04-S03](stories/F04-S03.md) | Passed and affirmatively reviewed/merged applicable foundation gate → logical stereo mix overview |
