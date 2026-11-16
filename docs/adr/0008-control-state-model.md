@@ -1,0 +1,89 @@
+# ADR-0008: Received state and explicit unverified command coordinates
+
+Date: 2026-11-16
+Status: F09-S02 design and pure executable model; acceptance/review owned by the containing PR/history. **No production integration.**
+
+## Context and evidence
+
+[ADR-0007](0007-owned-protocol-adapter.md) retains the independently owned adapter. The [versioned reference](../iem-native-protocol-reference.md) and [manifest](../native-protocol-reference-manifest.json) separate source from firmware observations: one served 3.0.7865 paired-master move had no own target receipt for 38.883s while a peer received changed, shorter-decimal values in about 11ms. Native local-first state and send return are not acknowledgements. Official 3.5.8328 static source is reproducible but is not the unavailable full served 3.0 source. None of these facts establishes universal echo coverage, precision, latency, automatic mirroring or an endpoint remedy.
+
+Current [level](../iem-aux-level-controls.md), [group](../iem-relative-groups.md) and [pan](../iem-pan-controls.md) runtime requires exact fresh own per-path observations within 2.5 seconds and disarms on timeout. That rule remains active until reviewed F09-S03 integration. This decision describes its proposed replacement without changing factories, guards, parsers, serializers, entries, UI or allowlists. [ADR-0004](0004-aux-level-safety.md), [ADR-0005](0005-normalized-aux-pan-safety.md) and [ADR-0006](0006-aux-geq-curve-contract.md) remain authoritative for all other invariants; reconciliation below is an integration requirement, not a silent override.
+
+## Decision: separate four kinds of information
+
+1. **Actual** is only the private current-socket received journal: raw finite values plus monotonically increasing per-receipt sequence and owned generation. A same-value receipt advances evidence even when no value changes. Public presentation Maps and requested values cannot populate it.
+2. **Requested** is a copied, immutable typed target vector plus its explicit gesture coordinate. It is a command reference, never a received baseline, estimated hardware state or proof of application.
+3. **Dispatch outcome** counts ordered authorizations, send returns and an outstanding ordinal/throw. Send return proves only that the call returned. All writes are non-atomic; even all returns can conceal partial or zero hardware application. Throw leaves that attempted write's delivery unknown. Authorization never substitutes for send return.
+4. **Subsequent observation** may exactly match an expected path after its immediate preauthorization receipt cutpoint. All fresh path matches within the observation window produce `observed-match`, explicitly **not correlated ACK, causal proof or transaction confirmation**. Same-value receipts before a path's own authorization, other paths, old generations and previous operations cannot satisfy it.
+
+No outgoing state is optimistically inserted into actual. Incoming events never arm, send or retry. No retry, remainder replay, rollback, queue, automatic reconnect or background probing is introduced.
+
+## State, deadlines and repeated gestures
+
+The pure model is [control-state-model.js](../../src/iem/control-state-model.js), with [adversarial traces](../../tests/iem-control-state-model.test.js). Its core transitions are:
+
+| State/event | Result and authority |
+| --- | --- |
+| Complete eligible actual scope + explicit arm | Established permission for this exact selection, profile, topology and canonical membership/context revision; no send |
+| Explicit begin/preview | Fresh opaque gesture; immutable anchor and copied cached preview; no send |
+| Deliberate commit | New ordered single-use operation; absolute or cached common-delta typed expectations |
+| Each authorization/send result | Capture that path's receipt cutpoint immediately before authorization; one outstanding ordinal; next ordinal requires previous return and unchanged owner/context |
+| Reentrant receipt during dispatch | Stop/disarm conservatively, including an exact match; remaining ordinals cannot run |
+| All sends returned | `pending`, bounded 2.5s observation window; further gestures blocked during this window |
+| Every path exactly/freshly matches in window | Terminal `observed-match`; permission and command coordinate may remain for same scope |
+| Window expires without every match | Terminal `sent-unverified`; permission and coordinate may remain for same scope; no automatic action |
+| Wrong/different target receipt, context/native change, cancellation or interruption | Stop/disarm; clear gesture/coordinate; preserve diagnostic counts; create recovery barrier for touched closure |
+
+`sent-unverified` is a normal truthful uncertainty outcome, not a delivery error or a reason to press Enable after every move. Each next move still requires a **new explicit user gesture and token**. Selecting a different scope, native edits, context changes, hide/navigation/disconnect/sleep and cancellation revoke permission. A repeated request equal to the last requested vector is a no-op, never an implicit retransmission. Pending cannot persist indefinitely: explicit time input on every entry/receipt/tick inspects both monotonic and wall elapsed time; either reaching 2.5s ends the window before processing a late receipt. Negative/backward clocks or more than 1000ms cumulative dual-clock disagreement during an operation invalidate/disarm. The 1000ms disagreement bound is a client fail-closed policy, not firmware timing evidence. Dispatch itself has a separate 2.5s start deadline; a stalled dispatch stops/disarms and cannot resume. Production S03 must supply current clocks, timer wakeups and checks at every control/receive/snapshot entry; lifecycle sleep detection cannot depend on a held timer alone.
+
+**Absolute individual/linked controls:** a new gesture chooses an absolute normalized command coordinate independently of unverified actual application. Linked actual prerequisites must still be equal raw values; do not average or equalize actual sides. Linked vectors request the same absolute value on their qualified closure. Equal old actual values are not proof that earlier requests applied.
+
+**Relative groups:** first arm freezes a complete finite non-silent actual anchor, canonical member order, deduplicated source×output closure and each member's continuous dB value. Subsequent explicit gestures add their cached common delta to the existing *command* coordinate against that same immutable anchor. For anchor values `b[i]`, commands request `inverse(dB(b[i]) + cumulativeDelta)`. Each new gesture starts at local delta zero; cumulative requested offset is separately labelled. Clamp the whole cumulative move at the first member's supported finite boundary, preserving the exact common cached preview; do not round or independently clamp members. Requested intent never becomes a new received baseline. A zero/silent, below-window or nonfinite actual anchor is unavailable; unchanged requested intent cannot resurrect it. Unequal linked closures remain unavailable, while unrelated members may have different actual values.
+
+This preserves **requested** offsets only. A silent partial application of a multi-write vector may leave real hardware balance unequal, and no client algorithm using only send return can detect or guarantee otherwise. Repeating explicit group moves is not certified hardware balance preservation. UI and qualification must disclose this limitation. A rearm-after-every-timeout alternative was rejected: it retains the observed repeated-Enable symptom without adding received evidence. Automatically treating intent as a new actual baseline was rejected because it falsely asserts application. Freezing every future gesture until a guaranteed own echo was rejected because the evidence demonstrates that echo can be absent. A command-coordinate chain keeps the uncertainty visible without manufacturing actual state.
+
+## Recovery barrier, stale data and ownership
+
+Missing is unavailable, partial is incomplete, and stale means a receipt from an old socket/generation, a non-advancing sequence, an expired operation window, invalidated prerequisites or pre-recovery cutpoint. No new arbitrary age-based freshness claim is made for unchanged current-session actual values; explicit lifecycle/owner invalidation is mandatory. Meter freshness and socket-open are separate concepts and grant no control authority.
+
+Once any local write was authorized, any invalidation records a receipt floor over the **entire touched closure**, including unattempted members of a partial operation. Clear command authority but retain that barrier across select-away/back, profile/topology/group changes and same-session reconnect attempts. Reusing the old Map, old raw equality or a single fresh side cannot clear it. Recovery requires complete compatible actual receipts **strictly after the invalidation floor**, qualified topology/mode/current membership, and explicit rearm. For group recovery, rebuild the typed scope and finite anchor from that fresh actual journal. The receipt that caused invalidation is at the floor and cannot itself count as recovered evidence. Native away/back remains invalidating even when final values equal the old anchor.
+
+An explicit new socket generation can supply its own complete actual snapshot, revoke all old authority and retire old-generation barriers; its sequence space starts anew and must not inherit high old counters. It is recovery of present state, **never retroactive confirmation of the old operation**. There is no automatic reconnect/INIT refresh/getter in this model. Switching to a disjoint fully qualified scope can establish new explicit permission while the prior closure's barrier remains.
+
+Every expectation belongs to exact generation, context revision and scope identity. Late exact receipts can update actual state only; an expired/canceled operation never becomes `observed-match` later. A late old value arriving during a new operation conflicts with the new expectation if different. If an old/native receipt numerically equals the new expected value after its cutpoint, causality is unknowable; report matching observation only. Different finite receipts retain raw actual values and invalidate even when quantization is plausible; an away/back transition cannot disappear inside numerical tolerance.
+
+Generation replacement or selection is allowed during a synchronous send callback: cancel/retire the old operation before publishing the new context; a later return/throw updates only its operation-ID diagnostic record, never the new operation's counts, permission or status. Old remaining ordinals cannot authorize. The model retains at most 128 retired diagnostic records, evicting only settled records; exhaustion with all unresolved records is an explicit integration error, never dropped accounting or new authority. Owned runtime send callbacks must settle synchronously/once, independent of publication/reentrancy.
+
+## Precision policy
+
+| Field | Command policy | Received comparison / unverified facts |
+| --- | --- | --- |
+| AUX master/send level, including group paths | Strict numeric finite 0..1, full serialized precision | Exact raw equality only. One master point `.39619533446252725` → `.3961953345` is a rounding observation, **not** a universal decimal-10 envelope or tolerance. Send-family/group precision remains unknown. |
+| Qualified send pan | Validate strict finite numeric 0..1 **before** pinned three-decimal setter normalization; expectation is normalized command value | Retain raw readback. Three-decimal commands do not establish firmware readback precision or direction/law; any different receipt remains `precision-or-native-conflict`. |
+| GEQ pure projection | Strict finite numeric 0..1, full precision; 31/62 typed expectations | No hardware precision established. Exact-only classification; no runtime send enabled. |
+
+`precision-or-native-conflict` deliberately does not diagnose an external editor or quantizer. It invalidates conservatively and requires recovery. Display rounding never changes actual equality, baseline or authority. Later evidence can justify a field/version-specific policy only through a separate reviewed contract change, with tests proving that native edits are not concealed.
+
+## Alternatives requiring separate evidence or authority
+
+| Alternative | Disposition |
+| --- | --- |
+| Second observer socket | The bounded peer observation is useful evidence, not preapproved runtime authority. Session ownership, peer completeness/latency/generation correlation, failure/permissions and explicit lifecycle require a separately reviewed design and targeted evidence; no second socket added. |
+| Explicit reconnect/new session | Existing explicit connection path may recover a complete current actual snapshot. It cannot prove the old operation applied or auto-rearm. No automatic reconnect, endpoint replacement or guessed session ID. |
+| Getter/request | No exact safe parameter getter established. No invented GET wire form, callback or ACK is allowed. This design does not depend on one. |
+| INIT refresh on existing socket | INIT is connection-allowed but its repeat completeness/order/interaction with missing own updates is unqualified. No automatic postwrite INIT or new authority is approved here. |
+| Copy native/bootstrap/library store | Rejected by ADR-0007: merged intent/actual state and global reconnect/startup side effects do not solve acknowledgement. |
+
+The unavailable full served-source hash remains a provenance gap, not a blocker for this generic uncertainty model. Any later chosen handshake/getter/observer/precision-dependent design must establish exact evidence first.
+
+## Honest presentation and S03 reconciliation
+
+Keep actual per-side readbacks visible as received; keep the requested marker/value distinct. During gesture/pending/sent-unverified, retain the requested cap/coordinate rather than misleadingly snapping it to old received position. Label actual as last received, requested as requested, pending as waiting for observations, `sent-unverified` as sent/application unverified, and `observed-match` as matching observations (no ACK/success badge). Show returned/attempted counts for interruption, including unknown throw and “some values may have changed”; no aggregate fake group VU or estimated hardware balance. A canceled/interrupted control has no active cap authority; retain diagnostic requested values separately and offer explicit recovery/rearm only when the barrier is satisfied. New-generation observations belong to current actual, never old success.
+
+S03 must deliberately amend the existing level/pan/group runtime contracts and private guards: replace timeout-as-failure with terminal sent-unverified for **all-returned unchanged same-scope** operations; separate command coordinates from received baselines/revisions; retain permission only there; add recovery barriers, cumulative-group ownership and truthful requested/actual presentation. Preserve strict type/range/topology checks, actual unequal-link read-only behavior, frozen continuous math/common clamp/cached delta, canonical stable-profile membership, per-path cutpoints, native away/back invalidation, opaque tokens and no retry/replay/rollback. S03 must prove private parser/socket/settings provenance, revalidation before each ordinal, reentrant generation handling, processing/native invalidation and physical lifecycle coverage. Pure data scopes/arrays/Maps exposed by this model are **not a production API**; do not expose generic senders, caller-supplied raw plans or editable state as authority.
+
+The model uses existing pure GEQ topology only for 31/62-path projection/scalability tests. ADR-0006's full bands/bypass/processing/current-owner requirements remain; no GEQ factory/session/UI write or automatic native reset is enabled. F06-S04 needs separately reviewed runtime work after applicable F09 readiness. F09-S04 owns separately authorized firmware corroboration of all-returned/no-echo repetition, real native edits, precision, partial/interrupted recovery, observation completeness and explicit GEQ readiness. [F08-S01](../stories/F08-S01.md) still owns physical Android/iOS/offline/sleep/both-rig release qualification. Source/fake tests do not pass those rows.
+
+## Executable API and verification boundary
+
+`createControlScope({kind, received, receipts, target, group})` builds copied bounded typed data using existing strict topology resolvers; `createControlState` starts disarmed; `transitionControl(state,event)` returns a new frozen state. Data-only exact event schemas reject accessors/extra fields/nonfinite payloads before clocks; received events use bounded paths and strictly advancing sequence. The module has no WebSocket, sender, network, timer, listener or persistence. Every event has explicit dual time. The future owner must privately derive model events and scope provenance; pure scope identity is only a fixture/validation aid, never live transport permission. Tests traverse all four production HTML/module import graphs to prove this module is unreachable; unchanged production build/offline hash is the separate byte-level exclusion check.
