@@ -211,3 +211,6 @@ Group/pan were not attempted before deadline; never repeat the completed master/
 
 
 Root reviewed the remaining-only plan, recorder delta and fake tests as a concrete proposal; new five-minute/four-gesture/twelve-command user approval is pending, with no live action before the answer. Root reported one compaction, re-read orchestration/current evidence and asserted no reliability loss; this does not imply an account reset. Sanitized checkpoint is local-only pending root's final diff/publication review.
+
+
+Root reviewed/pushed the sanitized payload at remote `9b52890a2e1ca8b83eaeef0f2af1a8add9553783`; same-connector draft-PR reconsideration was rejected again because explicit approval of this specific endpoint/firmware payload was still required despite general PR scope/public precedent. Root disclosed this and requested concrete payload approval; **pending**, separate from the remaining-only hardware request. No PR exists; no bypass/retry/further push while pending. Local-only checkpoint updates preserve this state.
