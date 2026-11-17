@@ -20,3 +20,9 @@ With browser network disabled, cold navigation to root, IEM alias, demo and conn
 ## Remaining gate
 
 F09-S04 remains unstarted: the user now reports the desk powered on/reachable, not independently verified here. S03 acceptance/merge must precede a separately bounded live-check plan/authorization. Exact firmware echo/precision/observation completeness, native edits and partial-application recovery need that evidence; F08-S01 physical release qualification remains open. No GEQ/new writer or physical-support claim follows from this report. Root owns/cleans its fake browser and preview resources; the story agent created no hardware socket.
+
+## Corrective-head smoke on worker `091b1303c61d315d`
+
+After both P1 review fixes, root independently repeated group +0.1 then +0.1: each gesture produced four distinct approved paths, requested cumulative +0.20 dB/local input Δ 0 and stable input identity, while actual remained unchanged. After group disarm and fresh receipts for only both `i.0` paths, selecting individual `i.0` correctly left Enable disabled with complete-recovery guidance. The disjoint AUX master remained eligible. Fresh receipts for the remaining paired `i.1` paths made explicit individual Enable available; no recovery action sent a write (eight total from the two deliberate group gestures).
+
+Cold network-disabled root/IEM/demo/connection-test launches again displayed their correct titles and current `091b1303c61d315d` offline-version proof, including connection-test saved-offline text; every entry created zero fake sockets. This is the final runtime-hash smoke. The broader layout/pan/terminal evidence above remains attributed to its earlier builds; no physical or real-firmware claim is added. Root closed its owned fake browser and preview after validation.
