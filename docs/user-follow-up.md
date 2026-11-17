@@ -214,3 +214,8 @@ Root reviewed the remaining-only plan, recorder delta and fake tests as a concre
 
 
 Root reviewed/pushed the sanitized payload at remote `9b52890a2e1ca8b83eaeef0f2af1a8add9553783`; same-connector draft-PR reconsideration was rejected again because explicit approval of this specific endpoint/firmware payload was still required despite general PR scope/public precedent. Root disclosed this and requested concrete payload approval; **pending**, separate from the remaining-only hardware request. No PR exists; no bypass/retry/further push while pending. Local-only checkpoint updates preserve this state.
+
+
+### Payload and remaining-only browser scope explicitly approved
+
+The user explicitly approved the specific sanitized public payload. They also said browser-test permission need not be requested repeatedly and to take as long as needed for the window. Remaining-only group two −0.1 dB / pan two −0.001 gestures (**four gestures/twelve SETD**) are approved; no repeated master/standalone-send moves. Root keeps max two connections and prepares a 30-minute diagnostic guard for tool delays. This changes time only, with no native/fault/EQ/snapshot/rollback/observer/new-field scope. Root owns publication/browser actions; agent commits authorization and time-only fixture/tests locally. Prior pending/rejection entries are historical; no new hardware pass follows.
