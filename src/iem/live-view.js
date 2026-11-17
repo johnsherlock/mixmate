@@ -7,7 +7,7 @@ import { outputColour, overviewColour } from './theme.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false;
@@ -34,8 +34,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   $('.mm-rec-state').textContent = 'Recording status unavailable';
   const shortcuts = $('.mm-group-switches');
   const shortcutNodes = new Map(), levelTargets = new WeakMap();
-  const enableLevel = element('button', 'mm-level-enable', 'Enable level'); enableLevel.type = 'button'; enableLevel.disabled = true; enableLevel.hidden = true;
-  $('.mm-local-tabs').append(enableLevel);
+
   let control = null, preview = null, selectedAux = null;
   const groupInputs = new WeakMap();
   const deltaText = value => `Δ ${value > 0 ? '+' : ''}${value.toFixed(2)} dB`;
@@ -63,6 +62,11 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   }
   const gestures = installFaderGestures(content, {
     onBegin(input) {
+      const target = levelTargets.get(input);
+      if (target && !selectedTarget(target)) {
+        if (target.kind === 'group') onSelectGroupLevel(target.groupId);
+        else onSelectLevel(target);
+      }
       const token = onBeginLevel();
       if (token) preview = { input, token };
       return token;
@@ -100,8 +104,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (control) {
         selection.className = 'mm-group-control-note mm-group-selection';
         selection.setAttribute('title', 'Group master · relative delta zero per gesture · no aggregate level or VU');
-        note.textContent = 'Requested total Δ · unverified'; note.className = 'mm-pan-button';
-        note.setAttribute('title', 'Requested cumulative offset only; no proof of hardware balance or application. Each gesture starts at local zero.');
+        note.textContent = 'Last requested gesture Δ'; note.className = 'mm-pan-button';
+        note.setAttribute('title', 'Last requested gesture offset; no proof of hardware balance or application. Each gesture uses current received state and starts at zero.');
         article.append(head, output, space, note, state, selection);
       } else article.append(head, output, space, state, note);
       const strip = { kind, article, name, description, output, state, input, select, unavailable, note };
@@ -166,21 +170,22 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         strip.name.disabled = false; strip.name.dataset.toggleGroup = model.groupId;
         strip.name.setAttribute('title', `${model.name} · group master`);
         const target = { kind: 'group', groupId: model.groupId, auxIndex: selectedAux };
-        const chosen = Boolean(selectedTarget(target)), eligible = chosen && control?.eligible;
+        const chosen = Boolean(selectedTarget(target)), eligible = Boolean(control && (canEditLevel ? canEditLevel(target) : chosen && control.eligible));
+        if (strip.input) levelTargets.set(strip.input, target);
         strip.article.dataset.levelSelected = String(chosen);
         strip.article.dataset.unknown = String(!eligible);
         if (strip.select) {
           strip.select.dataset.selectGroupLevel = model.groupId; strip.select.disabled = false;
           strip.select.setAttribute('aria-label', `Select relative level for group ${model.name}`); strip.select.setAttribute('aria-pressed', String(chosen));
           strip.input.dataset.group = model.groupId;
-          strip.input.disabled = !(eligible && control.armed && !control.pending);
+          strip.input.disabled = !(eligible && !control.dispatching);
           strip.input.setAttribute('aria-label', `${model.name} relative delta, zero per gesture; cap drag or arrow keys, release to apply`);
           if (preview?.input !== strip.input) strip.input.value = '0';
           strip.unavailable.hidden = Boolean(eligible);
         }
-        strip.note.textContent = chosen && control?.gestureActive ? 'Gesture Δ · release to apply' : 'Requested total Δ · unverified';
-        strip.output.textContent = eligible ? deltaText(control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0) : 'Δ —';
-        strip.output.setAttribute('aria-label', eligible ? 'Requested cumulative offset, or current gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
+        strip.note.textContent = chosen && control?.gestureActive ? 'Gesture Δ · release to apply' : chosen && control?.lastDelta !== null ? 'Last requested gesture Δ' : 'Gesture Δ · starts at zero';
+        strip.output.textContent = eligible ? deltaText(chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0) : 'Δ —';
+        strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         strip.state.textContent = chosen ? control.reason || control.status : model.stateText;
         continue;
       }
@@ -191,7 +196,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.name.setAttribute('title', model.name);
       const levelTarget = model.sourceId && model.auxIndex !== undefined ? { kind: 'send', auxIndex: model.auxIndex, sourceId: model.sourceId }
         : model.auxIndex !== undefined ? { kind: 'master', auxIndex: model.auxIndex } : null;
-      if (levelTarget) levelTargets.set(strip.name, levelTarget);
+      if (levelTarget) { levelTargets.set(strip.name, levelTarget); levelTargets.set(strip.input, levelTarget); }
       const isSelected = levelTarget && selectedTarget(levelTarget);
       strip.article.dataset.levelSelected = String(Boolean(isSelected));
       strip.name.setAttribute('aria-pressed', String(Boolean(isSelected)));
@@ -200,7 +205,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.input.setAttribute('aria-label', `${model.name} received level, read-only`);
       const known = typeof model.position === 'number' && Number.isFinite(model.position) && model.position >= 0 && model.position <= 1;
       strip.article.dataset.unknown = String(!known);
-      strip.input.disabled = !(control && isSelected && control.eligible && control.armed && !control.pending);
+      strip.input.disabled = !(control && levelTarget && (canEditLevel ? canEditLevel(levelTarget) : isSelected && control.eligible) && !control.dispatching);
       if (isSelected && typeof control?.requestedValue === 'number') {
         strip.state.textContent = `Last received ${model.levelText ?? '—'} · Requested ${control.requestedValue}`;
         strip.state.setAttribute('title', strip.state.textContent);
@@ -210,7 +215,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         strip.state.setAttribute('title', strip.state.textContent);
       }
       strip.output.setAttribute('aria-label', `${model.name} last received level`);
-      strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, controls off' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
+      strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
       if (preview?.input !== strip.input) strip.input.value = isSelected && typeof control?.requestedValue === 'number' ? String(control.requestedValue) : known ? String(model.position) : '0';
       updateMeter(strip, model);
     }
@@ -220,13 +225,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     root.dataset.levelControls = String(Boolean(control));
     if (!control?.gestureActive && preview) { preview = null; gestures.cancel(); }
     const targetLabel = control?.selected ? `${control.selected.kind === 'group' ? `Group ${control.groupName || control.selected.groupId}` : control.selected.kind === 'master' ? 'Master' : sourceLabel(control.selected.sourceId)} → AUX ${control.selected.auxIndex + 1}` : 'no selected level';
-    enableLevel.hidden = !control;
-    const levelArmed = control?.armed && control.operation !== 'pan';
-    enableLevel.disabled = !control?.selected || control.operation === 'pan' || !control.eligible || control.pending;
-    enableLevel.textContent = levelArmed ? 'Disable level' : 'Enable level';
-    enableLevel.setAttribute('aria-label', `${levelArmed ? 'Disable' : 'Enable'} level for ${targetLabel}`);
-    enableLevel.setAttribute('title', `${targetLabel}: ${control?.reason || control?.status || ''}`);
-    $('.mm-mode-label').textContent = control ? `LIVE IEM · ${control.operation === 'pan' ? 'PAN' : control.panCapable && !control.selected ? 'CONTROLS' : 'LEVELS'} ${control.pending ? 'PENDING' : control.armed ? 'ENABLED' : 'OFF'}` : 'READ-ONLY IEM';
+
+    $('.mm-mode-label').textContent = control ? `LIVE IEM · ${control.operation === 'pan' ? 'PAN' : control.panCapable && !control.selected ? 'CONTROLS' : 'LEVELS'} ${control.dispatching ? 'SENDING' : control.eligible || !control.selected && model.connectionPhase === 'live' ? 'READY' : 'WAITING'}` : 'READ-ONLY IEM';
     $('.mm-dirty').textContent = control ? control.status : 'Read-only · no parameter writes';
     $('.mm-dirty').setAttribute('title', control?.status || 'Read-only');
     const terminal = ['error', 'closed', 'timeout', 'blocked', 'unsupported', 'invalid'].includes(model.connectionPhase);
@@ -243,7 +243,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     auxSelected = selected;
     $('.mm-local-tabs').hidden = !selected && !groupEditing;
     if ($('.mm-title')) $('.mm-title').textContent = model.selectedMix?.name ?? '';
-    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? control ? 'Expanded group · relative Δ controls' : 'Expanded group · level unavailable' : control ? 'Local group masters · relative Δ controls' : 'Local group masters · level unavailable' : control ? 'All observed AUX sources · select and enable a level' : 'All observed AUX sources · read-only' : 'Individual received outputs';
+    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? control ? 'Expanded group · relative Δ controls' : 'Expanded group · level unavailable' : control ? 'Local group masters · relative Δ controls' : 'Local group masters · level unavailable' : control ? 'All observed AUX sources · select a level to edit' : 'All observed AUX sources · read-only' : 'Individual received outputs';
     reconcile(grid, overviewStrips, model.mixes, 'master');
     reconcile(bank, sourceStrips, model.sources || [], 'source');
     reconcile(pinned, pinnedStrips, model.selectedMix && model.showAuxMaster !== false ? [model.selectedMix] : [], 'master');
@@ -263,7 +263,6 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if (button.dataset.openPan !== undefined) { gestures.cancel(); onOpenPan({ sourceId: button.dataset.openPan, auxIndex: Number(button.dataset.panAux) }); }
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
     if (control && levelTargets.has(button)) { gestures.cancel(); onSelectLevel(levelTargets.get(button)); }
-    if (button === enableLevel) { gestures.cancel(); onToggleLevel(); }
     if (button.dataset.selectGroupLevel !== undefined) { gestures.cancel(); onSelectGroupLevel(button.dataset.selectGroupLevel); }
     if (button.dataset.toggleGroup !== undefined) { gestures.cancel(); onToggleGroup(button.dataset.toggleGroup); }
     if (button.dataset.mode === 'channels') { gestures.cancel(); onAllChannels(); }

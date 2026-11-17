@@ -102,7 +102,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.match(liveHTML, /connect-src ws:/);
     assert.match(demoHTML, /connect-src 'none'/);
     const transport = await readFile('src/iem/session-core.js', 'utf8');
-    assert.deepEqual([...transport.matchAll(/\.send\(([^)]+)\)/g)].map(match => match[1]).sort(), ["'2::'", "'3:::ALIVE'", "'3:::INIT'", "message"].sort());
+    assert.deepEqual([...transport.matchAll(/\.send\(([^)]+)\)/g)].map(match => match[1]).sort(), ["'2::'", "'2::'", "'3:::ALIVE'", "'3:::ALIVE'", "'3:::INIT'", "'3:::INIT'", "message"].sort());
     assert.ok(!transport.includes('../protocol.js'));
     assert.match(transport, /createReadOnlySession\(options\) \{ return createSession\(false, options\)/);
     assert.match(transport, /createAuxLevelSession\(options\) \{ return createSession\(true, options\)/);

@@ -12,7 +12,7 @@ export function resolveGroupNavigation(groups, requested) {
 function master(group, profileId, aux, controls) {
   return { id: `group:${profileId}:${group.id}@${aux}`, kind: 'group', groupId: group.id, name: group.name,
     detail: `${group.members.length} member${group.members.length === 1 ? '' : 's'} · ${controls ? 'relative Δ · no group VU' : 'relative level unavailable'}`,
-    levelText: 'Unavailable', stateText: controls ? 'Select level, then enable · Δ 0 per gesture' : 'Group level unavailable · read-only', panText: '', browsable: false };
+    levelText: 'Unavailable', stateText: controls ? 'Drag or use keys · fresh received basis · Δ 0 per gesture' : 'Group level unavailable · read-only', panText: '', browsable: false };
 }
 export function projectGroupNavigation(base, profile, requested) {
   const groups = profile?.groups || [], navigation = resolveGroupNavigation(groups, requested);

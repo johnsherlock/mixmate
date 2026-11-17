@@ -16,7 +16,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   for (const value of ['192.168.0.60', '192.168.1.60']) { const option = make('option'); option.value = value; known.append(option); }
   const profileLabel = make('label', 'Saved local rig'), addressLabel = make('label', 'Mixer private IPv4 address');
   profileLabel.append(profile); addressLabel.append(address); connect.type = 'submit';
-  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? pan ? 'Controls start off. Select and enable a level or normalized pan explicitly; only release applies a change.' : 'Levels start off. Select a level and enable it explicitly; only release applies a change.' : 'Only received state is shown. No mixer parameter writes.');
+  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? pan ? 'Known compatible levels and normalized pan are editable after connecting. Drag or use keys; release applies a change.' : 'Known compatible levels are editable after connecting. Drag or use keys; release applies a change.' : 'Only received state is shown. No mixer parameter writes.');
   settings.className = note.className = 'mm-caption'; note.setAttribute('role', 'status');
   form.append(profileLabel, addressLabel, known, settings, connect, note);
   $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';

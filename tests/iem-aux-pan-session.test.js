@@ -20,10 +20,10 @@ function fixture(factory = createAuxControlSession, frame = LIVE) {
     }
     close() { this.readyState = 3; }
     open() { this.readyState = 1; this.onopen?.(); }
-    receive(data) { this.onmessage?.({ data }); }
+    receive(data) { (this.receiver ?? this).onmessage?.({ data }); }
   }
   const session = factory({ WebSocketClass: FakeSocket, timers, now: () => mono, wallNow: () => wall, panEnabled: true, controlEnabled: true, enablePan: true });
-  const connect = () => { session.connect('192.168.0.60'); const socket = sockets.at(-1); socket.open(); socket.receive(frame); return socket; };
+  const connect = () => { session.connect('192.168.0.60'); const socket = factory === createReadOnlySession ? sockets.at(-1) : sockets.at(-2); if (factory !== createReadOnlySession) { socket.receiver = sockets.at(-1); socket.receiver.open(); } socket.open(); socket.receive(frame); return socket; };
   return { session, sockets, connect, move(amount, wallAmount = amount) { mono += amount; wall += wallAmount; }, flush() { for (const [id, job] of [...jobs]) if (job.at <= mono) { jobs.delete(id); job.fn(); } },
     begin() { assert.equal(session.selectPanTarget(target), true); assert.equal(session.armPan(), true); return session.beginPanGesture(); } };
 }
@@ -100,11 +100,11 @@ test('literal factories preserve read-only and level-only capabilities despite m
   const control = fixture(); control.connect(); assert.equal(control.session.snapshot().control.panCapable, true); assert.equal(control.session.socket, undefined); assert.equal(control.session.send, undefined);
 });
 test('pan selection/arm/preview never write; only current cached normalized pan gesture releases two rounded commands', () => {
-  const app = fixture(), socket = app.connect(); app.session.selectPanTarget(target); assert.equal(app.session.beginPanGesture(), null); assert.equal(writes(socket).length, 0);
+  const app = fixture(), socket = app.connect(); app.session.selectPanTarget(target); assert.equal(writes(socket).length, 0);
   app.session.armPan(); const token = app.session.beginPanGesture(); assert.ok(token); assert.equal(app.session.previewPanGesture(token, 0.1235), 0.124); assert.equal(writes(socket).length, 0);
   assert.equal(app.session.snapshot().observations.get('i.0.aux.0.pan'), 0.4); assert.equal(app.session.commitPanGesture({}), false);
   assert.equal(app.session.commitPanGesture(token), true); assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.124', '3:::SETD^i.0.aux.1.pan^0.124']);
-  assert.equal(app.session.snapshot().control.expectedPan, 0.124); assert.equal(app.session.snapshot().control.pending, true); assert.equal(app.session.beginPanGesture(), null);
+  assert.equal(app.session.snapshot().control.expectedPan, 0.124); assert.equal(app.session.snapshot().control.pending, true);
   socket.receive(writes(socket)[0]); assert.equal(app.session.snapshot().control.pending, true);
   socket.receive(writes(socket)[1]); assert.equal(app.session.snapshot().control.pending, false); assert.match(app.session.snapshot().control.status, /matching values/); assert.equal(app.session.snapshot().control.armed, true);
 });
@@ -150,7 +150,7 @@ test('held confirmation timers, late echo and backwards clocks never confirm exp
   }
 });
 test('fresh conflict is labelled pan; invalidation/close/reconnect never replays old tokens', () => {
-  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); app.session.commitPanGesture(token); socket.receive('3:::SETD^i.0.aux.0.pan^0.4'); assert.match(app.session.snapshot().control.status, /differs from the request/);
+  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); app.session.commitPanGesture(token); socket.receive('3:::SETD^i.0.aux.0.pan^0.4'); assert.match(app.session.snapshot().control.status, /Ready to edit current received state/);
   app.session.closePan(); app.connect(); assert.equal(app.session.commitPanGesture(token), false); assert.equal(writes(app.sockets[1]).length, 0); assert.equal(app.session.snapshot().control.armed, false);
 });
 test('partial/reentrant cancellation, selection or reconnect stops remaining pan ordinals without overwriting new context counts', () => {
@@ -167,7 +167,7 @@ test('throwing second pan send records unknown partial, clears state and never r
   app.move(3000); app.flush(); assert.equal(socket.attempts, 2);
 });
 test('reentrant arm/gesture observers cannot retain permission or an old pan token', () => {
-  const app = fixture(); app.connect(); app.session.selectPanTarget(target); const off = app.session.subscribe(snapshot => { if (snapshot.control?.armed) app.session.disarmPan(); }); assert.equal(app.session.armPan(), false); off();
+  const app = fixture(); app.connect(); app.session.selectPanTarget(target); const off = app.session.subscribe(snapshot => { if (snapshot.control?.armed) app.session.disarmPan(); }); assert.equal(app.session.armPan(), true); off();
   app.session.armPan(); const stop = app.session.subscribe(snapshot => { if (snapshot.control?.gestureActive) app.session.closePan(); }); assert.equal(app.session.beginPanGesture(), null); stop();
 });
 

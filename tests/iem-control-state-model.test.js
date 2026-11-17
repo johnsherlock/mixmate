@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
-import { createControlScope, createControlState, transitionControl, OBSERVATION_WINDOW_MS } from '../src/iem/control-state-model.js';
+import { createControlScope, createControlState, createPeerControlState, transitionControl, OBSERVATION_WINDOW_MS } from '../src/iem/control-state-model.js';
 import { continuousFaderDB, GROUP_MAX_DB } from '../src/iem/relative-groups.js';
 
-function fixture(kind = 'level', linked = false, levels = [0.4, 0.6]) {
+function fixture(kind = 'level', linked = false, levels = [0.4, 0.6], peer = false) {
   const received = new Map([['model', 'ui24'], ['a.0.stereoIndex', linked ? 0 : -1], ['a.0.matrix', false], ['i.0.stereoIndex', -1], ['i.1.stereoIndex', -1]]);
   if (linked) { received.set('a.1.stereoIndex', 1); received.set('a.1.matrix', false); }
   for (let a = 0; a < (linked ? 2 : 1); a++) {
@@ -17,7 +17,7 @@ function fixture(kind = 'level', linked = false, levels = [0.4, 0.6]) {
   const target = kind === 'level' ? { kind: 'master', auxIndex: 0 } : kind === 'pan' ? { sourceId: 'i.0', auxIndex: 0 } : { auxIndex: 0 };
   const group = { id: 'band', members: ['i.0', 'i.1'] };
   const scope = () => createControlScope({ kind, received, receipts, target, group });
-  let state = createControlState({ scope: scope(), generation: 1, revision: 1, now: { mono: 0, wall: 10000 } });
+  let state = (peer ? createPeerControlState : createControlState)({ scope: scope(), generation: 1, revision: 1, now: { mono: 0, wall: 10000 } });
   let time = 0;
   const step = (type, fields = {}, advance = 1) => { time += advance; state = transitionControl(state, { type, now: { mono: time, wall: 10000 + time }, ...fields }); return state; };
   const receive = (path, value, extra = {}) => {
@@ -404,4 +404,44 @@ test('repeated overlapping recovered closures keep recovery history bounded with
     for (const member of members) a.receive(`${member}.aux.0.value`, a.received.get(`${member}.aux.0.value`));
     assert.ok(a.state.retired.length <= 128);
   }
+});
+
+
+test('peer policy: native receipt cancels obsolete intent without imposing an Enable recovery barrier', () => {
+  const a = fixture('level', false, [0.4, 0.6], true);
+  a.step('arm'); a.gesture(0.7); a.dispatch();
+  a.receive('a.0.mix', 0.6);
+  assert.equal(a.state.gesture, null); assert.equal(a.state.chain, null);
+  assert.equal(a.state.actual[0].value, 0.6); assert.deepEqual(a.state.barriers, []);
+  // The private owner rebuilds the current actual scope on the next deliberate
+  // gesture. No user Enable event or outgoing effect is implied by these events.
+  a.step('select', { scope: a.scope(), revision: a.state.revision + 1 });
+  a.step('arm'); a.step('begin');
+  assert.equal(a.state.chain.anchor[0].value, 0.6);
+});
+
+test('peer policy: observation diagnostics do not freeze a new absolute gesture for 2.5 seconds', () => {
+  const a = fixture('level', false, [0.4, 0.6], true);
+  a.step('arm'); a.gesture(0.7); a.dispatch();
+  a.step('begin'); assert.ok(a.state.gesture);
+  assert.equal(a.state.operation.status, 'sent-unverified');
+  assert.equal(a.state.actual[0].value, 0.4);
+  assert.equal(a.state.chain.requested[0].value, 0.7);
+});
+
+test('peer policy: incomplete reentrant dispatch still requires the whole original post-floor closure', () => {
+  const a = fixture('level', true, [0.4, 0.6], true);
+  a.step('arm'); a.gesture(0.7); const id = a.state.operation.id;
+  a.step('authorize', { id, ordinal: 0 });
+  a.receive('a.0.mix', 0.7);
+  a.step('returned', { id, ordinal: 0 });
+  assert.equal(a.state.operation.returned, 1);
+  assert.equal(a.state.operation.status, 'reentrant-invalidated');
+  assert.equal(a.state.barriers.length, 2);
+  a.receive('a.1.mix', 0.7);
+  a.step('select', { scope: a.scope(), revision: a.state.revision + 1 });
+  assert.throws(() => a.step('arm'));
+  a.receive('a.0.mix', 0.7);
+  a.step('select', { scope: a.scope(), revision: a.state.revision + 1 });
+  a.step('arm'); a.step('begin'); assert.ok(a.state.gesture);
 });

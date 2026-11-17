@@ -3,6 +3,10 @@
 Date: 2026-11-11
 Status: Accepted implementation direction under explicit user F06 orchestration/ADR-0002; S01 CI/review/merge pending.
 
+## Current peer-editor amendment — 2026-11-17
+
+The user's [current direction](0004-aux-level-safety.md#current-user-direction-and-testing-permission--2026-11-17) and [ADR-0008 F09-S04 decision](0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17) supersede manual Enable/Disable and native-edit rearm below. Pan keeps its existing exact source/output qualification and three-decimal wire normalization, with raw actual readbacks from the private receive-only companion. Qualified dialog gestures/presets are immediately usable. Obsolete intent cancels on incoming change; complete compatible actual automatically permits the next gesture. Unknown/unequal/unsupported pan remains unavailable. No direction/balance/new-field capability is granted.
+
 ## Context
 
 F05 implementation is merged in PRs #23–25 and its closure PR #26/main `0d9b326`; physical qualification remains F08-S01. The user authorized sequential F06 delivery, each story with CI and affirmative exact-head Codex review before merge. Pinned pan implementation differs from level fan-out, and neither inspected primary docs nor upstream tests establishes physical numeric direction or stereo-source balance law. A single bounded passive native-client GET was unavailable; no actuator or additional probe is used.

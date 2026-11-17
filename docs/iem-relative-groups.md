@@ -1,5 +1,11 @@
 # Relative AUX group levels — F05-S03
 
+## Current F09-S04 peer-editor reconciliation — 2026-11-17
+
+The [current runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17) supersede historical manual arming/rearming, cumulative old-anchor groups, one-socket actual state and observation-window input blocking below. Qualified connected controls accept direct cap/key gestures without Enable/Disable or prior name selection. A private receive-only companion is the sole actual journal; existing typed writer classes remain unchanged. Native/precision changes cancel obsolete intent and update raw actual; the next deliberate gesture automatically uses current compatible state. Groups reanchor per gesture only after complete overlapping local-write basis receipts. Incomplete dispatch still requires full touched-closure post-floor recovery, then a new gesture without manual rearm. No retry/replay/rollback, new fields, generic sender or EQ runtime. Old sections/evidence describe their attributed historical builds; current exact-head delivery and firmware acceptance belong to [F09-S04](stories/F09-S04.md).
+
+## Historical contract and evidence
+
 ## F09-S03 current runtime reconciliation — 2026-11-17
 
 The [current owned runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md) supersede historical timeout-disarm, fresh-baseline-per-move and unrelated-value invalidation wording below. Production uses the private reducer/current-owner typed dispatch guard; historical standalone leases remain pure compatibility/test helpers, not runtime authority. Literal factories, exact allowlist, arming, lifecycle/stereo safeguards and no retry/replay/rollback remain unchanged. Review/merge acceptance is tracked by [F09-S03](stories/F09-S03.md).
