@@ -14,7 +14,7 @@ Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 unstarted, targeted hardware gate open |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 in progress, blocking hardware rows open |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -70,3 +70,7 @@ Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchest
 [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) already authorizes the named feature classes; exact forms/types/ranges and deliberate reviewed typed-guard/allowlist changes remain mandatory. It does not authorize automatic real-desk tests. Snapshot SAVE was explicitly forbidden in recent live diagnostics; future F07 feature-class scope does not override that session restriction or create current hardware permission.
 
 Library/native source evidence, fake tests, observed device/firmware trials and hypotheses must remain distinct. [F08-S01](stories/F08-S01.md) retains Android/iOS, installation/current-asset offline proof, local-network permissions, sleep/recovery, both rigs and all implemented controls as a physical release gate. Record unresolved findings and dependency exceptions in [follow-ups](user-follow-up.md). Start from the concise [handoff](orchestrator-handoff.md).
+
+## Active S04-only batch — 2026-11-17
+
+The user subsequently explicitly said “Start F09-S04”, authorizing this sole-story batch after the previous stop. [S04 matrix](f09-s04-firmware-validation.md) records one bounded passive diagnostic with clean closure, proposed exact live limits and missing permissions. No live parameter writes or browser control passes yet. S04 remains incomplete, applicable foundation/EQ criteria remain blocking and F06-S04 is not ready; no downstream story starts automatically. Earlier unstarted/stop text above describes the completed S03 batch. Root owns live action coordination and final acceptance.

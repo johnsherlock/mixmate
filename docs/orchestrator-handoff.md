@@ -1,4 +1,10 @@
-# Orchestrator handoff — 2026-11-17
+# Orchestrator handoff — active F09-S04 checkpoint, 2026-11-17
+
+## Active S04-only batch — supersedes the historical stop below
+
+The user subsequently explicitly said **“Start F09-S04”**. Current reviewed baseline is main `865e0085ac45eeee1ced8c6ff1e8b2762943f2b4` (closing PR#41), branch `codex/f09-s04-firmware-validation`. Sole sequential fresh-context story agent; root owns live-browser coordination and final acceptance. [S04 validation matrix](f09-s04-firmware-validation.md) contains exact authorization, passive readbacks/outbound inventory/cleanup, proposed live bounds and blocking rows. One authorized nine-second literal read-only connection succeeded/closed; no parameter action or native reload occurred. Required checks passed301/301 and unchanged worker091b1303c61d315d. Live-control/native/partial/recovery hardware rows are not run; S04 remains incomplete and **F06-S04 not ready**. Do not merge or start downstream implementation based on preparation. Applicable live scope still needs explicit approval; no hardware actions remain running. Preserve the untracked integration handoff. Review/CI/PR and final batch disposition will be recorded before a final handoff; this is a working checkpoint, not a delivered completion claim.
+
+## Historical S03 batch handoff
 
 Start with [AGENTS](../AGENTS.md), [lifecycle](orchestration.md), [backlog](backlog.md), assigned story/feature and contracts. Last verified story baseline on main is **`446664578d5470378730d6acdbe5aa77488a72fb`**. This closing documentation delivery is identified by its containing reviewed PR/history; recheck its final review/CI/merge, actual HEAD and worktree. No previous conversation or private artifact is required.
 
