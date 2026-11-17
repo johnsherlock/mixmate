@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S03-only batch is complete; the handoff records its stop boundary. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S03-only batch is complete; the explicitly authorized S04-only batch is now in progress. The handoff records its approved live limits and current manual Chrome preflight blocker. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -73,4 +73,4 @@ Library/native source evidence, fake tests, observed device/firmware trials and 
 
 ## Active S04-only batch — 2026-11-17
 
-The user subsequently explicitly said “Start F09-S04”, authorizing this sole-story batch after the previous stop. [S04 matrix](f09-s04-firmware-validation.md) records one bounded passive diagnostic with clean closure, proposed exact live limits and missing permissions. No live parameter writes or browser control passes yet. S04 remains incomplete, applicable foundation/EQ criteria remain blocking and F06-S04 is not ready; no downstream story starts automatically. Earlier unstarted/stop text above describes the completed S03 batch. Root owns live action coordination and final acceptance.
+The user subsequently explicitly said “Start F09-S04”, authorizing this sole-story batch after the previous stop. [S04 matrix](f09-s04-firmware-validation.md) records one bounded passive diagnostic with clean closure and the user-approved exact eight-gesture / twenty-command live block. That approval remains valid; only the manual Chrome self-XSS step is pending before root execution. Native edits and hardware fault injection remain outside approval. No live parameter writes or browser control passes yet. S04 remains incomplete, applicable foundation/EQ criteria remain blocking and F06-S04 is not ready; no downstream story starts automatically. Earlier unstarted/stop text above describes the completed S03 batch. Root owns live action coordination and final acceptance.
