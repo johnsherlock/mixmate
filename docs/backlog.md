@@ -14,7 +14,7 @@ Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 in progress, blocking hardware rows open |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 interrupted before writes, hardware gate blocked |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -73,4 +73,9 @@ Library/native source evidence, fake tests, observed device/firmware trials and 
 
 ## Active S04-only batch — 2026-11-17
 
-The user subsequently explicitly said “Start F09-S04”, authorizing this sole-story batch after the previous stop. [S04 matrix](f09-s04-firmware-validation.md) records one bounded passive diagnostic with clean closure and the user-approved exact eight-gesture / twenty-command live block. That approval remains valid; only the manual Chrome self-XSS step is pending before root execution. Native edits and hardware fault injection remain outside approval. No live parameter writes or browser control passes yet. S04 remains incomplete, applicable foundation/EQ criteria remain blocking and F06-S04 is not ready; no downstream story starts automatically. Earlier unstarted/stop text above describes the completed S03 batch. Root owns live action coordination and final acceptance.
+The user subsequently explicitly said “Start F09-S04”, authorizing this sole-story batch after the previous stop. [S04 matrix](f09-s04-firmware-validation.md) records one bounded passive diagnostic with clean closure and the user-approved exact eight-gesture / twenty-command live block. That target approval remains historical authorization; the manual Chrome step was completed and the subsequent live attempt was interrupted as recorded below. Native edits and hardware fault injection remain outside approval. No live parameter writes or browser control passes yet. S04 remains incomplete, applicable foundation/EQ criteria remain blocking and F06-S04 is not ready; no downstream story starts automatically. Earlier unstarted/stop text above describes the completed S03 batch. Root owns live action coordination and final acceptance.
+
+
+### Current interrupted S04 checkpoint
+
+The [owner-browser attempt](f09-s04-firmware-validation.md#interrupted-owner-browser-attempt--2026-11-17) received baseline/setup but recorded zero successful gestures/parameter calls. Socket 1 closed unclean before the watchdog; the second recorded socket's time/cause is unknown. Both sockets and recorder are cleaned up. The original 180-second/two-connection block is closed; no new connection under unused gesture allowance. S04 remains in progress with blocking hardware acceptance and **F06-S04 not ready**. A documentation/fake-diagnostic preservation PR must remain draft/incomplete and unmerged. No downstream implementation starts; fresh bounded continuation budget/new missing scope is required, preserving original target approval.
