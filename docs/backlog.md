@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S03-only batch is complete; the explicitly authorized S04-only batch is now in progress. The handoff records its approved live limits and remaining hardware blockers and approved remaining-only trial. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S03-only batch is complete; the explicitly authorized S04-only batch is now in progress. The handoff records its approved live limits and parked hardware acceptance and draft-only handoff. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -14,7 +14,7 @@ Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 master/send scoped pass, remaining hardware gate blocked |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 parked incomplete, native/partial/full-rearm gate blocked |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -71,8 +71,8 @@ Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchest
 
 Library/native source evidence, fake tests, observed device/firmware trials and hypotheses must remain distinct. [F08-S01](stories/F08-S01.md) retains Android/iOS, installation/current-asset offline proof, local-network permissions, sleep/recovery, both rigs and all implemented controls as a physical release gate. Record unresolved findings and dependency exceptions in [follow-ups](user-follow-up.md). Start from the concise [handoff](orchestrator-handoff.md).
 
-## Active S04-only batch — 2026-11-17
+## S04-only batch boundary — parked incomplete, 2026-11-17
 
-The user explicitly started S04 and separately approved its bounded windows. [Current matrix/evidence](f09-s04-firmware-validation.md) records a passive baseline, an interrupted zero-parameter window and a subsequent scoped repeated master/send owner-behavior pass (four trusted gestures/eight returned SETD, no sender target echoes). Requested reductions were not reversed; current actual/application/precision remain unknown. Both completed windows are closed and cleaned up. Group/pan/native/partial/precision/recovery acceptance still blocks S04 and **F06-S04 readiness**.
+[Exact matrix/evidence](f09-s04-firmware-validation.md) corroborates scoped repeated level/group/pan owner behavior (eight trusted gestures/twenty returned SETD, no sender target echoes) and limited later current-state/precision points. Native edit/away-back, real partial/interrupted dispatch and full touched-closure recovery plus explicit rearm remain **blocking**. S04 is parked incomplete; **F06-S04 not ready**, F08 physical release gate remains open.
 
-Approved remaining-only trial: thirty-minute guard/max two connections, four group/pan gestures/twelve SETD, final controls-OFF snapshot; **root evidence pending**, no repeated master/standalone-send gestures. Root owns live actions, sanitized draft-publication reconsideration and final acceptance. Draft PR #42 remains incomplete; no merge/downstream implementation; story agent makes no hardware/browser action. Historical batch receipts above do not waive this gate.
+[Draft PR #42](https://github.com/johnsherlock/mixmate/pull/42) contains the reviewed handoff off main; no merge/downstream implementation. All owned live resources closed; no further connection in this batch. Preserve existing user target/time/publication approval while assessing genuinely missing scope/evidence; excluded native/fault actions are not implied. Root owns future orchestration/acceptance; story agent stops after final-head review/CI/checkpoint verification.
