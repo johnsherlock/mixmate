@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "s04-validation",
+      "name": "S04 validation",
+      "address": "192.168.0.60",
+      "groups": [
+        {
+          "id": "s04-inputs-0-1",
+          "name": "S04 inputs 0/1",
+          "members": ["i.0", "i.1"]
+        }
+      ],
+      "navigation": {
+        "mixId": "a.0",
+        "view": "groups",
+        "expandedGroupId": null
+      }
+    }
+  ],
+  "selectedProfileId": "s04-validation",
+  "preferences": {
+    "orientation": "auto",
+    "showMeters": true
+  }
+}
