@@ -73,14 +73,14 @@ test('unconfirmed deadline is checked even with held timers before late echo, sn
     if (action === 'echo') socket.receive('3:::SETD^a.0.mix^0.5');
     if (action === 'arm') assert.equal(app.session.armLevel(), true); // Explicit re-arm after expired operation is allowed.
     const state = app.session.snapshot(); assert.equal(state.control.pending, false);
-    if (action !== 'arm') assert.equal(state.control.armed, false);
+    if (action !== 'arm') assert.equal(state.control.armed, action !== 'backward');
     assert.doesNotMatch(state.control.status, /Observed matching/); assert.equal(writes(socket).length, 1);
   }
 });
 test('fresh wrong echo conflicts, same-value preauthorization receipts cannot confirm and no timeout retries', () => {
-  const app = setup(), socket = app.connect(), token = app.begin(); socket.receive('3:::SETD^a.0.mix^0.4'); app.session.commitLevelGesture(token, 0.4);
+  const app = setup(), socket = app.connect(), token = app.begin(); socket.receive('3:::SETD^a.0.mix^0.4'); app.session.commitLevelGesture(token, 0.5);
   assert.equal(app.session.snapshot().control.pending, true); socket.receive('3:::SETD^a.0.mix^0.41');
-  assert.equal(app.session.snapshot().control.armed, false); assert.match(app.session.snapshot().control.status, /changed|Conflicting/);
+  assert.equal(app.session.snapshot().control.armed, false); assert.match(app.session.snapshot().control.status, /differs from the request|changed/);
   app.move(3000); app.flush(); assert.equal(writes(socket).length, 1);
 });
 test('reentrant cancellation/close/new connection after a send prevents all remaining ordinals and counts returned sends honestly', () => {
@@ -102,7 +102,7 @@ test('send throws leave unknown delivery/partial counts, clear state and never r
   const app = setup(), socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1'); const token = app.begin();
   socket.hook = message => { if (message.startsWith('3:::SETD')) socket.throws = true; };
   assert.equal(app.session.commitLevelGesture(token, 0.5), false); const state = app.session.snapshot();
-  assert.equal(state.phase, 'error'); assert.equal(state.observations.size, 0); assert.equal(state.control.authorized, 2); assert.equal(state.control.dispatched, 1); assert.match(state.detail, /some levels may have changed/);
+  assert.equal(state.phase, 'error'); assert.equal(state.observations.size, 0); assert.equal(state.control.authorized, 2); assert.equal(state.control.dispatched, 1); assert.match(state.detail, /some levels or pan positions may have changed/);
   app.connect(); assert.equal(app.session.commitLevelGesture(token, 0.7), false); assert.equal(writes(app.sockets[1]).length, 0);
 });
 test('reentrant observers cannot retain an arm or gesture token after cancellation', () => {
@@ -179,7 +179,7 @@ test('groups bind stable controller profile instead of saved selected-profile/IP
   assert.ok(Math.abs(continuousFaderDB(changes[0].value) - continuousFaderDB(0.35) - 3) < 1e-10);
   assert.ok(Math.abs(continuousFaderDB(changes[1].value) - continuousFaderDB(0.65) - 3) < 1e-10);
   for (const message of writes(app.socket)) app.socket.receive(message);
-  assert.match(app.session.snapshot().control.status, /Last relative Δ \+3.00/); assert.equal(app.session.snapshot().control.previewDelta, 0);
+  assert.match(app.session.snapshot().control.status, /Requested cumulative Δ 3.00/); assert.equal(app.session.snapshot().control.previewDelta, 0);
   app.session.bindGroupProfile(null); assert.equal(app.session.selectGroupTarget('band', 0), false); assert.equal(app.session.armLevel(), false);
   app.session.bindGroupProfile('two'); const next = app.beginGroup(); app.session.previewLevelGesture(next, 1); app.session.commitLevelGesture(next, 1);
   assert.match(writes(app.socket).at(-1), /^3:::SETD\^p\.0\.aux\.0\.value/);
@@ -239,7 +239,7 @@ test('group partial throws/timeout/reentrant membership changes reuse stop-and-d
     if (failure === 'membership') app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.session.bindGroupProfile('two'); };
     app.session.commitLevelGesture(token, 2);
     if (failure === 'timeout') { app.move(2600); app.flush(); }
-    const count = writes(app.socket).length; assert.equal(count, failure === 'timeout' ? 2 : 1); assert.equal(app.session.snapshot().control.armed, false);
+    const count = writes(app.socket).length; assert.equal(count, failure === 'timeout' ? 2 : 1); assert.equal(app.session.snapshot().control.armed, failure === 'timeout');
     app.move(3000); app.flush(); assert.equal(writes(app.socket).length, count); assert.equal(app.session.commitLevelGesture(token, 2), false);
     app.session.disconnect(); await app.repository.close();
   }
@@ -257,4 +257,166 @@ test('a control invalidation discovered on a meter-only publication updates disa
   publish(snapshot, 'meters'); assert.equal(view.renders, before + 1); assert.equal(view.model.control.armed, false);
   publish(snapshot, 'meters'); assert.equal(view.renders, before + 1); assert.equal(view.meters, 1);
   controller.destroy();
+});
+
+test('F09 no echo retains same-scope absolute command coordinate without mutating received state or retransmitting no-op', () => {
+  const app = setup(), socket = app.connect();
+  assert.equal(app.session.commitLevelGesture(app.begin(), 0.6), true);
+  app.move(2500); // Held timer: next entry must end pending.
+  const token = app.session.beginLevelGesture(); assert.ok(token);
+  assert.equal(app.session.snapshot().control.requestedValue, 0.6);
+  assert.equal(app.session.snapshot().observations.get('a.0.mix'), 0.4);
+  assert.equal(app.session.commitLevelGesture(token, 0.6), false);
+  assert.equal(writes(socket).length, 1);
+  const next = app.session.beginLevelGesture(); assert.ok(next);
+  assert.equal(app.session.commitLevelGesture(next, 0.7), true);
+  assert.deepEqual(writes(socket), ['3:::SETD^a.0.mix^0.6', '3:::SETD^a.0.mix^0.7']);
+  assert.equal(app.session.snapshot().observations.get('a.0.mix'), 0.4);
+});
+
+test('F09 recovery floor survives select-away/back and requires every touched linked path strictly after invalidation', () => {
+  const app = setup(), socket = app.connect();
+  socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+  app.session.commitLevelGesture(app.begin(), 0.6);
+  socket.receive('3:::SETD^a.0.mix^0.61\nSETD^a.0.mix^0.4');
+  assert.equal(app.session.snapshot().control.armed, false);
+  app.session.selectLevelTarget(send); app.session.selectLevelTarget(master);
+  assert.equal(app.session.armLevel(), false); // old equal raw values do not recover
+  socket.receive('3:::SETD^a.0.mix^0.4');
+  assert.equal(app.session.armLevel(), false);
+  socket.receive('3:::SETD^a.1.mix^0.4');
+  assert.equal(app.session.armLevel(), true);
+  assert.equal(writes(socket).length, 2);
+});
+
+test('F09 partial dispatch barriers cover unattempted closure and new generation needs its own complete actuals', () => {
+  const app = setup(), socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+  const token = app.begin(); socket.hook = message => { if (message.startsWith('3:::SETD')) app.session.disarmLevel(); };
+  assert.equal(app.session.commitLevelGesture(token, 0.6), false); assert.equal(writes(socket).length, 1);
+  socket.hook = null; socket.receive('3:::SETD^a.0.mix^0.4');
+  app.session.selectLevelTarget(master); assert.equal(app.session.armLevel(), false);
+  socket.receive('3:::SETD^a.1.mix^0.4'); assert.equal(app.session.armLevel(), true);
+  app.session.disconnect(); app.connect('3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^a.0.mix^0.6');
+  app.session.selectLevelTarget(master); assert.equal(app.session.armLevel(), false);
+  app.sockets.at(-1).receive('3:::SETD^a.1.mix^0.6'); assert.equal(app.session.armLevel(), true);
+});
+
+test('F09 group repeated no-echo gestures accumulate requested delta against immutable actual anchor', async () => {
+  const app = await groupFixture();
+  try {
+    let token = app.beginGroup(); assert.equal(app.session.previewLevelGesture(token, 3), 3); assert.equal(app.session.commitLevelGesture(token, 3), true);
+    app.move(2500); token = app.session.beginLevelGesture(); assert.ok(token);
+    assert.equal(app.session.previewLevelGesture(token, 2), 2); assert.equal(app.session.commitLevelGesture(token, -999), true); // cached delta owns intent
+    const commands = writes(app.socket).map(message => parseIemStateFrame(message)[0]);
+    for (let i = 0; i < 2; i++) assert.ok(Math.abs(continuousFaderDB(commands[i + 2].value) - continuousFaderDB([0.35, 0.65][i]) - 5) < 1e-10);
+    assert.equal(app.session.snapshot().control.lastDelta, 5);
+    assert.equal(app.session.snapshot().observations.get('i.0.aux.0.value'), 0.35);
+    assert.equal(app.session.snapshot().observations.get('f.0.aux.0.value'), 0.65);
+  } finally { app.session.disconnect(); await app.repository.close(); }
+});
+
+test('F09 settings and socket clocks revalidate before each ordinal without replay', async () => {
+  const app = await groupFixture();
+  try {
+    const token = app.beginGroup(); app.session.previewLevelGesture(token, 2);
+    app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.move(2600); };
+    assert.equal(app.session.commitLevelGesture(token, 2), false);
+    assert.equal(writes(app.socket).length, 1); assert.equal(app.session.snapshot().control.dispatched, 1);
+    assert.equal(app.session.snapshot().control.armed, false);
+  } finally { app.session.disconnect(); await app.repository.close(); }
+});
+
+test('F09 public requested diagnostics and hostile descriptor accessors cannot grant authority', () => {
+  const app = setup(), socket = app.connect(); let called = false;
+  assert.equal(app.session.selectLevelTarget({ get kind() { called = true; return 'master'; }, auxIndex: 0 }), false);
+  assert.equal(called, false);
+  app.session.commitLevelGesture(app.begin(), 0.6); app.move(2500);
+  const state = app.session.snapshot(); state.control.requestedDiagnostic[0].value = 1; state.control.requestedValue = 1;
+  assert.equal(app.session.snapshot().control.requestedValue, 0.6); assert.equal(writes(socket).length, 1);
+});
+
+test('F09 relevant processing receipts revoke permission and establish complete recovery, unrelated context does not', () => {
+  const app = setup(), socket = app.connect();
+  app.session.commitLevelGesture(app.begin(send), 0.6); app.move(2500);
+  socket.receive('3:::SETD^i.1.aux.0.post^1'); assert.equal(app.session.snapshot().control.armed, true);
+  socket.receive('3:::SETD^i.0.aux.0.postproc^1'); assert.equal(app.session.snapshot().control.armed, false);
+  assert.equal(app.session.armLevel(), false);
+  socket.receive('3:::SETD^i.0.aux.0.value^0.4'); assert.equal(app.session.armLevel(), true);
+  assert.equal(writes(socket).length, 1);
+});
+
+test('F09 reentrant same-socket replacement keeps new operation counts/permission when old send returns or throws', () => {
+  for (const outcome of ['returned', 'threw']) {
+    const app = setup(), socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+    const old = app.begin();
+    socket.hook = message => {
+      if (!message.startsWith('3:::SETD')) return;
+      socket.hook = null;
+      app.session.selectLevelTarget(send); assert.equal(app.session.armLevel(), true);
+      assert.equal(app.session.commitLevelGesture(app.session.beginLevelGesture(), 0.7), true);
+      if (outcome === 'threw') throw Error('Old send delivery unknown');
+    };
+    assert.equal(app.session.commitLevelGesture(old, 0.6), false);
+    const control = app.session.snapshot().control;
+    assert.equal(control.armed, true); assert.equal(control.pending, true);
+    assert.equal(control.authorized, 2); assert.equal(control.dispatched, 2); assert.equal(control.unknownDelivery, false);
+    assert.equal(control.requestedValue, 0.7); assert.equal(app.session.snapshot().phase, 'live');
+    assert.equal(writes(socket).length, 3);
+  }
+});
+
+test('F09 cumulative group clamp uses original actual anchor and exact cached common coordinate', async () => {
+  const app = await groupFixture();
+  try {
+    let token = app.beginGroup(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2); app.move(2500);
+    token = app.session.beginLevelGesture(); const local = app.session.previewLevelGesture(token, 10000);
+    const expectedTotal = GROUP_MAX_DB - continuousFaderDB(0.65);
+    assert.ok(Math.abs(local - (expectedTotal - 2)) < 1e-10);
+    assert.equal(app.session.commitLevelGesture(token, Math.round(local)), true);
+    const commands = writes(app.socket).slice(-2).map(message => parseIemStateFrame(message)[0]);
+    for (let i = 0; i < 2; i++) assert.ok(Math.abs(continuousFaderDB(commands[i].value) - continuousFaderDB([0.35, 0.65][i]) - expectedTotal) < 1e-9);
+    assert.equal(app.session.snapshot().control.lastDelta, expectedTotal);
+  } finally { app.session.disconnect(); await app.repository.close(); }
+});
+
+test('F09 recovery cannot shrink to a fresh individual or canonical group subset; disjoint scope stays independent', async () => {
+  for (const shrink of ['individual', 'membership', 'overlap']) {
+    const app = await groupFixture();
+    try {
+      const token = app.beginGroup(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2); app.session.disarmLevel();
+      app.socket.receive('3:::SETD^i.0.aux.0.value^0.35');
+      app.session.selectLevelTarget(master); assert.equal(app.session.armLevel(), true); // disjoint value closure
+      if (shrink === 'individual') app.session.selectLevelTarget(send);
+      else {
+        await app.repository.update(settings => { settings.profiles[0].groups[0].members = shrink === 'membership' ? ['i.0'] : ['i.0', 'i.1']; });
+        app.session.selectGroupTarget('band', 0);
+      }
+      assert.equal(app.session.snapshot().control.eligible, false, shrink); assert.equal(app.session.armLevel(), false, shrink);
+      app.socket.receive('3:::SETD^f.0.aux.0.value^0.65'); assert.equal(app.session.armLevel(), true, shrink);
+      assert.equal(writes(app.socket).length, 2);
+    } finally { app.session.disconnect(); await app.repository.close(); }
+  }
+});
+
+test('F09 split topology still requires every old linked side to recover before rearming the overlapping mono side', () => {
+  const app = setup(), socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+  app.session.commitLevelGesture(app.begin(), 0.6); app.session.disarmLevel();
+  socket.receive('3:::SETD^a.0.stereoIndex^-1\nSETD^a.1.stereoIndex^-1\nSETD^a.0.mix^0.4');
+  app.session.selectLevelTarget(master); assert.equal(app.session.snapshot().control.eligible, false); assert.equal(app.session.armLevel(), false);
+  socket.receive('3:::SETD^a.1.mix^0.4'); assert.equal(app.session.armLevel(), true);
+});
+
+test('F09 every clock-sample fault around dispatch preserves exact authorization before any write', () => {
+  let revoked = 0;
+  for (let fault = 1; fault <= 40; fault++) {
+    let samples = 0, inject = false, wall = 100;
+    const app = setup(createAuxLevelSession, { now: () => { if (inject && ++samples === fault) wall += 1500; return 100; }, wallNow: () => wall });
+    const socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+    const token = app.begin(); inject = true; app.session.commitLevelGesture(token, 0.6);
+    const state = app.session.snapshot().control;
+    assert.ok(writes(socket).length <= state.authorized, `fault ${fault}: no unauthorized sends`);
+    assert.equal(state.dispatched, writes(socket).length, `fault ${fault}: exact returned sends`);
+    if (state.authorized === 0) { revoked++; assert.equal(writes(socket).length, 0); }
+  }
+  assert.ok(revoked > 0);
 });

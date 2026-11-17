@@ -221,21 +221,24 @@ test('opaque latest gesture identity and frozen copied values prevent forged pre
   assert.equal('send' in a.state, false); assert.equal('socket' in a.state, false);
 });
 
-test('model is unreachable from every production HTML import graph', async () => {
-  const root = resolve(new URL('..', import.meta.url).pathname), visited = new Set();
-  async function visit(file) {
+test('model is integrated only through private session owner in live entries', async () => {
+  const root = resolve(new URL('..', import.meta.url).pathname), modelFile = resolve(root, 'src/iem/control-state-model.js'), owner = resolve(root, 'src/iem/session-core.js');
+  async function visit(file, visited) {
     if (visited.has(file)) return; visited.add(file);
-    assert.notEqual(file, resolve(root, 'src/iem/control-state-model.js'));
     const text = await readFile(file, 'utf8');
     const imports = [...text.matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)].map(x => x[1]);
     if (file.endsWith('.html')) imports.push(...[...text.matchAll(/<script[^>]+src="([^"]+)"/g)].map(x => x[1]));
     for (const ref of imports) if (ref.startsWith('.') || ref.startsWith('/src/')) {
       const child = ref.startsWith('/') ? resolve(root, ref.slice(1)) : resolve(dirname(file), ref);
-      if (/\.(js|html)$/.test(child)) await visit(child);
+      if (child === modelFile) assert.equal(file, owner, 'Only private session owner may integrate model.');
+      if (/\.(js|html)$/.test(child)) await visit(child, visited);
     }
   }
-  for (const entry of ['index.html', 'iem.html', 'demo.html', 'connection-test.html']) await visit(resolve(root, entry));
-  assert.ok(visited.has(resolve(root, 'src/iem/session-core.js')));
+  for (const entry of ['index.html', 'iem.html', 'demo.html', 'connection-test.html']) {
+    const visited = new Set(); await visit(resolve(root, entry), visited);
+    assert.equal(visited.has(modelFile), ['index.html', 'iem.html'].includes(entry), entry);
+    assert.equal(visited.has(owner), ['index.html', 'iem.html'].includes(entry), entry);
+  }
 });
 
 test('dispatch stalls expire without later ordinals; held result can settle diagnostics only', () => {
@@ -372,4 +375,33 @@ test('changed historical disjoint readbacks preserve current permission and old 
   const single = createControlScope({ kind: 'level', received: b.received, receipts: b.receipts, target: { kind: 'send', sourceId: 'i.0', auxIndex: 0 }, group: undefined });
   b.step('select', { scope: single, revision: 2 }); b.step('select', { scope: groupScope, revision: 3 }); b.step('arm');
   b.receive('i.0.aux.0.value', 0.7); assert.equal(b.state.armed, false); assert.equal(b.state.status, 'native-invalidated');
+});
+
+test('overlapping subset recovery retains full uncertain closure; completed old closure does not join a later disjoint target', () => {
+  const a = fixture('group', false, [0.4, 0.6]); a.step('arm'); a.gesture(2); a.dispatch();
+  a.step('invalidate', { reason: 'cancel', revision: 2 }); a.receive('i.0.aux.0.value', 0.4);
+  const individual = createControlScope({ kind: 'level', received: a.received, receipts: a.receipts, target: { kind: 'send', sourceId: 'i.0', auxIndex: 0 }, group: null });
+  a.step('select', { scope: individual, revision: 3 }); assert.throws(() => a.step('arm'));
+  a.receive('i.1.aux.0.value', 0.6); a.step('arm');
+  // Fully recovered {i0,i1} must be retired before later {i1,i2} uncertainty.
+  a.received.set('i.2.stereoIndex', -1); a.received.set('i.2.aux.0.value', 0.5); a.receipts.set('i.2.aux.0.value', a.state.lastReceipt + 1);
+  const other = createControlScope({ kind: 'group', received: a.received, receipts: a.receipts, target: { auxIndex: 0 }, group: { id: 'other', members: ['i.1', 'i.2'] } });
+  a.step('select', { scope: other, revision: 4 }); a.step('arm'); a.gesture(1); a.dispatch(); a.step('invalidate', { reason: 'cancel', revision: 5 });
+  assert.equal(a.state.barriers.length, 2);
+  assert.ok(a.state.barriers.every(b => !b.closure.includes('i.0.aux.0.value')));
+  a.step('select', { scope: individual, revision: 6 }); a.step('arm'); assert.equal(a.state.armed, true);
+});
+
+test('repeated overlapping recovered closures keep recovery history bounded without blocking disjoint scopes', () => {
+  const a = fixture('group', false, [0.4, 0.6]);
+  a.received.set('i.2.stereoIndex', -1); a.received.set('i.2.aux.0.value', 0.5); a.receipts.set('i.2.aux.0.value', 2);
+  for (let i = 0; i < 150; i++) {
+    const members = i % 2 ? ['i.1', 'i.2'] : ['i.0', 'i.1'];
+    const scope = createControlScope({ kind: 'group', received: a.received, receipts: a.receipts, target: { auxIndex: 0 }, group: { id: 'overlap', members } });
+    a.step('select', { scope, revision: a.state.revision + 1 }); a.step('arm'); a.gesture(1); a.dispatch();
+    a.step('invalidate', { reason: 'cancel', revision: a.state.revision + 1 });
+    assert.equal(a.state.barriers.length, 2); assert.ok(a.state.barriers.every(b => b.closure.length === 2));
+    for (const member of members) a.receive(`${member}.aux.0.value`, a.received.get(`${member}.aux.0.value`));
+    assert.ok(a.state.retired.length <= 128);
+  }
 });

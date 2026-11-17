@@ -1,5 +1,12 @@
 # Individual AUX level controls — F05-S02
 
+## F09-S03 current runtime reconciliation — 2026-11-17
+
+The [current owned runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md) supersede historical timeout-disarm, fresh-baseline-per-move and unrelated-value invalidation wording below. Production uses the private reducer/current-owner typed dispatch guard; historical standalone leases remain pure compatibility/test helpers, not runtime authority. Literal factories, exact allowlist, arming, lifecycle/stereo safeguards and no retry/replay/rollback remain unchanged. Review/merge acceptance is tracked by [F09-S03](stories/F09-S03.md).
+
+Requested absolute caps persist separately from raw last-received numeric values while permission survives. An unchanged all-returned operation ends pending as sent-unverified after 2.5 seconds; a new explicit gesture may continue on the same scope without pressing Enable again. Equal requested vectors do not resend. Complete post-invalidation receipts over the entire touched closure plus explicit rearm are required; select-away/back cannot erase barriers. Firmware acceptance and F08 physical qualification remain open; no GEQ/new command is enabled.
+
+
 Date: 2026-11-10. Baseline: S01 PR #23 merged at `c53a842` after green CI and affirmative Codex review of final head `1f07c8a`. Scope is the already-authorized individual master/send level feature; no real desk access/actuation, pan, relative groups or additional parameter classes.
 
 ## Scoped plan before implementation

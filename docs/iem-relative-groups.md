@@ -1,5 +1,12 @@
 # Relative AUX group levels — F05-S03
 
+## F09-S03 current runtime reconciliation — 2026-11-17
+
+The [current owned runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md) supersede historical timeout-disarm, fresh-baseline-per-move and unrelated-value invalidation wording below. Production uses the private reducer/current-owner typed dispatch guard; historical standalone leases remain pure compatibility/test helpers, not runtime authority. Literal factories, exact allowlist, arming, lifecycle/stereo safeguards and no retry/replay/rollback remain unchanged. Review/merge acceptance is tracked by [F09-S03](stories/F09-S03.md).
+
+First explicit arm freezes the canonical deduplicated received anchor and continuous finite dB values. Each local gesture starts at Δ0 and adds its cached common delta to a cumulative requested coordinate against that immutable anchor. Common-clamp the cumulative vector at the first finite member boundary; never use intent as actual baseline, independently clamp members or fabricate silence. Rearm after complete recovery rebuilds a finite/non-silent actual anchor. Requested offsets do not prove hardware balance survived a silent partial application. Complete post-invalidation receipts over the entire touched closure plus explicit rearm are required; select-away/back cannot erase barriers. Firmware acceptance and F08 physical qualification remain open; no GEQ/new command is enabled.
+
+
 Date: 2026-11-10. Scoped plan accepted under the user's explicit sequential F05 authorization. S02 PR #24 merged at `162aeb2` after green CI and affirmative review of final `4cf1d85`. No real desk access/actuation or new wire forms.
 
 ## Scoped plan before implementation

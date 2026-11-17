@@ -1,3 +1,5 @@
+// Historical pure lease compatibility helper; F09-S03 production authority is
+// the privately integrated control-state-model plus typed session-core guard.
 import { encodeAuxPanCommand, normalizeAuxPanPosition, resolveAuxPanTargets, resolveAuxPanTopology } from './aux-pan-protocol.js';
 const counter = value => Number.isSafeInteger(value) && value >= 0;
 const sameEpoch = (a, b) => a.generation === b.generation && a.revision === b.revision;

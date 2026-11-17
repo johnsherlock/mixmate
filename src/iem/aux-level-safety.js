@@ -1,3 +1,5 @@
+// Historical pure lease compatibility helper; F09-S03 production authority is
+// the privately integrated control-state-model plus typed session-core guard.
 import { encodeAuxLevelCommand, resolveAuxLevelTargets, resolveAuxLevelTopology } from './aux-level-protocol.js';
 import { resolveRelativeGroup, resolveGroupTopology, relativeGroupChange } from './relative-groups.js';
 const counter = value => Number.isSafeInteger(value) && value >= 0;

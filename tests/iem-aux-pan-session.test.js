@@ -53,8 +53,8 @@ for (const kind of ['level', 'pan']) {
     app.move(1); app.flush();
     const timedOut = app.session.snapshot();
     assert.equal(timedOut.phase, 'live'); assert.equal(socket.readyState, 1);
-    assert.equal(timedOut.control.pending, false); assert.equal(timedOut.control.armed, false);
-    assert.match(timedOut.control.status, /readback unconfirmed.*No retry/);
+    assert.equal(timedOut.control.pending, false); assert.equal(timedOut.control.armed, true);
+    assert.match(timedOut.control.status, /application unverified.*no retry/);
     assert.equal(writes(socket).length, 2);
     app.session.disconnect(); assert.equal(app.session.snapshot().observations.size, 0);
     app.session.connect('192.168.0.60'); const fresh = app.sockets.at(-1); fresh.open();
@@ -69,7 +69,7 @@ for (const kind of ['level', 'pan']) {
   });
 }
 
-test('F08-S03 partial pan echo plus live heartbeat cannot confirm the missing partner; late receipt stays disarmed', () => {
+test('partial pan echo cannot complete observation; late receipt retains terminal unverified outcome', () => {
   const app = fixture(), socket = app.connect(), token = app.begin();
   app.session.previewPanGesture(token, 0.601); app.session.commitPanGesture(token);
   socket.receive(writes(socket)[0]); socket.receive('2::');
@@ -78,8 +78,8 @@ test('F08-S03 partial pan echo plus live heartbeat cannot confirm the missing pa
   assert.equal(app.session.snapshot().observations.get('i.0.aux.1.pan'), 0.4);
   app.move(2500); app.flush(); socket.receive(writes(socket)[1]);
   assert.equal(app.session.snapshot().phase, 'live');
-  assert.equal(app.session.snapshot().control.armed, false);
-  assert.match(app.session.snapshot().control.status, /unconfirmed/);
+  assert.equal(app.session.snapshot().control.armed, true);
+  assert.equal(app.session.snapshot().control.outcome, 'sent-unverified');
   assert.equal(writes(socket).length, 2);
 });
 
@@ -89,7 +89,7 @@ test('F08-S03 visually identical rounded pan readback invalidates rather than co
   socket.receive('3:::SETD^i.0.aux.0.pan^0.6010000001');
   const state = app.session.snapshot();
   assert.equal(state.observations.get('i.0.aux.0.pan'), 0.6010000001);
-  assert.match(state.control.status, /native control changed/); assert.equal(state.control.armed, false);
+  assert.match(state.control.status, /differs from the request/); assert.equal(state.control.armed, false);
   assert.equal(state.control.pending, false);
   assert.equal(state.phase, 'live'); assert.equal(writes(socket).length, 2);
 });
@@ -106,7 +106,7 @@ test('pan selection/arm/preview never write; only current cached normalized pan 
   assert.equal(app.session.commitPanGesture(token), true); assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.124', '3:::SETD^i.0.aux.1.pan^0.124']);
   assert.equal(app.session.snapshot().control.expectedPan, 0.124); assert.equal(app.session.snapshot().control.pending, true); assert.equal(app.session.beginPanGesture(), null);
   socket.receive(writes(socket)[0]); assert.equal(app.session.snapshot().control.pending, true);
-  socket.receive(writes(socket)[1]); assert.equal(app.session.snapshot().control.pending, false); assert.match(app.session.snapshot().control.status, /matching pan/); assert.equal(app.session.snapshot().control.armed, true);
+  socket.receive(writes(socket)[1]); assert.equal(app.session.snapshot().control.pending, false); assert.match(app.session.snapshot().control.status, /matching values/); assert.equal(app.session.snapshot().control.armed, true);
 });
 test('level/group and pan permissions/tokens exclude each other and wrong-kind entry points cannot act', () => {
   const app = fixture(), socket = app.connect(); app.session.selectLevelTarget(level); app.session.armLevel(); const old = app.session.beginLevelGesture();
@@ -126,47 +126,60 @@ test('pan-only observed sources can control without levels; linked/FX/mono-AUX/m
   assert.equal(app.session.selectPanTarget({ sourceId: 'i.20', auxIndex: 0 }), false); assert.equal(writes(socket).length, 0);
 });
 test('native pan away/back, level or topology edits invalidate pan baseline; identical receipts/names do not', () => {
-  for (const frame of ['3:::SETD^i.0.aux.0.pan^0.7\nSETD^i.0.aux.0.pan^0.4', '3:::SETD^i.0.aux.0.value^0.7', '3:::SETD^a.1.matrix^1']) {
+  for (const frame of ['3:::SETD^i.0.aux.0.pan^0.7\nSETD^i.0.aux.0.pan^0.4', '3:::SETD^a.1.matrix^1']) {
     const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); socket.receive(frame); assert.equal(app.session.commitPanGesture(token), false); assert.equal(app.session.snapshot().control.armed, false); assert.equal(writes(socket).length, 0);
   }
   const app = fixture(), socket = app.connect(), token = app.begin(); socket.receive('3:::SETD^i.0.aux.0.pan^0.4\nSETS^i.0.name^Synthetic <svg>'); assert.equal(app.session.previewPanGesture(token, 0.6), 0.6); assert.equal(app.session.commitPanGesture(token), true);
 });
-test('actual pan edits also cancel level permission in combined factory while old level-only semantics stay intact', () => {
+test('unrelated pan values do not cancel a selected level scope in either factory', () => {
   for (const factory of [createAuxControlSession, createAuxLevelSession]) {
     const app = fixture(factory), socket = app.connect(); app.session.selectLevelTarget(level); app.session.armLevel(); const token = app.session.beginLevelGesture(); socket.receive('3:::SETD^i.0.aux.0.pan^0.5');
-    assert.equal(app.session.snapshot().control.armed, factory === createAuxLevelSession); assert.equal(app.session.commitLevelGesture(token, 0.5), factory === createAuxLevelSession);
+    assert.equal(app.session.snapshot().control.armed, true); assert.equal(app.session.commitLevelGesture(token, 0.6), true);
   }
 });
 test('same-value and rounded expected pan needs fresh post-authorization receipt on every path', () => {
-  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.40049); socket.receive('3:::SETD^i.0.aux.0.pan^0.4\nSETD^i.0.aux.1.pan^0.4');
+  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.60049); socket.receive('3:::SETD^i.0.aux.0.pan^0.4\nSETD^i.0.aux.1.pan^0.4');
   app.session.commitPanGesture(token); assert.equal(app.session.snapshot().control.pending, true); socket.receive(writes(socket)[0]); assert.equal(app.session.snapshot().control.pending, true); socket.receive(writes(socket)[1]); assert.equal(app.session.snapshot().control.pending, false);
 });
 test('held confirmation timers, late echo and backwards clocks never confirm expired pan or rearm', () => {
   for (const mode of ['snapshot', 'late', 'backward']) {
     const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); app.session.commitPanGesture(token); app.move(mode === 'backward' ? -1 : 2600);
     if (mode === 'late') for (const message of writes(socket)) socket.receive(message);
-    const state = app.session.snapshot(); assert.equal(state.control.pending, false); assert.equal(state.control.armed, false); assert.doesNotMatch(state.control.status, /matching pan/);
+    const state = app.session.snapshot(); assert.equal(state.control.pending, false); assert.equal(state.control.armed, mode !== 'backward'); assert.doesNotMatch(state.control.status, /matching values/);
     app.flush(); assert.equal(writes(socket).length, 2);
   }
 });
 test('fresh conflict is labelled pan; invalidation/close/reconnect never replays old tokens', () => {
-  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); app.session.commitPanGesture(token); socket.receive('3:::SETD^i.0.aux.0.pan^0.4'); assert.match(app.session.snapshot().control.status, /Conflicting pan/);
+  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); app.session.commitPanGesture(token); socket.receive('3:::SETD^i.0.aux.0.pan^0.4'); assert.match(app.session.snapshot().control.status, /differs from the request/);
   app.session.closePan(); app.connect(); assert.equal(app.session.commitPanGesture(token), false); assert.equal(writes(app.sockets[1]).length, 0); assert.equal(app.session.snapshot().control.armed, false);
 });
 test('partial/reentrant cancellation, selection or reconnect stops remaining pan ordinals without overwriting new context counts', () => {
   for (const mode of ['close', 'level', 'reconnect', 'native']) {
     const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6);
     socket.hook = message => { if (!message.startsWith('3:::SETD')) return; if (mode === 'close') app.session.closePan(); if (mode === 'level') app.session.selectLevelTarget(level); if (mode === 'reconnect') app.connect(); if (mode === 'native') socket.receive('3:::SETD^i.0.aux.0.pan^0.6'); };
-    assert.equal(app.session.commitPanGesture(token), false); assert.equal(writes(socket).length, 1); assert.equal(app.session.snapshot().control.armed, false); assert.equal(app.session.snapshot().control.dispatched, mode === 'reconnect' ? 0 : 1);
+    assert.equal(app.session.commitPanGesture(token), false); assert.equal(writes(socket).length, 1); assert.equal(app.session.snapshot().control.armed, false); assert.equal(app.session.snapshot().control.dispatched, ['reconnect', 'level'].includes(mode) ? 0 : 1);
     app.move(3000); app.flush(); assert.equal(writes(socket).length, 1);
   }
 });
 test('throwing second pan send records unknown partial, clears state and never retries/rolls back', () => {
   const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); socket.hook = message => { if (message.startsWith('3:::SETD')) socket.throws = true; };
-  assert.equal(app.session.commitPanGesture(token), false); const snapshot = app.session.snapshot(); assert.equal(snapshot.phase, 'error'); assert.equal(snapshot.control.authorized, 2); assert.equal(snapshot.control.dispatched, 1); assert.equal(snapshot.observations.size, 0); assert.match(snapshot.detail, /some pan positions may have changed/);
+  assert.equal(app.session.commitPanGesture(token), false); const snapshot = app.session.snapshot(); assert.equal(snapshot.phase, 'error'); assert.equal(snapshot.control.authorized, 2); assert.equal(snapshot.control.dispatched, 1); assert.equal(snapshot.observations.size, 0); assert.match(snapshot.detail, /some levels or pan positions may have changed/);
   app.move(3000); app.flush(); assert.equal(socket.attempts, 2);
 });
 test('reentrant arm/gesture observers cannot retain permission or an old pan token', () => {
   const app = fixture(); app.connect(); app.session.selectPanTarget(target); const off = app.session.subscribe(snapshot => { if (snapshot.control?.armed) app.session.disarmPan(); }); assert.equal(app.session.armPan(), false); off();
   app.session.armPan(); const stop = app.session.subscribe(snapshot => { if (snapshot.control?.gestureActive) app.session.closePan(); }); assert.equal(app.session.beginPanGesture(), null); stop();
+});
+
+test('F09 no-echo repeated pan uses explicit requested coordinate, no-op suppression and exact raw conflict recovery', () => {
+  const app = fixture(), socket = app.connect(); let token = app.begin();
+  app.session.previewPanGesture(token, 0.6); assert.equal(app.session.commitPanGesture(token), true); app.move(2500);
+  token = app.session.beginPanGesture(); assert.ok(token); app.session.previewPanGesture(token, 0.6); assert.equal(app.session.commitPanGesture(token), false);
+  assert.equal(writes(socket).length, 2);
+  token = app.session.beginPanGesture(); app.session.previewPanGesture(token, 0.7); assert.equal(app.session.commitPanGesture(token), true);
+  assert.equal(writes(socket).length, 4); assert.equal(app.session.snapshot().observations.get('i.0.aux.0.pan'), 0.4);
+  socket.receive('3:::SETD^i.0.aux.0.pan^0.7000000001');
+  assert.equal(app.session.snapshot().control.armed, false); assert.equal(app.session.armPan(), false);
+  socket.receive('3:::SETD^i.0.aux.1.pan^0.7\nSETD^i.0.aux.0.pan^0.7');
+  assert.equal(app.session.armPan(), true); assert.equal(writes(socket).length, 4);
 });

@@ -377,5 +377,11 @@ test('terminal dispatch details remain visible and accessible rather than generi
     view.render({ status, connectionPhase: 'error', mixes: [], sources: [], control: { selected: null, eligible: false, armed: false, reason: 'Select an observed master or source send.', status: 'Off' } });
     assert.equal(root.querySelector('.mm-feedback').textContent, status); assert.equal(root.querySelector('.mm-feedback').attributes['aria-label'], status);
     const empty = root.querySelector('.mm-empty'); assert.equal(empty.hidden, false); assert.equal(empty.children[0].textContent, 'Connection stopped'); assert.equal(empty.children[1].textContent, status);
+    const diagnostic = 'Returned 1/2 authorized; throwing send delivery unknown; some values may have changed.';
+    view.render({ status, connectionPhase: 'error', mixes: [], sources: [], control: { selected: null, eligible: false, armed: false, authorized: 2, dispatched: 1, unknownDelivery: true, status: diagnostic } });
+    assert.equal(empty.hidden, false); assert.match(empty.children[1].textContent, /Returned 1\/2 authorized; throwing send delivery unknown/);
+    assert.match(root.querySelector('.mm-feedback').textContent, /Returned 1\/2 authorized/);
+    assert.equal(root.querySelector('.mm-feedback').attributes['aria-label'], root.querySelector('.mm-feedback').textContent);
+
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
 });

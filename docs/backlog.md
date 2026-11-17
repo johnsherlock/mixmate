@@ -14,7 +14,7 @@ Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S02 merged reference/design checkpoints; S03–S04 unstarted |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S02 merged; S03 implemented, review/CI/merge pending; S04 unstarted |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -24,7 +24,7 @@ Feature numbers do not determine execution priority. Previously merged implement
 | --- | --- | --- |
 | 1 | [F09-S01](stories/F09-S01.md) | [Reference/adapter decision](iem-native-protocol-reference.md) merged in PR #37; exact served-source gap parked |
 | 2 | [F09-S02](stories/F09-S02.md) | [ADR-0008](adr/0008-control-state-model.md)/pure model merged in PR #38; unwired |
-| 3 | [F09-S03](stories/F09-S03.md) | S02 → integrate existing level/group/pan model and coherent UI |
+| 3 | [F09-S03](stories/F09-S03.md) | S02 → existing level/group/pan model implemented; containing-PR review/CI/merge pending |
 | 4 | [F09-S04](stories/F09-S04.md) | S03 → separately authorized targeted firmware validation; explicit applicable EQ readiness decision |
 | 5 | [F04-S03](stories/F04-S03.md) | Passed and affirmatively reviewed/merged applicable foundation gate → logical stereo mix overview |
 | 6 | [F04-S04](stories/F04-S04.md) | F04-S03 → compact accessible channel detail |
@@ -40,7 +40,7 @@ This is the intended sequence, not a hardware waiver: if F09-S04 is blocked, par
 
 The live IEM owns its WebSocket/session. `soundcraft-ui-connection` 7.1.0 currently supplies imported display converters; related meter/relative math and protocol references are distinct from instantiating its connection/control facade. [ADR-0007](adr/0007-owned-protocol-adapter.md) selects owned transport plus existing helper-only retention; the [versioned reference/manifest](iem-native-protocol-reference.md) indexes portable official source and explicitly parks unavailable served-source provenance. A library replacement is not an established remedy.
 
-Reviewed runtime capability is AUX master/send levels, relative groups and eligible normalized mono-source pan into verified reciprocal stereo AUX pairs. Current confirmation requires fresh own per-path receipt within 2.5 seconds; intent/send return is not received state or a correlated ACK. Read-only factories remain connection-only. GEQ serializers/curve/leases are pure and **unwired**; shelves/filters are unverified. Snapshots/recording remain unwired. [AGENTS](../AGENTS.md) and linked contracts define authority.
+Reviewed runtime capability is AUX master/send levels, relative groups and eligible normalized mono-source pan into verified reciprocal stereo AUX pairs. The S03 containing PR integrates the [owned uncertainty runtime](iem-control-runtime.md): exact fresh all-path observations within 2.5 seconds produce observed-match; unchanged all-returned expiry is terminal sent-unverified with same-scope requested coordinates/permission for a new explicit gesture. Intent/send return is not received state or a correlated ACK; review/CI/merge acceptance is tracked by that PR. Read-only factories remain connection-only. GEQ serializers/curve/leases are pure and **unwired**; shelves/filters are unverified. Snapshots/recording remain unwired. [AGENTS](../AGENTS.md) and linked contracts define authority.
 
 Bounded trials on firmware `3.0.7865-ui24` applied changes without sender target echoes. The native paired-master trial likewise received no own target path for 38.883 seconds; a read-only peer received both approximately 11ms after dispatch at shorter decimal precision. Native source shows local-first state with no established correlated ACK callback. This is one firmware/operation observation, not proof of all fields, endpoints or causality. Last observed `a.0/a.1` values were `0.3961953345` each, left applied. No snapshot save/recall/delete occurred. Existing diagnostic authorization applies only within its recorded scope and bounds; this replan does not expand it. Record applicable prior permission and seek only missing scope.
 
@@ -63,7 +63,7 @@ Earlier implementation receipts remain in individual stories and Git history (F0
 
 ## Orchestration and release gates
 
-Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The authorized F09-S01/S02 batch is complete. Stop after the reviewed handoff; F09-S03 is next intended work for a fresh orchestrator, excluded from this run. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
+Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The previous F09-S01/S02 batch is complete. The 2026-11-17 run authorizes **F09-S03 only**; implementation is delivered for containing-PR review/CI/merge, not yet merged at preparation. Stop before F09-S04: the user now reports the desk online (unverified here); S03 acceptance/merge and separately bounded live authorization are still required. No hardware action is authorized by this batch. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
 
 [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) already authorizes the named feature classes; exact forms/types/ranges and deliberate reviewed typed-guard/allowlist changes remain mandatory. It does not authorize automatic real-desk tests. Snapshot SAVE was explicitly forbidden in recent live diagnostics; future F07 feature-class scope does not override that session restriction or create current hardware permission.
 

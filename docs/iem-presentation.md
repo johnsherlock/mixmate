@@ -55,3 +55,8 @@ The empty-shell observations above describe the S02 baseline. [F03-S03](iem-live
 ## Default-entry amendment — F01-S04
 
 The root/test destinations above describe the historical S02 baseline. ADR-0003 / F01-S04 promotes the reviewed read-only IEM to `index.html` while retaining `iem.html` as the same-entry compatibility URL. The preserved input experiment/settings move to `connection-test.html`, labelled **Settings / test**; demo/reference remain separate. Version 0.3.0 and verified update notices use the existing bar. Four-entry proof/query handling replaces the original three-entry list without changing CSS/gestures or forcing an update/reconnect.
+
+
+## F09-S03 requested versus received controls
+
+For the selected owned level/pan coordinate, the cap remains at the last requested/preview value through pending and terminal sent-unverified; the numeric level/per-side pan readout remains last received, explicitly labelled separately from requested intent. Canceled controls restore received cap position and retain inactive requested diagnostics/counts. Groups show local preview Δ while gesturing and requested cumulative offset between gestures, with no hardware-balance proof or aggregate VU. Unchanged requested vectors do not resend. Existing keyed strips/caps/dialog roots, cap drag, double-track jump, single-touch scroll, three-column portrait and compact landscape geometry are preserved; no row, direction labels or runtime asset dependency is added. Desktop fake evidence cannot qualify physical touch/offline/sleep.

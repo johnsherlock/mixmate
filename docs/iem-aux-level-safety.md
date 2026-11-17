@@ -1,5 +1,12 @@
 # AUX level safety contract — F05-S01
 
+## F09-S03 current runtime reconciliation — 2026-11-17
+
+The [current owned runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md) supersede historical timeout-disarm, fresh-baseline-per-move and unrelated-value invalidation wording below. Production uses the private reducer/current-owner typed dispatch guard; historical standalone leases remain pure compatibility/test helpers, not runtime authority. Literal factories, exact allowlist, arming, lifecycle/stereo safeguards and no retry/replay/rollback remain unchanged. Review/merge acceptance is tracked by [F09-S03](stories/F09-S03.md).
+
+Strict finite data-only level descriptors reject accessors before reading fields. Existing output/source Cartesian closure, finite/equal actual prerequisites and exact full-precision serialization remain required; only the private owner can authorize a live send. Complete post-invalidation receipts over the entire touched closure plus explicit rearm are required; select-away/back cannot erase barriers. Firmware acceptance and F08 physical qualification remain open; no GEQ/new command is enabled.
+
+
 Date: 2026-11-10. Implementation scope authorized in ADR-0002; scoped plan accepted by the master under the user's explicit F05 orchestration instruction. This story provides pure serializers, target validation and an arming lease, not a socket, control session or UI actuation. The existing read-only session and production entry retain their connection-only capability. Physical qualification remains open in F08-S01; no real desk access or actuation is used.
 
 ## Scoped plan before implementation

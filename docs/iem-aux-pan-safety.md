@@ -1,5 +1,12 @@
 # AUX send pan evidence and safety — F06-S01
 
+## F09-S03 current runtime reconciliation — 2026-11-17
+
+The [current owned runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md) supersede historical timeout-disarm, fresh-baseline-per-move and unrelated-value invalidation wording below. Production uses the private reducer/current-owner typed dispatch guard; historical standalone leases remain pure compatibility/test helpers, not runtime authority. Literal factories, exact allowlist, arming, lifecycle/stereo safeguards and no retry/replay/rollback remain unchanged. Review/merge acceptance is tracked by [F09-S03](stories/F09-S03.md).
+
+Strict numeric prevalidation and three-decimal command normalization remain; exact raw received values are never rounded into equality or replaced with intent. Mono source, reciprocal stereo AUX pair, equal individual actual pan and no linked-source/FX/direction claims remain required. Complete post-invalidation receipts over the entire touched closure plus explicit rearm are required; select-away/back cannot erase barriers. Firmware acceptance and F08 physical qualification remain open; no GEQ/new command is enabled.
+
+
 Date: 2026-11-11. The user explicitly authorized sequential F06 orchestration under ADR-0002. Baseline: F05 PRs #23–25 merged, closure PR #26/main `0d9b326`; app 0.4.0/offline `7e24c1d1c7d7292b`. This story supplies pure typed primitives/contracts only. Existing runtime level/group controls, read-only factory, demo and input test remain unchanged. No real desk actuation or new network probe is performed.
 
 ## Scoped plan before guard implementation

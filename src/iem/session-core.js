@@ -2,17 +2,15 @@ import { mixerURL } from '../mixer-address.js';
 import { createLiveProvider } from './live-provider.js';
 import { decodeVu2Frame } from './meters.js';
 import { IEM_RECEIVE_LIMITS, parseIemStateFrame } from './protocol.js';
-import { createAuxPanGuard } from './aux-pan-safety.js';
-import { auxPanPath, resolveAuxPanTargets } from './aux-pan-protocol.js';
-import { createAuxLevelGuard } from './aux-level-safety.js';
-import { resolveRelativeGroup } from './relative-groups.js';
+import { createControlScope, createControlState, transitionControl, OBSERVATION_WINDOW_MS } from './control-state-model.js';
+import { auxPanPath, encodeAuxPanCommand } from './aux-pan-protocol.js';
 import { validateSettings } from '../settings.js';
-import { resolveAuxLevelTargets, auxLevelPath } from './aux-level-protocol.js';
+import { auxLevelPath, encodeAuxLevelCommand } from './aux-level-protocol.js';
 
 // Private ownership: no socket, generic sender or queue escapes. The literal
 // read-only factory cannot acquire the typed level capability through options.
 function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, timers = globalThis, timeoutMs = 15000, idleMs = 30000, meterTtlMs = 2000, meterCadenceMs = 100,
-  now = () => globalThis.performance?.now() ?? Date.now(), wallNow = () => Date.now(), clockGraceMs = 1000, confirmationMs = 2500, settingsRepository } = {}, panEnabled = false) {
+  now = () => globalThis.performance?.now() ?? Date.now(), wallNow = () => Date.now(), clockGraceMs = 1000, settingsRepository } = {}, panEnabled = false) {
   const provider = createLiveProvider(), listeners = new Set();
   let socket = null, generation = 0, deadline, keepalive, idle, meterExpiry, meterFlush;
   let meters = new Map(), meterStamp = null, meterRevision = 0, inspectCurrent = () => {};
@@ -26,8 +24,12 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   }
   let phase = 'idle', detail = 'Not connected — no received mixer state';
   const observed = new Map(), receipts = new Map();
-  let sequence = 0, revision = 0, levelRevision = 0, panRevision = 0, selected = null, armed = false, gesture = null, pending = null, confirmation;
-  let controlStatus = 'Select a level; controls are off.', lastOperation = null, groupProfileId = null, selectedGroupSignature = null;
+  let sequence = 0, revision = 0, selected = null, confirmation, model = null;
+  let controlStatus = 'Select a level; controls are off.', groupProfileId = null, selectedGroupSignature = null;
+  // Only this owner constructs scopes and reducer events from its socket journal.
+  // Neither pure scopes nor public snapshots are accepted as transport authority.
+  const modelTime = () => { const t = stamp(); return { mono: Math.max(0, t.mono), wall: Math.max(0, t.wall) }; };
+  const step = event => { model = transitionControl(model, { ...event, now: modelTime() }); };
   const readGroup = groupId => {
     const settings = validateSettings(settingsRepository?.snapshot()?.settings);
     const profile = settings.profiles.find(profile => profile.id === groupProfileId);
@@ -35,180 +37,192 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (!group) throw Error('Current bound local group is unavailable.');
     return group;
   };
-  const guard = createAuxLevelGuard({ readGroup, readContext: () => ({ generation, revision, levelRevision, observations: observed, receipts,
-    open: socket?.readyState === 1, visible: globalThis.document?.hidden !== true }) });
   const panTarget = () => ({ sourceId: selected.sourceId, auxIndex: selected.auxIndex });
-  const panGuard = createAuxPanGuard({ readContext: () => ({ generation, revision, panRevision, observations: observed, receipts, open: socket?.readyState === 1, visible: globalThis.document?.hidden !== true }) });
-  function cancelControl(message = 'Controls off; enable explicitly.') {
-    revision++; guard.disarm(); panGuard.disarm(); armed = false; gesture = pending = null;
+  function scope() {
+    if (!selected) throw Error('Select an observed master or source send.');
+    const kind = selected.kind === 'group' ? 'group' : selected.kind === 'pan' ? 'pan' : 'level';
+    const group = kind === 'group' ? readGroup(selected.groupId) : null;
+    return createControlScope({ kind, received: observed, receipts,
+      target: kind === 'pan' ? panTarget() : kind === 'group' ? { auxIndex: selected.auxIndex } : selected,
+      group: group ? { id: group.id, members: [...group.members] } : null });
+  }
+  function installScope() {
+    const current = scope();
+    if (!model) model = createControlState({ scope: current, generation, revision: ++revision, now: modelTime() });
+    else if (model.generation !== generation) step({ type: 'new-generation', scope: current, generation, revision: ++revision });
+    else step({ type: 'select', scope: current, revision: ++revision });
+  }
+  function cancelControl(message = 'Controls off; enable explicitly.', reason = 'cancel') {
+    revision++;
+    if (model) step({ type: 'invalidate', reason, revision });
     timers.clearTimeout(confirmation); controlStatus = message;
   }
-  function inspectConfirmation() {
-    if (!pending || pending.dispatching || !pending.completed) return;
-    const age = elapsed(pending.completed);
-    if (invalidClock(age) || Math.max(age.mono, age.wall) >= confirmationMs) cancelControl(`${pending.kind === 'pan' ? 'Pan' : 'Level'} readback unconfirmed; controls off. No retry.`);
-  }
+  function inspectConfirmation() { if (model) step({ type: 'tick' }); }
   function syncGroupSelection() {
     if (selected?.kind !== 'group') return;
-    try {
-      if (JSON.stringify([groupProfileId, readGroup(selected.groupId)]) === selectedGroupSignature) return;
-    } catch { /* Missing or invalid canonical definition invalidates authority too. */ }
-    cancelControl('Local group definition changed; select and enable again.'); selected = null; selectedGroupSignature = null;
+    try { if (JSON.stringify([groupProfileId, readGroup(selected.groupId)]) === selectedGroupSignature) return; }
+    catch { /* Missing canonical definitions revoke permission too. */ }
+    cancelControl('Local group definition changed; select and enable again.', 'membership'); selected = null; selectedGroupSignature = null;
+  }
+  const activeOperation = () => model?.generation === generation || phase === 'error' ? model?.operation : null;
+  function statusText() {
+    const op = activeOperation();
+    if (model?.status === 'pending') return 'Waiting for fresh observations; application unverified.';
+    if (model?.status === 'sent-unverified') return 'Sent; application unverified. Requested coordinate retained; no retry. Some values may have changed.';
+    if (model?.status === 'observed-match') return `${selected?.kind === 'group' ? `Requested cumulative Δ ${model.chain?.delta.toFixed(2)} dB; ` : ''}Observed matching values; no correlated acknowledgement.`;
+    if (model?.status === 'no-op') return 'Unchanged requested coordinate; no commands sent.';
+    if (model && !model.armed) {
+      const reasons = {
+        'precision-or-native-conflict': 'Received value differs from the request; precision or native change is unknown.',
+        'native-invalidated': 'Received control value changed; controls off.',
+        'reentrant-invalidated': 'Received state during dispatch interrupted the adjustment; controls off.',
+        'clock-invalidated': 'Clock changed; controls off.',
+        'dispatch-expired': 'Dispatch deadline elapsed; controls off.',
+        'interrupted': 'Adjustment interrupted; controls off.',
+      };
+      const reason = reasons[model.status] ?? controlStatus;
+      if (op?.authorized) return `${reason} Returned ${op.returned}/${op.authorized} authorized${op.unknownDelivery ? '; throwing send delivery unknown' : ''}; some values may have changed. Fresh complete received recovery and explicit enable required.`;
+      return reason;
+    }
+    return controlStatus;
   }
   function controlSnapshot() {
     syncGroupSelection(); inspectConfirmation();
     let eligible = false, groupName, reason = 'Select an observed master or source send.';
     if (selected) {
-      try { if (selected.kind === 'pan') resolveAuxPanTargets(observed, panTarget()); else if (selected.kind === 'group') { const group = readGroup(selected.groupId); groupName = group.name; resolveRelativeGroup(observed, group, selected.auxIndex); } else resolveAuxLevelTargets(observed, selected); eligible = socket?.readyState === 1; reason = eligible ? '' : 'Socket is not open.'; }
-      catch (error) { reason = error.message; }
+      try {
+        const currentScope = scope(); if (selected.kind === 'group') groupName = readGroup(selected.groupId).name;
+        const blocked = model?.generation === generation && model.barriers.some(b => b.generation === generation && b.closure.some(path => currentScope.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor);
+        eligible = socket?.readyState === 1 && !blocked;
+        reason = blocked ? 'Fresh complete received recovery required before enabling.' : eligible ? '' : 'Socket is not open.';
+      } catch (error) { reason = error.message; }
     }
-    return { ...(panEnabled ? { panCapable: true, operation: selected?.kind === 'pan' ? 'pan' : 'level', previewPan: gesture?.panValue, expectedPan: lastOperation?.kind === 'pan' ? lastOperation.panValue : null } : {}), ...(groupName ? { groupName } : {}), selected: selected ? { ...selected } : null, eligible, reason, armed, gestureActive: Boolean(gesture), pending: Boolean(pending), status: controlStatus, previewDelta: gesture?.delta ?? 0, lastDelta: lastOperation?.delta ?? null, dispatched: lastOperation?.dispatched || 0, authorized: lastOperation?.authorized || 0 };
-  }
-  function finishReadback() {
-    inspectConfirmation();
-    if (!pending || pending.dispatching) return;
-    const result = pending.guard.readback(pending.plan);
-    if (result === 'unconfirmed') return;
-    timers.clearTimeout(confirmation);
-    if (result === 'observed-match') { const delta = pending.delta, kind = pending.kind; pending = null; controlStatus = kind === 'pan' ? 'Observed matching pan positions; no correlated acknowledgement.' : delta === undefined ? 'Observed matching level readback; no correlated acknowledgement.' : `Last relative Δ ${delta >= 0 ? '+' : ''}${delta.toFixed(2)} dB observed; next gesture starts at Δ 0.`; }
-    else { const label = pending.kind === 'pan' ? 'Pan' : 'Level'; cancelControl(result === 'conflict' ? `Conflicting ${label.toLowerCase()} readback; controls off.` : `${label} operation invalidated; controls off.`); }
+    const owned = model?.generation === generation, op = activeOperation(), chain = owned ? model.chain : null, preview = owned ? model.gesture?.preview : null;
+    return { ...(panEnabled ? { panCapable: true, operation: selected?.kind === 'pan' ? 'pan' : 'level', previewPan: preview?.expected[0]?.value, expectedPan: selected?.kind === 'pan' ? chain?.requested[0]?.value ?? null : null } : {}),
+      ...(groupName ? { groupName } : {}), selected: selected ? { ...selected } : null, eligible, reason,
+      armed: Boolean(owned && model.armed), gestureActive: Boolean(owned && model.gesture), pending: Boolean(owned && ['pending', 'dispatching'].includes(op?.status)),
+      requestedDiagnostic: op?.expected.map(({ path, value }) => ({ path, value })) ?? [], status: statusText(), outcome: owned ? model.status : 'idle', previewDelta: preview?.gestureDelta ?? 0, lastDelta: chain?.delta ?? op?.delta ?? null,
+      requestedValue: chain && selected?.kind !== 'group' ? preview?.expected[0]?.value ?? chain.requested[0]?.value : null,
+      dispatched: op?.returned ?? 0, authorized: op?.authorized ?? 0, unknownDelivery: op?.unknownDelivery ?? false };
   }
   function journal(frame) {
     if (!controlEnabled) return;
     inspectConfirmation();
-    const updates = parseIemStateFrame(frame);
-    let topology = false, changed = false, unexpected = false;
-    for (const update of updates) {
-      const { path, value, field } = update, existed = observed.has(path), previous = observed.get(path);
-      const actual = !existed || previous !== value;
+    for (const { path, value, field } of parseIemStateFrame(frame)) {
+      const actual = !observed.has(path) || observed.get(path) !== value;
       observed.set(path, value); receipts.set(path, ++sequence);
-      if (actual && ['model', 'matrix', 'stereoIndex'].includes(field)) { topology = true; revision++; }
-      if (existed && actual && (field === 'level' || panEnabled && field === 'pan')) {
-        changed = true; if (field === 'level') levelRevision++; else panRevision++;
-        if (!pending || pending.dispatching || !pending.expected.has(path) || pending.expected.get(path) !== value) unexpected = true;
+      if (actual && ['model', 'matrix', 'stereoIndex'].includes(field)) cancelControl('Received topology changed; controls off.', 'topology');
+      if (actual && ['mute', 'post', 'postproc'].includes(field) && model?.generation === generation && model.scope.members.some(({ target }) =>
+        path.startsWith(`a.${target.auxIndex}.`) || target.sourceId && (path === `${target.sourceId}.mute` || path.startsWith(`${target.sourceId}.aux.${target.auxIndex}.`)))) {
+        cancelControl('Received processing context changed; controls off.', 'processing');
       }
+      if (model?.generation === generation && (field === 'level' || field === 'pan')) step({ type: 'receive', generation, path, value, receipt: sequence });
     }
-    if ((armed || gesture || pending) && (topology || unexpected || (changed && !pending))) cancelControl(panEnabled ? 'Received context or native control changed; controls off.' : 'Received context or native level changed; controls off.');
-    else finishReadback();
   }
   function canAct() { if (socket) inspectCurrent(); syncGroupSelection(); inspectConfirmation(); return controlEnabled && socket?.readyState === 1 && globalThis.document?.hidden !== true; }
-  const armSelected = () => selected.kind === 'group' ? guard.armGroup(selected.groupId, selected.auxIndex) : guard.arm(selected);
-  function dispatchPlan(plan, kind, planGuard) {
-      gesture = null;
-      if (plan.delta === 0) { lastOperation = null; controlStatus = 'Relative Δ 0 dB; no commands sent.'; emit('controls'); return false; }
-      const operation = { plan, kind, guard: planGuard, panValue: kind === 'pan' ? plan.value : undefined, dispatching: true, expected: new Map(), delta: plan.delta, dispatched: 0, authorized: 0 }, current = socket, tokenGeneration = generation;
-      pending = lastOperation = operation;
+  function revalidate() {
+    if (!canAct() || !selected || !model?.armed || model.generation !== generation || !model.scopeCurrent) throw Error('Current owner revoked.');
+    const current = scope();
+    if (current.identity !== model.scope.identity || JSON.stringify(current.members.map(x => [x.path, x.target])) !== JSON.stringify(model.scope.members.map(x => [x.path, x.target]))) throw Error('Current typed closure changed.');
+  }
+  function dispatch() {
+    const op = model.operation, current = socket, ownerGeneration = generation;
+    if (op?.status !== 'dispatching') { emit('controls'); return false; }
+    for (let ordinal = 0; ordinal < op.expected.length; ordinal++) {
       try {
-        for (let ordinal = 0; ordinal < plan.count; ordinal++) {
-          if (!canAct() || socket !== current || generation !== tokenGeneration || pending !== operation || !armed) throw Error('Dispatch interrupted.');
-          const grant = planGuard.authorizeNext(plan, ordinal); operation.authorized++;
-          const { value: ignored, ...target } = grant.command;
-          operation.expected.set(kind === 'pan' ? auxPanPath(target) : auxLevelPath(target), grant.command.value);
-          current.send(grant.message);
-          // A send may synchronously trigger a fake/native callback. Never continue its old operation.
-          operation.dispatched++;
-          if (pending !== operation || socket !== current || generation !== tokenGeneration || !armed) {
-            if (generation === tokenGeneration) emit('controls');
-            return false;
-          }
+        revalidate();
+        if (socket !== current || generation !== ownerGeneration || model.operation?.id !== op.id) throw Error('Dispatch interrupted.');
+        step({ type: 'authorize', id: op.id, ordinal });
+        const authorized = model.operation;
+        if (socket !== current || current.readyState !== 1 || globalThis.document?.hidden === true || generation !== ownerGeneration ||
+            model.generation !== ownerGeneration || model.revision !== op.revision || !model.scopeCurrent || !model.armed ||
+            model.scope !== op.scope || authorized?.id !== op.id || authorized.status !== 'dispatching' ||
+            authorized.flight !== ordinal || authorized.authorized !== ordinal + 1 || authorized.returned !== ordinal) throw Error('Exact owned authorization was revoked.');
+        // No callback or await between owned authorization and exact typed send.
+        const command = { ...op.expected[ordinal].target, value: op.expected[ordinal].value };
+        const message = selected.kind === 'pan' ? encodeAuxPanCommand(command) : encodeAuxLevelCommand(command);
+        try { current.send(message); }
+        catch {
+          step({ type: 'threw', id: op.id, ordinal });
+          if (socket === current && generation === ownerGeneration && model.operation?.id === op.id) stop('error', 'Adjustment interrupted; some levels or pan positions may have changed. Reconnect explicitly.');
+          return false;
         }
+        // Settle the exact outstanding ID even after a synchronous replacement.
+        step({ type: 'returned', id: op.id, ordinal });
+        if (socket !== current || generation !== ownerGeneration || model.operation?.id !== op.id || !model.armed || !['dispatching', 'pending', 'observed-match'].includes(model.operation.status)) { emit('controls'); return false; }
       } catch {
-        if (socket === current && generation === tokenGeneration) stop('error', kind === 'pan' ? 'Pan adjustment interrupted; some pan positions may have changed. Reconnect explicitly.' : 'Level adjustment interrupted; some levels may have changed. Reconnect explicitly.');
-        return false;
+        if (socket === current && generation === ownerGeneration && model.operation?.id === op.id && model.armed) cancelControl('Dispatch interrupted; some values may have changed.');
+        emit('controls'); return false;
       }
-      operation.dispatching = false; operation.completed = stamp(); controlStatus = kind === 'pan' ? 'Waiting for fresh pan readback; positions are not confirmed.' : plan.delta === undefined ? 'Waiting for fresh level readback; delivery is not confirmed.' : `Relative Δ ${plan.delta >= 0 ? '+' : ''}${plan.delta.toFixed(2)} dB pending fresh member readback.`;
-      confirmation = timers.setTimeout(() => {
-        if (pending === operation && generation === tokenGeneration) { cancelControl(`${pending.kind === 'pan' ? 'Pan' : 'Level'} readback unconfirmed; controls off. No retry.`); emit('controls'); }
-      }, confirmationMs);
-      finishReadback(); emit('controls'); return true;
+    }
+    timers.clearTimeout(confirmation);
+    confirmation = timers.setTimeout(() => { if (model?.operation?.id === op.id && generation === ownerGeneration) { inspectConfirmation(); emit('controls'); } }, OBSERVATION_WINDOW_MS);
+    emit('controls'); return true;
+  }
+  function select(target, message) {
+    cancelControl(); selected = target;
+    try { installScope(); controlStatus = message; } catch (error) { controlStatus = error.message; }
+    emit('controls'); return Boolean(selected && controlSnapshot().eligible);
+  }
+  function arm(pan) {
+    if (!canAct() || !selected || (selected.kind === 'pan') !== pan || model?.gesture || ['pending', 'dispatching'].includes(activeOperation()?.status)) return false;
+    try { if (model?.armed) { revalidate(); emit('controls'); return Boolean(model?.armed); } installScope(); step({ type: 'arm' }); controlStatus = 'Enabled; requested coordinate is separate from last received values. Release to apply.'; emit('controls'); return Boolean(model?.armed); }
+    catch (error) { cancelControl(error.message); emit('controls'); return false; }
+  }
+  function begin(pan) {
+    if (!canAct() || !selected || (selected.kind === 'pan') !== pan || !model?.armed || model.gesture || ['pending', 'dispatching'].includes(activeOperation()?.status)) return null;
+    try { revalidate(); step({ type: 'begin' }); const token = model.gesture.token; controlStatus = 'Preview requested coordinate; release to apply. Last received values unchanged.'; emit('controls'); return model.gesture?.token === token && model.armed ? token : null; }
+    catch (error) { cancelControl(error.message); emit('controls'); return null; }
+  }
+  function preview(token, value, pan) {
+    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || (selected?.kind === 'pan') !== pan) return null;
+    try { revalidate(); step({ type: 'preview', token, value }); return selected.kind === 'group' ? model.gesture.preview.gestureDelta : model.gesture.preview.expected[0].value; }
+    catch (error) { cancelControl(error.message); emit('controls'); return null; }
+  }
+  function commit(token, value, pan) {
+    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || (selected?.kind === 'pan') !== pan) return false;
+    if (typeof value !== 'number' && !pan && selected.kind !== 'group') return false;
+    try {
+      revalidate();
+      if (!pan && selected.kind !== 'group') { if (preview(token, value, false) === null) return false; }
+      if (!model.gesture?.preview) return false;
+      step({ type: 'commit', token }); return dispatch();
+    } catch (error) { cancelControl(error.message); emit('controls'); return false; }
   }
   const controlAPI = {
-    bindGroupProfile(profileId) {
-      if (profileId === groupProfileId) return;
-      cancelControl(); selected = null; groupProfileId = typeof profileId === 'string' ? profileId : null;
-    },
+    bindGroupProfile(profileId) { if (profileId !== groupProfileId) { cancelControl('Profile changed; controls off.', 'profile'); selected = null; groupProfileId = typeof profileId === 'string' ? profileId : null; } },
     selectGroupTarget(groupId, auxIndex) {
-      cancelControl(); selected = null;
-      try {
-        const group = readGroup(groupId);
-        selected = Object.freeze({ kind: 'group', groupId: group.id, auxIndex }); selectedGroupSignature = JSON.stringify([groupProfileId, group]);
-        resolveRelativeGroup(observed, group, auxIndex); controlStatus = 'Relative group selected; enable explicitly.';
-      } catch (error) { controlStatus = error.message; }
-      emit('controls'); return Boolean(selected && controlSnapshot().eligible);
+      let target = null;
+      try { const group = readGroup(groupId); target = Object.freeze({ kind: 'group', groupId: group.id, auxIndex }); selectedGroupSignature = JSON.stringify([groupProfileId, group]); }
+      catch { /* No group authority from caller data. */ }
+      return select(target, 'Relative group selected; enable explicitly. Requested offsets do not prove hardware balance.');
     },
     selectLevelTarget(target) {
-      cancelControl(); selected = null;
-      try { selected = resolveAuxLevelTargets(observed, target).target; controlStatus = 'Level selected; enable explicitly.'; }
-      catch (error) {
-        // Keep only a valid narrow descriptor for an honest unavailable selection.
-        try { auxLevelPath(target); selected = Object.freeze({ ...target }); } catch { /* No caller path can become authority. */ }
-        controlStatus = error.message;
-      }
-      emit('controls'); return Boolean(selected && controlSnapshot().eligible);
+      let descriptor = null;
+      try { auxLevelPath(target); descriptor = Object.freeze({ ...target }); } catch { /* Strict narrow descriptor only. */ }
+      return select(descriptor, 'Level selected; enable explicitly.');
     },
-    armLevel() {
-      if (!canAct() || !selected || selected.kind === 'pan' || pending || gesture) return false;
-      try { armSelected(); armed = true; controlStatus = 'Level enabled; drag the cap and release to apply.'; emit('controls'); return armed; }
-      catch (error) { cancelControl(error.message); emit('controls'); return false; }
-    },
+    armLevel: () => arm(false),
     disarmLevel() { cancelControl(); emit('controls'); },
     invalidateLevelContext() { cancelControl(); selected = null; },
-    beginLevelGesture() {
-      if (!canAct() || !armed || pending || gesture || !selected || selected.kind === 'pan') return null;
-      try { armSelected(); } catch (error) { cancelControl(error.message); emit('controls'); return null; }
-      const token = Object.freeze({}); gesture = { token, delta: 0 }; controlStatus = 'Preview only; release to apply. Readout remains received.'; emit('controls'); return gesture?.token === token && armed ? token : null;
-    },
-    previewLevelGesture(token, value) {
-      if (!canAct() || !gesture || gesture.token !== token || !armed || pending || selected?.kind === 'pan') return null;
-      if (selected.kind !== 'group') return value;
-      try { gesture.delta = guard.previewRelative(value); gesture.previewed = true; return gesture.delta; }
-      catch (error) { cancelControl(error.message); emit('controls'); return null; }
-    },
-    cancelLevelGesture() { if (gesture && selected?.kind !== 'pan') { cancelControl('Adjustment cancelled; controls off.'); emit('controls'); } },
-    commitLevelGesture(token, value) {
-      if (!canAct() || !armed || !gesture || gesture.token !== token || pending || selected?.kind === 'pan') return false;
-      if (typeof value !== 'number' || !Number.isFinite(value) || (selected.kind === 'group' && !gesture.previewed)) return false;
-      let plan;
-      try { plan = selected.kind === 'group' ? guard.prepareRelative(gesture.delta) : guard.prepare(value); } catch (error) { cancelControl(error.message); emit('controls'); return false; }
-      return dispatchPlan(plan, 'level', guard);
-    },
+    beginLevelGesture: () => begin(false),
+    previewLevelGesture: (token, value) => preview(token, value, false),
+    cancelLevelGesture() { if (model?.gesture && selected?.kind !== 'pan') { cancelControl('Adjustment cancelled; controls off.'); emit('controls'); } },
+    commitLevelGesture: (token, value) => commit(token, value, false),
   };
   const panAPI = {
     selectPanTarget(target) {
-      cancelControl(); selected = null;
-      try {
-        const path = auxPanPath(target), match = /^(.*)\.aux\.([0-9])\.pan$/.exec(path);
-        selected = Object.freeze({ kind: 'pan', sourceId: match[1], auxIndex: Number(match[2]) });
-        resolveAuxPanTargets(observed, panTarget()); controlStatus = 'Pan selected; enable explicitly. Positions are normalized numbers.';
-      } catch (error) { controlStatus = error.message; }
-      emit('controls'); return Boolean(selected && controlSnapshot().eligible);
+      let descriptor = null;
+      try { const path = auxPanPath(target), match = /^(.*)\.aux\.([0-9])\.pan$/.exec(path); descriptor = Object.freeze({ kind: 'pan', sourceId: match[1], auxIndex: Number(match[2]) }); } catch { /* Narrow pan only. */ }
+      return select(descriptor, 'Pan selected; enable explicitly. Positions are normalized numbers.');
     },
-    armPan() {
-      if (!canAct() || selected?.kind !== 'pan' || pending || gesture) return false;
-      try { panGuard.arm(panTarget()); armed = true; controlStatus = 'Pan enabled; preview then release to apply.'; emit('controls'); return armed; }
-      catch (error) { cancelControl(error.message); emit('controls'); return false; }
-    },
+    armPan: () => arm(true),
     disarmPan() { if (selected?.kind === 'pan') { cancelControl('Pan controls off.'); emit('controls'); } },
     closePan() { if (selected?.kind === 'pan') { cancelControl(); selected = null; emit('controls'); } },
-    beginPanGesture() {
-      if (!canAct() || !armed || pending || gesture || selected?.kind !== 'pan') return null;
-      try { panGuard.arm(panTarget()); } catch (error) { cancelControl(error.message); emit('controls'); return null; }
-      const token = Object.freeze({}); gesture = { token, panValue: observed.get(auxPanPath(panTarget())) };
-      controlStatus = 'Pan preview only; release to apply. Received positions remain unchanged.'; emit('controls');
-      return gesture?.token === token && armed ? token : null;
-    },
-    previewPanGesture(token, value) {
-      if (!canAct() || !armed || pending || !gesture || gesture.token !== token || selected?.kind !== 'pan') return null;
-      try { const plan = panGuard.prepare(value); gesture.panValue = plan.value; gesture.previewed = true; return plan.value; }
-      catch (error) { cancelControl(error.message); emit('controls'); return null; }
-    },
-    commitPanGesture(token) {
-      if (!canAct() || !armed || pending || !gesture || gesture.token !== token || !gesture.previewed || selected?.kind !== 'pan') return false;
-      let plan;
-      try { plan = panGuard.prepare(gesture.panValue); } catch (error) { cancelControl(error.message); emit('controls'); return false; }
-      return dispatchPlan(plan, 'pan', panGuard);
-    },
-    cancelPanGesture() { if (selected?.kind === 'pan' && gesture) { cancelControl('Pan adjustment cancelled; controls off.'); emit('controls'); } },
+    beginPanGesture: () => begin(true),
+    previewPanGesture: (token, value) => preview(token, value, true),
+    commitPanGesture: token => commit(token, undefined, true),
+    cancelPanGesture() { if (selected?.kind === 'pan' && model?.gesture) { cancelControl('Pan adjustment cancelled; controls off.'); emit('controls'); } },
   };
   const snapshot = () => {
     if (socket) inspectCurrent(); // A read after sleep cannot resurrect old state before timers run.
@@ -218,7 +232,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   const clearTimers = () => { timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
   function stop(next = 'disconnected', message = 'Disconnected — received state cleared') {
     ++generation;
-    cancelControl('Controls off; received state cleared.'); if (next !== 'error') lastOperation = null; selected = null; observed.clear(); receipts.clear(); sequence = 0;
+    cancelControl('Controls off; received state cleared.', 'disconnect'); selected = null; observed.clear(); receipts.clear(); sequence = 0;
     clearTimers();
     const old = socket;
     socket = null;

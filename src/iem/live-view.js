@@ -70,7 +70,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     onPreview(input, token, value) {
       const next = onPreviewLevel(token, value);
       const group = groupInputs.get(input);
-      if (group && typeof next === 'number') { group.output.textContent = deltaText(next); group.output.setAttribute('title', `Relative delta ${next} dB; whole-group limit applied.`); }
+      if (group && typeof next === 'number') { group.note.textContent = 'Gesture Δ · release to apply'; group.output.textContent = deltaText(next); group.output.setAttribute('title', `Relative delta ${next} dB; whole-group limit applied.`); }
       return next;
     },
     onCommit(input, token) { preview = null; onCommitLevel(token, Number(input.value)); },
@@ -89,7 +89,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (!control) head.append(selection);
       const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
       unavailable.setAttribute('aria-label', 'Relative group level unavailable · read-only');
-      const state = element('span', 'mm-live-strip-state'), note = element('span', 'mm-group-control-note', control ? 'RELATIVE Δ · 0 per gesture · no VU' : 'Local definition · no group meter');
+      const state = element('span', 'mm-live-strip-state'), note = element('span', 'mm-group-control-note', control ? 'REQUESTED Δ · no balance proof' : 'Local definition · no group meter');
       space.append(scale, unavailable);
       let input;
       if (control) {
@@ -100,10 +100,11 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (control) {
         selection.className = 'mm-group-control-note mm-group-selection';
         selection.setAttribute('title', 'Group master · relative delta zero per gesture · no aggregate level or VU');
-        const reference = element('span', 'mm-pan-button', 'RELATIVE Δ · 0 per gesture');
-        article.append(head, output, space, reference, state, selection);
+        note.textContent = 'Requested total Δ · unverified'; note.className = 'mm-pan-button';
+        note.setAttribute('title', 'Requested cumulative offset only; no proof of hardware balance or application. Each gesture starts at local zero.');
+        article.append(head, output, space, note, state, selection);
       } else article.append(head, output, space, state, note);
-      const strip = { kind, article, name, description, output, state, input, select, unavailable };
+      const strip = { kind, article, name, description, output, state, input, select, unavailable, note };
       if (input) groupInputs.set(input, strip);
       return strip;
     }
@@ -177,8 +178,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           if (preview?.input !== strip.input) strip.input.value = '0';
           strip.unavailable.hidden = Boolean(eligible);
         }
-        strip.output.textContent = eligible ? deltaText(control.gestureActive ? control.previewDelta || 0 : control.pending ? control.lastDelta || 0 : 0) : 'Δ —';
-        strip.output.setAttribute('aria-label', eligible ? 'Relative adjustment delta; not a group level' : 'Group adjustment unavailable');
+        strip.note.textContent = chosen && control?.gestureActive ? 'Gesture Δ · release to apply' : 'Requested total Δ · unverified';
+        strip.output.textContent = eligible ? deltaText(control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0) : 'Δ —';
+        strip.output.setAttribute('aria-label', eligible ? 'Requested cumulative offset, or current gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         strip.state.textContent = chosen ? control.reason || control.status : model.stateText;
         continue;
       }
@@ -199,8 +201,17 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       const known = typeof model.position === 'number' && Number.isFinite(model.position) && model.position >= 0 && model.position <= 1;
       strip.article.dataset.unknown = String(!known);
       strip.input.disabled = !(control && isSelected && control.eligible && control.armed && !control.pending);
+      if (isSelected && typeof control?.requestedValue === 'number') {
+        strip.state.textContent = `Last received ${model.levelText ?? '—'} · Requested ${control.requestedValue}`;
+        strip.state.setAttribute('title', strip.state.textContent);
+      }
+      if (isSelected && !control.armed && control.requestedDiagnostic?.length) {
+        strip.state.textContent = `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}`;
+        strip.state.setAttribute('title', strip.state.textContent);
+      }
+      strip.output.setAttribute('aria-label', `${model.name} last received level`);
       strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, controls off' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
-      if (preview?.input !== strip.input) strip.input.value = known ? String(model.position) : '0';
+      if (preview?.input !== strip.input) strip.input.value = isSelected && typeof control?.requestedValue === 'number' ? String(control.requestedValue) : known ? String(model.position) : '0';
       updateMeter(strip, model);
     }
   }
@@ -219,9 +230,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     $('.mm-dirty').textContent = control ? control.status : 'Read-only · no parameter writes';
     $('.mm-dirty').setAttribute('title', control?.status || 'Read-only');
     const terminal = ['error', 'closed', 'timeout', 'blocked', 'unsupported', 'invalid'].includes(model.connectionPhase);
-    $('.mm-feedback').textContent = terminal ? model.status : control ? `${targetLabel}: ${control.pending ? control.status : control.reason || control.status}` : model.status;
+    const terminalMessage = control?.authorized > 0 ? `${model.status} ${control.status}` : model.status;
+    $('.mm-feedback').textContent = terminal ? terminalMessage : control ? `${targetLabel}: ${control.pending ? control.status : control.reason || control.status}` : model.status;
     empty.children[0].textContent = terminal ? 'Connection stopped' : 'Waiting for received AUX state';
-    empty.children[1].textContent = terminal ? model.status : 'Connect explicitly to your desk. Unknown or unsupported state stays unavailable; Demo is a separate simulation.';
+    empty.children[1].textContent = terminal ? terminalMessage : 'Connect explicitly to your desk. Unknown or unsupported state stays unavailable; Demo is a separate simulation.';
     $('.mm-feedback').setAttribute('title', `${model.status} · ${targetLabel}: ${control?.reason || control?.status || ''}`);
     $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
     $('.mm-desk').textContent = model.connectionPhase ? `${model.modelLabel} · ${model.connectionPhase}` : 'No socket connection';
