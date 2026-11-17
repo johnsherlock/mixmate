@@ -72,8 +72,8 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
       row.setAttribute('title', row.textContent);
     }
     if (!preview) {
-      const received = actual.values[0]; input.value = received.known ? String(received.value) : '0';
-      previewLabel.textContent = control?.pending ? `Pending wire position: ${control.expectedPan}` : 'Preview wire position: —';
+      const received = actual.values[0]; input.value = selected && typeof control?.requestedValue === 'number' ? String(control.requestedValue) : received.known ? String(received.value) : '0';
+      previewLabel.textContent = selected && typeof control?.expectedPan === 'number' ? `Requested wire position: ${control.expectedPan}; application unverified` : control?.requestedDiagnostic?.length ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}` : 'Requested wire position: —';
     }
     status.textContent = control?.pending ? control.status : actual.reason || (selected ? control.status : control?.status || 'Pan controls off.');
     gestures?.sync();

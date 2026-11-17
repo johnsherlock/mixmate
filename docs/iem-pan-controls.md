@@ -1,5 +1,12 @@
 # Normalized AUX send pan controls — F06-S02
 
+## F09-S03 current runtime reconciliation — 2026-11-17
+
+The [current owned runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md) supersede historical timeout-disarm, fresh-baseline-per-move and unrelated-value invalidation wording below. Production uses the private reducer/current-owner typed dispatch guard; historical standalone leases remain pure compatibility/test helpers, not runtime authority. Literal factories, exact allowlist, arming, lifecycle/stereo safeguards and no retry/replay/rollback remain unchanged. Review/merge acceptance is tracked by [F09-S03](stories/F09-S03.md).
+
+Requested normalized pan persists separately from both raw last-received output values while owned; the cap no longer snaps to old readback when unchanged all-returned dispatch becomes sent-unverified. New explicit gestures may continue on the same qualified scope; numeric presets use the same opaque token/preview path. Cancellation clears active cap authority but retains inactive requested diagnostics. Complete post-invalidation receipts over the entire touched closure plus explicit rearm are required; select-away/back cannot erase barriers. Firmware acceptance and F08 physical qualification remain open; no GEQ/new command is enabled.
+
+
 Date: 2026-11-11. S01 PR #27 merged at `4857346` after green CI/215 tests and affirmative exact-head `4ddc5c3` review. Scope is the already-authorized qualified normalized send-pan runtime/UI; direction and stereo balance remain unverified. No real mixer actuation or probe, and no EQ work.
 
 ## Scoped plan before implementation

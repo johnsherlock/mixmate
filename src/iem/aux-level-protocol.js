@@ -5,8 +5,11 @@ const normalized = value => typeof value === 'number' && Number.isFinite(value) 
 const auxIndex = value => Number.isInteger(value) && value >= 0 && value < UI24_AUX_COUNT;
 function descriptor(target, withValue = false) {
   if (!target || ![Object.prototype, null].includes(Object.getPrototypeOf(target))) throw Error('Invalid AUX level descriptor.');
-  const keys = ['kind', 'auxIndex', ...(target.kind === 'send' ? ['sourceId'] : []), ...(withValue ? ['value'] : [])];
-  if (Reflect.ownKeys(target).length !== keys.length || keys.some(key => !Object.hasOwn(target, key))) throw Error('Unexpected AUX level fields.');
+  const fields = Object.getOwnPropertyDescriptors(target);
+  const kind = fields.kind?.value;
+  const keys = ['kind', 'auxIndex', ...(kind === 'send' ? ['sourceId'] : []), ...(withValue ? ['value'] : [])];
+  if (Reflect.ownKeys(fields).length !== keys.length || keys.some(key => !Object.hasOwn(fields, key) || !Object.hasOwn(fields[key], 'value'))) throw Error('Unexpected AUX level fields.');
+  target = Object.fromEntries(keys.map(key => [key, fields[key].value]));
   if (!['master', 'send'].includes(target.kind) || !auxIndex(target.auxIndex)) throw Error('Invalid AUX level target.');
   if (target.kind === 'send') {
     if (typeof target.sourceId !== 'string') throw Error('Invalid AUX source.');

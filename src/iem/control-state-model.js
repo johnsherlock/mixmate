@@ -1,4 +1,5 @@
-// F09-S02 pure proposal only. NOT a transport capability or production dependency.
+// Pure state model, privately integrated by the F09-S03 session owner.
+// Data scopes/events are not a transport capability.
 // Owned-adapter integration and remaining gates: docs/adr/0008-control-state-model.md.
 import { resolveAuxLevelTargets } from './aux-level-protocol.js';
 import { resolveAuxPanTargets, normalizeAuxPanPosition } from './aux-pan-protocol.js';
@@ -22,7 +23,7 @@ const stamp = input => {
   return t;
 };
 
-// Fake/pure construction boundary. A future adapter must obtain these inputs
+// Pure construction boundary. The production owner obtains these inputs
 // privately from its current socket journal and canonical settings, not callers.
 export function createControlScope(input) {
   const { kind, received, receipts, target, group } = data(input, ['kind', 'received', 'receipts', 'target', 'group']);
