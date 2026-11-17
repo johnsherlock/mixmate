@@ -222,21 +222,23 @@ test('opaque latest gesture identity and frozen copied values prevent forged pre
 });
 
 test('model is integrated only through private session owner in live entries', async () => {
-  const root = resolve(new URL('..', import.meta.url).pathname), visited = new Set();
-  async function visit(file) {
+  const root = resolve(new URL('..', import.meta.url).pathname), modelFile = resolve(root, 'src/iem/control-state-model.js'), owner = resolve(root, 'src/iem/session-core.js');
+  async function visit(file, visited) {
     if (visited.has(file)) return; visited.add(file);
-
     const text = await readFile(file, 'utf8');
     const imports = [...text.matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)].map(x => x[1]);
     if (file.endsWith('.html')) imports.push(...[...text.matchAll(/<script[^>]+src="([^"]+)"/g)].map(x => x[1]));
     for (const ref of imports) if (ref.startsWith('.') || ref.startsWith('/src/')) {
       const child = ref.startsWith('/') ? resolve(root, ref.slice(1)) : resolve(dirname(file), ref);
-      if (/\.(js|html)$/.test(child)) await visit(child);
+      if (child === modelFile) assert.equal(file, owner, 'Only private session owner may integrate model.');
+      if (/\.(js|html)$/.test(child)) await visit(child, visited);
     }
   }
-  for (const entry of ['index.html', 'iem.html', 'demo.html', 'connection-test.html']) await visit(resolve(root, entry));
-  assert.ok(visited.has(resolve(root, 'src/iem/session-core.js')));
-  assert.ok(visited.has(resolve(root, 'src/iem/control-state-model.js')));
+  for (const entry of ['index.html', 'iem.html', 'demo.html', 'connection-test.html']) {
+    const visited = new Set(); await visit(resolve(root, entry), visited);
+    assert.equal(visited.has(modelFile), ['index.html', 'iem.html'].includes(entry), entry);
+    assert.equal(visited.has(owner), ['index.html', 'iem.html'].includes(entry), entry);
+  }
 });
 
 test('dispatch stalls expire without later ordinals; held result can settle diagnostics only', () => {

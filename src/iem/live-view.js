@@ -230,9 +230,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     $('.mm-dirty').textContent = control ? control.status : 'Read-only · no parameter writes';
     $('.mm-dirty').setAttribute('title', control?.status || 'Read-only');
     const terminal = ['error', 'closed', 'timeout', 'blocked', 'unsupported', 'invalid'].includes(model.connectionPhase);
-    $('.mm-feedback').textContent = terminal ? model.status : control ? `${targetLabel}: ${control.pending ? control.status : control.reason || control.status}` : model.status;
+    const terminalMessage = control?.authorized > 0 ? `${model.status} ${control.status}` : model.status;
+    $('.mm-feedback').textContent = terminal ? terminalMessage : control ? `${targetLabel}: ${control.pending ? control.status : control.reason || control.status}` : model.status;
     empty.children[0].textContent = terminal ? 'Connection stopped' : 'Waiting for received AUX state';
-    empty.children[1].textContent = terminal ? model.status : 'Connect explicitly to your desk. Unknown or unsupported state stays unavailable; Demo is a separate simulation.';
+    empty.children[1].textContent = terminal ? terminalMessage : 'Connect explicitly to your desk. Unknown or unsupported state stays unavailable; Demo is a separate simulation.';
     $('.mm-feedback').setAttribute('title', `${model.status} · ${targetLabel}: ${control?.reason || control?.status || ''}`);
     $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
     $('.mm-desk').textContent = model.connectionPhase ? `${model.modelLabel} · ${model.connectionPhase}` : 'No socket connection';
