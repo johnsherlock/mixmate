@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const variants = [
   { label: 'three-minute original', file: 'f09-s04-recorder.js', budgetMs: 180_000 },
-  { label: 'five-minute remaining-only', file: 'f09-s04-remaining-recorder.js', budgetMs: 300_000 },
+  { label: 'thirty-minute remaining-only', file: 'f09-s04-remaining-recorder.js', budgetMs: 1_800_000 },
 ];
 
 function fixture(source) {

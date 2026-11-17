@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S03-only batch is complete; the explicitly authorized S04-only batch is now in progress. The handoff records its approved live limits and remaining hardware blockers and unapproved remaining-only proposal. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S03-only batch is complete; the explicitly authorized S04-only batch is now in progress. The handoff records its approved live limits and remaining hardware blockers and approved remaining-only trial. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -75,4 +75,4 @@ Library/native source evidence, fake tests, observed device/firmware trials and 
 
 The user explicitly started S04 and separately approved its bounded windows. [Current matrix/evidence](f09-s04-firmware-validation.md) records a passive baseline, an interrupted zero-parameter window and a subsequent scoped repeated master/send owner-behavior pass (four trusted gestures/eight returned SETD, no sender target echoes). Requested reductions were not reversed; current actual/application/precision remain unknown. Both completed windows are closed and cleaned up. Group/pan/native/partial/precision/recovery acceptance still blocks S04 and **F06-S04 readiness**.
 
-Remaining-only proposal: one five-minute/max-two-connection window, four group/pan gestures/twelve SETD, final controls-OFF snapshot; **user approval pending**, no repeated master/standalone-send gestures. Root owns live actions, sanitized draft-publication reconsideration and final acceptance. No PR/merge/downstream implementation; story agent makes no hardware/browser action. Historical batch receipts above do not waive this gate.
+Approved remaining-only trial: thirty-minute guard/max two connections, four group/pan gestures/twelve SETD, final controls-OFF snapshot; **root evidence pending**, no repeated master/standalone-send gestures. Root owns live actions, sanitized draft-publication reconsideration and final acceptance. Draft PR #42 remains incomplete; no merge/downstream implementation; story agent makes no hardware/browser action. Historical batch receipts above do not waive this gate.
