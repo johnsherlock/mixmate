@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S01/S02 batch is complete; the handoff records its stop boundary. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S03-only batch is complete; the handoff records its stop boundary. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -14,7 +14,7 @@ Current plan: 2026-11-16. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S02 merged; S03 implemented, review/CI/merge pending; S04 unstarted |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 unstarted, targeted hardware gate open |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -23,8 +23,8 @@ Feature numbers do not determine execution priority. Previously merged implement
 | Order | Story / gate | Dependency and purpose |
 | --- | --- | --- |
 | 1 | [F09-S01](stories/F09-S01.md) | [Reference/adapter decision](iem-native-protocol-reference.md) merged in PR #37; exact served-source gap parked |
-| 2 | [F09-S02](stories/F09-S02.md) | [ADR-0008](adr/0008-control-state-model.md)/pure model merged in PR #38; unwired |
-| 3 | [F09-S03](stories/F09-S03.md) | S02 → existing level/group/pan model implemented; containing-PR review/CI/merge pending |
+| 2 | [F09-S02](stories/F09-S02.md) | [ADR-0008](adr/0008-control-state-model.md)/pure model merged in PR #38; integrated by S03 |
+| 3 | [F09-S03](stories/F09-S03.md) | Existing level/group/pan integration merged in PR #40; firmware gate remains S04 |
 | 4 | [F09-S04](stories/F09-S04.md) | S03 → separately authorized targeted firmware validation; explicit applicable EQ readiness decision |
 | 5 | [F04-S03](stories/F04-S03.md) | Passed and affirmatively reviewed/merged applicable foundation gate → logical stereo mix overview |
 | 6 | [F04-S04](stories/F04-S04.md) | F04-S03 → compact accessible channel detail |
@@ -40,13 +40,13 @@ This is the intended sequence, not a hardware waiver: if F09-S04 is blocked, par
 
 The live IEM owns its WebSocket/session. `soundcraft-ui-connection` 7.1.0 currently supplies imported display converters; related meter/relative math and protocol references are distinct from instantiating its connection/control facade. [ADR-0007](adr/0007-owned-protocol-adapter.md) selects owned transport plus existing helper-only retention; the [versioned reference/manifest](iem-native-protocol-reference.md) indexes portable official source and explicitly parks unavailable served-source provenance. A library replacement is not an established remedy.
 
-Reviewed runtime capability is AUX master/send levels, relative groups and eligible normalized mono-source pan into verified reciprocal stereo AUX pairs. The S03 containing PR integrates the [owned uncertainty runtime](iem-control-runtime.md): exact fresh all-path observations within 2.5 seconds produce observed-match; unchanged all-returned expiry is terminal sent-unverified with same-scope requested coordinates/permission for a new explicit gesture. Intent/send return is not received state or a correlated ACK; review/CI/merge acceptance is tracked by that PR. Read-only factories remain connection-only. GEQ serializers/curve/leases are pure and **unwired**; shelves/filters are unverified. Snapshots/recording remain unwired. [AGENTS](../AGENTS.md) and linked contracts define authority.
+Reviewed runtime capability is AUX master/send levels, relative groups and eligible normalized mono-source pan into verified reciprocal stereo AUX pairs. S03, merged in [PR #40](https://github.com/johnsherlock/mixmate/pull/40), integrates the [owned uncertainty runtime](iem-control-runtime.md): exact fresh all-path observations within 2.5 seconds produce observed-match; unchanged all-returned expiry is terminal sent-unverified with same-scope requested coordinates/permission for a new explicit gesture. Intent/send return is not received state or a correlated ACK; final review/CI/merge receipts are recorded in the story. Read-only factories remain connection-only. GEQ serializers/curve/leases are pure and **unwired**; shelves/filters are unverified. Snapshots/recording remain unwired. [AGENTS](../AGENTS.md) and linked contracts define authority.
 
 Bounded trials on firmware `3.0.7865-ui24` applied changes without sender target echoes. The native paired-master trial likewise received no own target path for 38.883 seconds; a read-only peer received both approximately 11ms after dispatch at shorter decimal precision. Native source shows local-first state with no established correlated ACK callback. This is one firmware/operation observation, not proof of all fields, endpoints or causality. Last observed `a.0/a.1` values were `0.3961953345` each, left applied. No snapshot save/recall/delete occurred. Existing diagnostic authorization applies only within its recorded scope and bounds; this replan does not expand it. Record applicable prior permission and seek only missing scope.
 
 ## Verified delivery checkpoints
 
-Last verified story baseline: `2e7edcba19e25d0d8b08e5f7825a33a7a0bc8231` on main; final handoff delivery is identified by its containing reviewed PR/history. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16:
+Last verified story baseline: `446664578d5470378730d6acdbe5aa77488a72fb` on main; final handoff delivery is identified by its containing reviewed PR/history. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16/17:
 
 | PR | Delivery | Merge commit |
 | --- | --- | --- |
@@ -58,12 +58,14 @@ Last verified story baseline: `2e7edcba19e25d0d8b08e5f7825a33a7a0bc8231` on main
 | [#36](https://github.com/johnsherlock/mixmate/pull/36) | Orchestrator lifecycle / batch | `c27f0d3f468887dcc8cf9e4382db7215d4d955a9` |
 | [#37](https://github.com/johnsherlock/mixmate/pull/37) | F09-S01 reference / ADR-0007 | `5bdf2c667aeffc50919e8e26aad5b09a63888d59` |
 | [#38](https://github.com/johnsherlock/mixmate/pull/38) | F09-S02 pure model / ADR-0008 | `2e7edcba19e25d0d8b08e5f7825a33a7a0bc8231` |
+| [#39](https://github.com/johnsherlock/mixmate/pull/39) | Reviewed S01/S02 closing handoff | `03f141f610124597cc93f7002388b88b1cf76d44` |
+| [#40](https://github.com/johnsherlock/mixmate/pull/40) | F09-S03 private runtime integration | `446664578d5470378730d6acdbe5aa77488a72fb` |
 
 Earlier implementation receipts remain in individual stories and Git history (F01–F05; F06-S01/S02). Historical pending/stop wording in evidence reports describes those checkpoints, not current PR state. F08-S03 is not fully validated and no physical support pass follows from these merges.
 
 ## Orchestration and release gates
 
-Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The previous F09-S01/S02 batch is complete. The 2026-11-17 run authorizes **F09-S03 only**; implementation is delivered for containing-PR review/CI/merge, not yet merged at preparation. Stop before F09-S04: the user now reports the desk online (unverified here); S03 acceptance/merge and separately bounded live authorization are still required. No hardware action is authorized by this batch. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
+Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The previous F09-S01/S02 batch is complete. The 2026-11-17 **F09-S03-only** batch is complete, confirmed merged in PR #40 after final review and passing CI. Stop with the reviewed handoff. F09-S04 remains unstarted: the user has confirmed the desk powered on, but the next run must establish bounded live targets/changes and applicable authorization before testing. No hardware action occurred in this batch. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
 
 [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) already authorizes the named feature classes; exact forms/types/ranges and deliberate reviewed typed-guard/allowlist changes remain mandatory. It does not authorize automatic real-desk tests. Snapshot SAVE was explicitly forbidden in recent live diagnostics; future F07 feature-class scope does not override that session restriction or create current hardware permission.
 
