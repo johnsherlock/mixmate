@@ -14,7 +14,7 @@ Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 parked incomplete, native/partial/full-rearm gate blocked |
+| [F09](features/F09.md) | Reliable control transport and state | 4 | S01–S03 merged; S04 implemented/targeted validation accepted in PR #42; final review/CI/merge pending |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -25,7 +25,7 @@ Feature numbers do not determine execution priority. Previously merged implement
 | 1 | [F09-S01](stories/F09-S01.md) | [Reference/adapter decision](iem-native-protocol-reference.md) merged in PR #37; exact served-source gap parked |
 | 2 | [F09-S02](stories/F09-S02.md) | [ADR-0008](adr/0008-control-state-model.md)/pure model merged in PR #38; integrated by S03 |
 | 3 | [F09-S03](stories/F09-S03.md) | Existing level/group/pan integration merged in PR #40; firmware gate remains S04 |
-| 4 | [F09-S04](stories/F09-S04.md) | S03 → separately authorized targeted firmware validation; explicit applicable EQ readiness decision |
+| 4 | [F09-S04](stories/F09-S04.md) | S03 → revised peer-editor model/runtime plus targeted firmware validation; explicit applicable EQ readiness decision |
 | 5 | [F04-S03](stories/F04-S03.md) | Passed and affirmatively reviewed/merged applicable foundation gate → logical stereo mix overview |
 | 6 | [F04-S04](stories/F04-S04.md) | F04-S03 → compact accessible channel detail |
 | 7 | [F02-S04](stories/F02-S04.md) | F04-S04 delivery order → discoverable saved-rig setup and persistence feedback |
@@ -76,3 +76,12 @@ Library/native source evidence, fake tests, observed device/firmware trials and 
 [Exact matrix/evidence](f09-s04-firmware-validation.md) corroborates scoped repeated level/group/pan owner behavior (eight trusted gestures/twenty returned SETD, no sender target echoes) and limited later current-state/precision points. Native edit/away-back, real partial/interrupted dispatch and full touched-closure recovery plus explicit rearm remain **blocking**. S04 is parked incomplete; **F06-S04 not ready**, F08 physical release gate remains open.
 
 [Draft PR #42](https://github.com/johnsherlock/mixmate/pull/42) contains the reviewed handoff off main; no merge/downstream implementation. All owned live resources closed; no further connection in this batch. Preserve existing user target/time/publication approval while assessing genuinely missing scope/evidence; excluded native/fault actions are not implied. Root owns future orchestration/acceptance; story agent stops after final-head review/CI/checkpoint verification.
+
+## Revised S04 direction — 2026-11-17
+
+The user explicitly expanded the S04-only batch to implement and validate equal-weight peer editing of existing level/group/eligible-pan controls. Qualified connected targets require no manual Enable/Disable or rearm after native edits; obsolete gesture cancellation and fresh compatible basis remain necessary. PR #42 retains historical old-model evidence, but revised code/contracts need new final-head review and CI. Standing story-scoped live testing permission supersedes old per-window/native/fault exclusions for necessary S04 tests. No downstream story, GEQ runtime, new write class or agent snapshot action is authorized. See the [revised story](stories/F09-S04.md) and [current user direction](adr/0004-aux-level-safety.md#current-user-direction-and-testing-permission--2026-11-17).
+
+
+## Revised S04 accepted checkpoint — 2026-11-17
+
+Root accepted the [final attributed existing-control foundation matrix](f09-s04-firmware-validation.md#final-current-matrix-and-readiness-decision) after e032 real-partial diagnostic/recovery/native-edit validation. PR #42 now awaits final-change affirmative review, passing CI and confirmed merge. F06-S04 is conditionally eligible for separately reviewed implementation after that delivery, retaining every GEQ-specific and F08 physical gate; this is no GEQ hardware qualification. The authorized S04-only batch ends with its reviewed repository handoff. No F04/F02/F06/F07/downstream implementation starts without a new explicit batch.

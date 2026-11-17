@@ -5,7 +5,7 @@ import { stereoRelationship } from './protocol.js';
 import { resolveAuxPanTargets } from './aux-pan-protocol.js';
 
 // Presentation copies never grant authority: only the private session's pan API
-// can enable/begin/commit. Raw normalized receive values remain visible unchanged.
+// can select/begin/commit. Raw normalized receive values remain visible unchanged.
 export function projectPanReadback(snapshot, target) {
   const received = snapshot.observations, link = stereoRelationship(received, `a.${target.auxIndex}`);
   const outputs = link.status === 'linked' ? link.members : [`a.${target.auxIndex}`];
@@ -30,15 +30,14 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
   const presets = make('div', 'mm-pan-presets'), presetButtons = [0, 0.5, 1].map(value => {
     const button = make('button', '', String(value)); button.type = 'button'; button.setAttribute('aria-label', `Apply normalized pan position ${value}`); presets.append(button); return button;
   });
-  const status = make('p', 'mm-pan-status'), enable = make('button', 'mm-primary mm-pan-enable', 'Enable pan'); enable.type = 'button'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  const actions = make('div', 'mm-dialog-actions'); actions.append(enable);
-  content.append(description, readbacks, labels, previewLabel, input, presets, status, actions);
+  const status = make('p', 'mm-pan-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+  content.append(description, readbacks, labels, previewLabel, input, presets, status);
   let lease = null, target = null, binding = null, focusBefore, gestures = null, preview = false, destroyed = false, boundListeners = [];
   const rows = new Map();
   const owns = token => !destroyed && lease === token && dialogOwner.owns(token);
   function closeFor(token, reason = {}, fromOwner = false) {
     if (!token || lease !== token || !fromOwner && !dialogOwner.owns(token)) return;
-    input.disabled = true; enable.disabled = true;
+    input.disabled = true;
     for (const button of presetButtons) button.disabled = true;
     lease = null; target = binding = null; preview = false;
     gestures?.destroy(); gestures = null;
@@ -57,11 +56,9 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     $('#mm-dialog-title').textContent = `AUX ${target.auxIndex + 1} · ${receivedName} · NORMALIZED PAN`;
     const selected = control?.selected?.kind === 'pan' && control.selected.sourceId === target.sourceId && control.selected.auxIndex === target.auxIndex;
     content.dataset.panKnown = String(Boolean(actual.values[0]?.known));
-    const enabled = selected && control.eligible && control.armed && !control.pending;
+    const enabled = selected && control.eligible && !control.dispatching;
     if (!control?.gestureActive && preview) { preview = false; gestures?.cancel(); }
-    input.disabled = !enabled; enable.disabled = !selected || !control.eligible || control.pending;
-    enable.textContent = selected && control.armed ? 'Disable pan' : 'Enable pan';
-    enable.setAttribute('aria-label', `${control?.armed ? 'Disable' : 'Enable'} normalized pan for ${sourceLabel(target.sourceId)} on AUX ${target.auxIndex + 1}`);
+    input.disabled = !enabled;
     for (const button of presetButtons) button.disabled = !enabled;
     const ids = new Set(actual.values.map(item => item.id));
     for (const [id, row] of rows) if (!ids.has(id)) { row.remove(); rows.delete(id); }
@@ -75,7 +72,7 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
       const received = actual.values[0]; input.value = selected && typeof control?.requestedValue === 'number' ? String(control.requestedValue) : received.known ? String(received.value) : '0';
       previewLabel.textContent = selected && typeof control?.expectedPan === 'number' ? `Requested wire position: ${control.expectedPan}; application unverified` : control?.requestedDiagnostic?.length ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}` : 'Requested wire position: —';
     }
-    status.textContent = control?.pending ? control.status : actual.reason || (selected ? control.status : control?.status || 'Pan controls off.');
+    status.textContent = control?.pending ? control.status : actual.reason || (selected ? control.status : control?.status || 'Pan adjustment unavailable.');
     gestures?.sync();
   }
   function open(request) {
@@ -109,7 +106,6 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
       onCancel() { preview = false; if (owns(next)) session.cancelPanGesture(); },
     });
     const listen = (node, type, fn) => { node.addEventListener(type, fn); boundListeners.push([node, type, fn]); };
-    listen(enable, 'click', () => { if (!owns(next)) return; if (session.snapshot().control?.armed) session.disarmPan(); else session.armPan(); });
     presetButtons.forEach((button, index) => listen(button, 'click', () => {
       if (!owns(next) || button.disabled) return;
       const token = begin(); if (!token) return;
@@ -118,7 +114,7 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     listen(closeButton, 'click', event => { if (owns(next)) { event.stopImmediatePropagation?.(); closeFor(next); } });
     listen(root, 'keydown', event => { if (owns(next) && event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation?.(); closeFor(next); } });
     gestures.prepare(); render();
-    (enable.disabled ? closeButton : enable).focus();
+    (input.disabled ? closeButton : input).focus();
     return true;
   }
   const unsubscribe = session.subscribe(snapshot => render(snapshot));

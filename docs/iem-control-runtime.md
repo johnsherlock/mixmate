@@ -1,3 +1,19 @@
+# Owned level, group and pan peer runtime — F09-S04
+
+The current policy is [ADR-0008's F09-S04 decision](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17). PR #42's final affirmative review, passing checks and [exact-build firmware matrix](f09-s04-firmware-validation.md) own delivery/acceptance. The former S03 policy below is historical.
+
+An explicit connection owns a private typed writer plus receive-only companion, same validated address/generation. The companion sends only INIT/ALIVE/heartbeat and exclusively populates bounded actual/provider/meter state; writer snapshots never interleave. Both must be open; target-specific model/modes/topology and actual values must be known/compatible. Either failure/close/timeout or lifecycle invalidation closes both and clears state, with no auto-reconnect. The literal read-only factory stays one connection, and level-only cannot gain pan through options. No socket/sender/raw plan escapes.
+
+Qualified faders self-select their typed target on cap/key begin; no name selection or Enable/Disable step is required. Pan opens immediately editable when qualified. Private authority is per opaque owned gesture, deliberate release/key release/preset only. Native/current-scope changes cancel obsolete gesture/intent, update raw actual and allow a new deliberate gesture automatically on current compatible state. Unrelated value receipts preserve disjoint intent. Unequal linked actuals remain read-only until compatible. A raw precision difference is not an ACK or a permanent product failure; current complete compatible state is ready without manual rearm.
+
+All-returned observations remain bounded to 2.5 seconds, exact fresh per-path matches mean observed-match without correlation/causality, and no matches mean sent-unverified. Absolute gestures can explicitly supersede the observation wait immediately; old receipts cannot confirm newer intent. Requested caps and diagnostics are distinct from received numeric values. Identical retained requested vectors are no-ops, never replay. Groups use a fresh finite actual anchor and one common cached clamped delta at **each** gesture, zero local reference and last-gesture requested delta; no cumulative stale coordinate overrides native changes.
+
+A group overlapping outstanding local writes waits for every original touched component path's actual receipt after its own preauthorization cutpoint before reanchoring, regardless of exact-request match. These bounded basis dependencies persist across subset/context selection, refresh on historical-scope receipts and retire once complete. Incomplete/reentrant/unknown dispatch requires the stronger full touched closure's strictly post-invalidation-floor compatible receipts, covering unattempted paths. No manual Enable is needed once genuine state recovers. Scope shrinking cannot bypass uncertainty; fully recovered components do not contaminate later disjoint work.
+
+Each ordinal revalidates private writer/receiver openness/generation, typed topology/canonical settings and exact post-reducer outstanding authorization. Any synchronous reentrant relevant value receipt stops the remainder, even exact; browser asynchronous receipts after the stack supply actual normally. Exact outstanding send return/throw settles its own ID once after replacement. Counts/unknown throw remain diagnostic; dispatch is non-atomic and hardware application/balance cannot be guaranteed. No queue/retry/replay/rollback/getter/postwrite INIT/new write class. GEQ remains unwired and F08-S01 remains the physical release gate.
+
+## Historical S03 runtime
+
 # Owned level, group and pan runtime — F09-S03
 
 ## Current runtime policy — 2026-11-17

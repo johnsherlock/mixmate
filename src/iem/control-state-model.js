@@ -59,6 +59,11 @@ export function createControlState({ scope, generation, revision, now }) {
   return freeze({ scope, scopeCurrent: true, generation, revision, now: stamp(now), actual: scope.members.map(x => ({ path: x.path, value: x.value, receipt: x.receipt })),
     lastReceipt: Math.max(...scope.members.map(x => x.receipt)), barriers: [], armed: false, chain: null, gesture: null, operation: null, retired: [], nextId: 1, status: 'idle' });
 }
+// The historical pure constructor remains available to compatibility fixtures.
+// Only the private owner chooses peer policy; this data object grants no sender.
+export function createPeerControlState(input) {
+  return freeze({ ...createControlState(input), peer: true, basis: [] });
+}
 const row = (s, path) => s.actual.find(x => x.path === path);
 const owns = (s, op) => op && op.generation === s.generation && op.revision === s.revision && op.scope === s.scope;
 const active = s => owns(s, s.operation) && ['dispatching', 'pending'].includes(s.operation.status);
@@ -73,6 +78,9 @@ function retire(s) {
 }
 function barrier(s) {
   if (!s.chain?.touched && !(active(s) && s.operation.authorized)) return;
+  // Peer receipts replace completed intent. Only incomplete/unknown dispatch
+  // needs the complete touched-closure post-invalidation recovery barrier.
+  if (s.peer && !(s.operation?.authorized && (s.operation.returned < s.operation.expected.length || s.operation.unknownDelivery))) return;
   // Retain the entire uncertain closure. Conservatively union intersecting
   // closures so shrinking selection/topology cannot discard an unresolved side.
   // One record per bounded typed path prevents unbounded invalidation history.
@@ -103,6 +111,25 @@ function barrier(s) {
   }
 }
 
+function rememberBasis(s, op) {
+  if (!s.peer) return;
+  s.basis = s.basis.filter(b => !b.members.every(m => (row(s, m.path)?.receipt ?? 0) > m.floor));
+  const members = new Map(op.expected.map(x => [x.path, { path: x.path, floor: x.cutpoint }]));
+  let changed;
+  do {
+    changed = false;
+    s.basis = s.basis.filter(b => {
+      if (!b.members.some(m => members.has(m.path))) return true;
+      for (const m of b.members) {
+        const existing = members.get(m.path);
+        members.set(m.path, { ...m, floor: Math.max(m.floor, existing?.floor ?? 0) });
+      }
+      changed = true; return false;
+    });
+  } while (changed);
+  if (members.size > 1024 || s.basis.length >= 1024) throw Error('Bounded received-basis capacity exhausted.');
+  s.basis.push({ members: [...members.values()] });
+}
 function stop(s, status) {
   barrier(s);
   if (active(s)) s.operation.status = status;
@@ -111,6 +138,7 @@ function stop(s, status) {
 function eligible(s) {
   if (!s.scopeCurrent || s.scope.members.some(x => !unit(row(s, x.path)?.value))) return false;
   if (s.scope.closures.some(paths => paths.some(path => row(s, path).value !== row(s, paths[0]).value))) return false;
+  if (s.peer && s.scope.kind === 'group' && s.basis.some(b => b.members.some(m => s.scope.members.some(x => x.path === m.path)) && b.members.some(m => (row(s, m.path)?.receipt ?? 0) <= m.floor))) return false;
   return !s.barriers.some(b => b.generation === s.generation && b.closure.some(path => s.scope.members.some(x => x.path === path)) && (!unit(row(s, b.path)?.value) || row(s, b.path).receipt <= b.floor));
 }
 function establish(s) {
@@ -129,7 +157,7 @@ function complete(s) {
   if (op?.status === 'pending' && op.expected.every(x => x.matched)) { op.status = 'observed-match'; s.status = 'observed-match'; }
 }
 function copy(s) {
-  return { ...s, actual: s.actual.map(x => ({ ...x })), barriers: s.barriers.map(x => ({ ...x })),
+  return { ...s, ...(s.peer ? { basis: s.basis.map(b => ({ members: b.members.map(m => ({ ...m })) })) } : {}), actual: s.actual.map(x => ({ ...x })), barriers: s.barriers.map(x => ({ ...x })),
     chain: s.chain && { ...s.chain }, gesture: s.gesture && { ...s.gesture },
     operation: s.operation && { ...s.operation, expected: s.operation.expected.map(x => ({ ...x })) },
     retired: s.retired.map(op => ({ ...op, expected: op.expected.map(x => ({ ...x })) })) };
@@ -173,6 +201,7 @@ function settleOutcome(s, event, now, allowProgress) {
     op.returned++;
     if (allowProgress && op === s.operation && owns(s, op) && op.status === 'dispatching' && op.returned === op.expected.length) {
       op.status = 'pending'; op.completed = now; s.status = 'pending';
+      rememberBasis(s, op);
       s.chain = { ...s.chain, delta: op.delta, requested: op.expected.map(({ path, target, value }) => ({ path, target, value })), touched: true };
       complete(s);
     }
@@ -203,7 +232,11 @@ export function transitionControl(state, input) {
       fields([]); if (active(s) || s.gesture) throw Error('Operation already active.');
       establish(s); s.armed = true; s.status = 'armed'; break;
     case 'begin':
-      fields([]); if (!s.armed || active(s) || s.gesture || !eligible(s)) throw Error('Explicit armed eligible gesture required.');
+      fields([]);
+      if (s.peer && s.operation?.status === 'pending' && s.scope.kind !== 'group') {
+        s.operation.status = 'sent-unverified'; s.status = 'sent-unverified';
+      }
+      if (!s.armed || active(s) || s.gesture || !eligible(s)) throw Error('Owned eligible gesture required.');
       s.gesture = { token: freeze({ id: s.nextId++ }), preview: null }; s.status = 'gesture'; break;
     case 'preview': {
       const { token, value } = fields(['token', 'value']);
@@ -281,7 +314,7 @@ export function transitionControl(state, input) {
     case 'new-generation': {
       const { generation, revision, scope } = fields(['generation', 'revision', 'scope']); requireScope(scope);
       if (!uint(generation) || generation <= s.generation || !uint(revision) || revision <= s.revision) throw Error('Explicit new owned generation required.');
-      stop(s, 'generation-invalidated'); retire(s); s.barriers = []; s.generation = generation; s.revision = revision; s.scope = scope; s.scopeCurrent = true;
+      stop(s, 'generation-invalidated'); retire(s); s.barriers = []; if (s.peer) s.basis = []; s.generation = generation; s.revision = revision; s.scope = scope; s.scopeCurrent = true;
       s.actual = scope.members.map(x => ({ path: x.path, value: x.value, receipt: x.receipt })); s.lastReceipt = Math.max(...scope.members.map(x => x.receipt));
       break;
     }

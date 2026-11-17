@@ -3,6 +3,10 @@
 Date: 2026-11-16
 Status: Decision recorded for F09-S01; reviewed delivery/acceptance tracked by the containing story PR/history.
 
+## F09-S04 receiver amendment — 2026-11-17
+
+The independently owned adapter/helper-only dependency decision remains. [ADR-0008's peer-editor revision](0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17) deliberately adds a private receive-only companion to control sessions, solely authoritative for actual observations, under one explicit-connect generation with the typed writer. It uses only the existing connection forms, no native/bootstrap/library dependency or endpoint/GET invention. Literal read-only remains single connection. PR #42's final review/CI and exact-build firmware matrix own acceptance; the S01 “no observer authority change” statement below describes that historical delivery.
+
 ## Context
 
 The [versioned native reference](../iem-native-protocol-reference.md) separates served 3.0.7865 trial/function evidence, unavailable full served source, reproducible official3.5.8328 archive and pinned community 7.1.0 implementation. One native paired-master move received no own target update through 38.883s; a read-only peer saw both changed values with shorter decimals. Native local-first state explains stable UI without establishing acknowledgement. Endpoint/session differences have no established causal relationship to missing echoes.
