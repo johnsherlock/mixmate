@@ -1,6 +1,8 @@
 # F09-S04 targeted firmware validation — 2026-11-17
 
-## Revised peer-editor validation in progress
+## Revised peer-editor delivery complete
+
+Root verified [PR #42](https://github.com/johnsherlock/mixmate/pull/42) merged at `2b3972df9b3d2e0e10c891d4dcc5a819b1e7fa1e` on 2026-11-17 at 22:58:11 UTC, after [affirmative review](https://github.com/johnsherlock/mixmate/pull/42#issuecomment-6963443125) of final head `6e8090dc75f50ae3c500c56d20d6ca91b46f0b83` and [passing CI](https://github.com/johnsherlock/mixmate/actions/runs/44194367234). The conditional final matrix's S04 delivery gate is satisfied. Historical pending/blocked statements retain their exact-build meaning, not current delivery status. F06-S04 implementation is eligible subject to its own scope/order/authorization and GEQ-specific gates; no GEQ or physical release qualification is claimed.
 
 The user explicitly expanded S04 to implement and validate equal-weight peer editing in the same PR. Current standing story-scoped permission includes necessary native edits and controlled interruption/recovery, without repeated per-gesture/time budgets. No agent snapshot action, new write class or unrelated configuration. [ADR-0008](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17) and the [current runtime](iem-control-runtime.md) own revised semantics. Root owns isolated-browser hardware QA; the story agent uses fake transports only. The historical old-build matrix below is preserved evidence, not revised-build acceptance. The final matrix below records targeted foundation acceptance and conditional F06-S04 implementation eligibility after final review/CI/merge; GEQ stays unwired and F08 physical release coverage stays open.
 
