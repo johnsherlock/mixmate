@@ -9,17 +9,36 @@ import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
 
-test('F08-S03 current overview retains ten individual readbacks for five reciprocal pairs, including unequal sides', () => {
+test('logical overview uses five reciprocal pairs and preserves unequal individual readbacks', () => {
   const frame = '3:::SETS^model^ui24\n' + Array.from({ length: 10 }, (_, index) =>
-    `SETD^a.${index}.matrix^0\nSETD^a.${index}.stereoIndex^${index % 2}\nSETD^a.${index}.mix^${index === 1 ? 0.6 : 0.4}`).join('\n');
+    `SETD^a.${index}.matrix^0\nSETD^a.${index}.stereoIndex^${index % 2}\nSETS^a.${index}.name^${index % 2 ? 'MIX' : 'DARA’S'}\nSETD^a.${index}.mix^${index === 1 ? 0.6 : 0.4}`).join('\n');
   const observations = new Map(parseIemStateFrame(frame).map(({ path, value }) => [path, value]));
   const model = projectLiveState({ observations, phase: 'live' });
-  assert.equal(model.mixes.length, 10); // Characterization, not acceptance of the requested five-card UI.
-  assert.deepEqual(model.mixes.map(mix => mix.themeIndex), [0, 0, 2, 2, 4, 4, 6, 6, 8, 8]);
-  assert.ok(model.mixes.every(mix => mix.detail.includes('individual readback')));
-  assert.equal(model.mixes[0].position, 0.4); assert.equal(model.mixes[1].position, 0.6);
-  const selected = projectLiveState({ observations, phase: 'live' }, 1);
-  assert.equal(selected.selectedMix.id, 'a.1'); assert.equal(selected.selectedMix.position, 0.6);
+  assert.equal(model.mixes.length, 5);
+  assert.deepEqual(model.mixes.map(mix => mix.id), ['a.0', 'a.2', 'a.4', 'a.6', 'a.8']);
+  assert.deepEqual(model.mixes.map(mix => mix.themeIndex), [0, 2, 4, 6, 8]);
+  assert.ok(model.mixes.every(mix => mix.detail.includes('individual readbacks')));
+  assert.deepEqual(model.mixes[0].sides.map(side => side.position), [0.4, 0.6]);
+  assert.match(model.mixes[0].levelText, /Output 1: .*Output 2: /);
+  assert.equal(model.mixes[0].name, 'DARA’S MIX');
+  for (const index of [0, 1]) {
+    const selected = projectLiveState({ observations, phase: 'live' }, index);
+    assert.equal(selected.selectedAux, 0); assert.equal(selected.selectedMix.id, 'a.0');
+    assert.equal(selected.selectedMix.name, 'DARA’S MIX');
+  }
+});
+test('logical projection keeps mono, unknown, conflicting and shifted topology honest without name guesses', () => {
+  const observations = new Map(parseIemStateFrame('3:::SETS^model^ui24\n' + Array.from({ length: 6 }, (_, i) => `SETD^a.${i}.matrix^0\nSETS^a.${i}.name^Same`).join('\n') + '\nSETD^a.0.stereoIndex^-1\nSETD^a.1.stereoIndex^0\nSETD^a.2.stereoIndex^1\nSETD^a.3.stereoIndex^-1\nSETD^a.4.stereoIndex^0\nSETD^a.5.stereoIndex^-1').map(({ path, value }) => [path, value]));
+  const project = () => projectLiveState({ observations });
+  assert.deepEqual(project().mixes.map(m => m.id), ['a.0', 'a.1', 'a.3', 'a.4', 'a.5']);
+  assert.equal(project().mixes[1].name, 'Same');
+  assert.match(project().mixes[3].detail, /conflict/);
+  observations.delete('a.2.stereoIndex');
+  assert.equal(project().mixes.length, 6); assert.match(project().mixes[1].detail, /unknown/);
+  observations.set('a.2.stereoIndex', 1); observations.set('a.2.matrix', true);
+  assert.equal(project().mixes.length, 6); assert.match(project().mixes[1].detail, /conflict/);
+  observations.set('a.2.matrix', false); observations.delete('a.2.name');
+  assert.match(project().mixes[1].name, /name not received/);
 });
 
 class Node {
@@ -398,4 +417,61 @@ test('terminal dispatch details remain visible and accessible rather than generi
     }
 
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
+});
+
+test('logical topology transitions retain both overview nodes and linked source previews move together without actual edits', () => {
+  const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
+  const document = documentFixture(), root = new Node(document);
+  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app']) { const node = document.createElement('div'); node.className = name; root.append(node); }
+  Object.assign(globalThis, { document, window: new Node(document), matchMedia: () => ({ matches: false }), innerHeight: 390, ResizeObserver: class { observe() {} disconnect() {} } });
+  const observations = new Map(parseIemStateFrame('3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a.0.stereoIndex^-1\nSETD^a.1.stereoIndex^-1\nSETD^a.0.mix^0.4\nSETD^a.1.mix^0.4\nSETD^i.2.stereoIndex^0\nSETD^i.3.stereoIndex^1\nSETD^i.2.aux.0.value^0.4\nSETD^i.3.aux.0.value^0.4\nSETD^i.2.aux.1.value^0.4\nSETD^i.3.aux.1.value^0.4').map(({ path, value }) => [path, value]));
+  const control = { selected: null, eligible: true, armed: true, gestureActive: false, status: 'Ready' };
+  const project = (selected = null) => projectLiveState({ observations, control }, selected);
+  let view, commits = 0, previews = 0;
+  try {
+    view = mountReadOnlyView(root, { canEditLevel: () => control.eligible, onSelectLevel: target => { control.selected = target; }, onBeginLevel: () => { control.gestureActive = true; return {}; }, onPreviewLevel: (token, value) => { previews++; return value; }, onCommitLevel: () => { commits++; control.gestureActive = false; }, onCancelLevel: () => { control.gestureActive = false; } });
+    view.render(project());
+    const grid = root.querySelector('.mm-strip-grid'), [left, right] = grid.children, rightCap = right.querySelector('.mm-fader-hit');
+    observations.set('a.0.stereoIndex', 0); observations.set('a.1.stereoIndex', 1); view.render(project());
+    assert.equal(grid.children.length, 1); assert.equal(grid.children[0], left);
+    observations.set('a.0.stereoIndex', -1); observations.set('a.1.stereoIndex', -1); view.render(project());
+    assert.equal(grid.children[1], right); assert.equal(right.querySelector('.mm-fader-hit'), rightCap);
+    view.render(project(1));
+    const existingSource = root.querySelector('.mm-strip-scroll').children[0];
+    observations.set('a.0.stereoIndex', 0); observations.set('a.1.stereoIndex', 1); view.render(project(1));
+    assert.equal(root.querySelector('.mm-strip-scroll').children[0], existingSource);
+    const bank = root.querySelector('.mm-strip-scroll'), [a, b] = bank.children;
+    const input = a.querySelector('input'), peer = b.querySelector('input'), cap = a.querySelector('.mm-fader-hit'), wrap = input.parentElement;
+    const event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
+    root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60));
+    assert.equal(Number(input.value), Number(peer.value)); assert.notEqual(Number(input.value), 0.4); assert.equal(commits, 0); assert.equal(previews, 1);
+    assert.equal(a.querySelector('.mm-value').textContent, b.querySelector('.mm-value').textContent);
+    const actual = a.querySelector('.mm-value').textContent, draft = String(input.value);
+    view.render(project(0)); view.renderMeters(project(0));
+    assert.equal(peer.value, draft); assert.equal(a.querySelector('.mm-value').textContent, actual);
+    root.querySelector('.mm-content').emit('pointerup', event(60)); assert.equal(commits, 1);
+    control.requestedValue = Number(draft); view.render(project(0)); assert.equal(peer.value, draft);
+    control.requestedValue = null; control.armed = false; control.eligible = false; view.render(project(0));
+    assert.equal(Number(input.value), 0.4); assert.equal(Number(peer.value), 0.4); assert.equal(input.disabled, true); assert.equal(peer.disabled, true);
+    assert.equal(observations.get('i.2.aux.0.value'), 0.4); assert.equal(observations.get('i.3.aux.1.value'), 0.4);
+  } finally {
+    view?.destroy();
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+  }
+});
+
+
+test('equal pair actuals share one display while right-only sends and raw unequal values remain explicit', () => {
+  const observations = new Map(parseIemStateFrame('3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^a.0.mix^0.4\nSETD^a.1.mix^0.4\nSETD^i.5.stereoIndex^-1\nSETD^i.5.aux.1.value^0.6').map(({ path, value }) => [path, value]));
+  const project = () => projectLiveState({ observations }, 1);
+  assert.equal(project().mixes[0].levelText, project().mixes[0].sides[0].levelText);
+  assert.match(project().mixes[0].actualLevelText, /Output 1: .*raw 0.4.*Output 2: .*raw 0.4/);
+  assert.deepEqual(project().sources.map(s => s.sourceId), ['i.5']);
+  assert.equal(project().sources[0].position, undefined);
+  assert.match(project().sources[0].levelText, /Output 1: not received.*Output 2:/);
+  observations.set('i.5.aux.0.value', 0.6);
+  assert.equal(project().sources[0].levelText, project().sources[0].sides[0].levelText);
+  observations.set('i.5.aux.1.value', 0.6000000001);
+  assert.match(project().sources[0].levelText, /Unequal/);
+  assert.match(project().sources[0].actualLevelText, /raw 0.6000000001/);
 });

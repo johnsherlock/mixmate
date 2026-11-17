@@ -190,10 +190,12 @@ export function mountLiveController({ session, repository, view, ui, document = 
     context,
     subscribeContext(listener) { contextListeners.add(listener); listener(context()); return () => contextListeners.delete(listener); },
     selectAux(index) {
-      if (selectedAux === index || projectLiveState(session.snapshot(), index).selectedAux === null) return false;
-      selectedAux = index;
-      const saved = profile()?.navigation;
-      chooseNavigation(saved?.mixId === `a.${index}` ? structuredClone(saved) : null);
+      const snapshot = session.snapshot(), candidate = projectLiveState(snapshot, index);
+      if (candidate.selectedAux === null || selectedAux === candidate.selectedAux) return false;
+      selectedAux = candidate.selectedAux;
+      const saved = profile()?.navigation, legacy = /^a\.([0-9])$/.exec(saved?.mixId || '');
+      const sameMix = legacy && projectLiveState(snapshot, Number(legacy[1])).selectedAux === selectedAux;
+      chooseNavigation(sameMix ? structuredClone(saved) : null);
       return true;
     },
     toggleGroup(id) {

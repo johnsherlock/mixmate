@@ -114,10 +114,10 @@ test('projection preserves unequal outputs, source families, literal names, fals
   const provider = createLiveProvider();
   provider.receive(LIVE + '\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.8\nSETD^a.2.matrix^1\nSETD^a.2.mix^0.6\nSETS^a.3.name^Mode unknown\nSETD^i.0.aux.0.value^0\nSETD^i.0.aux.0.pan^0.375\nSETD^i.0.aux.0.mute^0\nSETD^i.0.aux.0.post^0\nSETD^i.0.aux.0.postproc^1\nSETS^i.0.name^<img src=x>\nSETD^l.0.aux.0.value^0.25\nSETD^p.1.aux.0.value^0.5\nSETD^f.3.aux.0.value^0.75\nSETS^i.23.name^Name only');
   const model = projectLiveState({ phase: 'live', detail: 'Received', observations: provider.snapshot() }, 0);
-  assert.equal(model.mixes.length, 4); assert.equal(model.mixes[0].position, 0); assert.equal(model.mixes[1].position, 0.8);
-  assert.equal(model.mixes[0].levelText, '−∞ dB'); assert.equal(model.mixes[2].browsable, false); assert.equal(model.mixes[3].browsable, false);
+  assert.equal(model.mixes.length, 3); assert.deepEqual(model.mixes[0].sides.map(side => side.position), [0, 0.8]);
+  assert.match(model.mixes[0].levelText, /Output 1: −∞ dB.*Output 2: /); assert.equal(model.mixes[1].browsable, false); assert.equal(model.mixes[2].browsable, false);
   assert.deepEqual(model.sources.map(source => source.sourceId), ['i.0', 'l.0', 'p.1', 'f.3']);
-  assert.equal(model.sources[0].name, '<img src=x>'); assert.equal(model.sources[0].panText, 'Pan 0.375 · normalized');
+  assert.equal(model.sources[0].name, '<img src=x>'); assert.equal(model.sources[0].panText, '1: Pan 0.375 · normalized · 2: Pan not received');
   assert.match(model.sources[0].stateText, /Unmuted.*Pre-fader.*Post-processing/); assert.match(model.sources[3].detail, /Stereo FX/);
   assert.equal(projectLiveState({ phase: 'live', detail: '', observations: provider.snapshot() }, 2).selectedAux, null);
 });
@@ -247,10 +247,10 @@ test('projection labels source taps, encoded floor and separate FX/output values
   socket.receive(vu);
   const model = projectLiveState(session.snapshot(), 0);
   assert.equal(model.mixes[0].meter.status, 'fresh');
-  assert.notEqual(model.mixes[0].meter.values[0].position, model.mixes[1].meter.values[0].position);
-  assert.equal(model.mixes[0].meter.channelCount, 1); // Individual linked output readbacks, never averaged.
-  assert.equal(model.mixes[2].meter.status, 'missing'); // Matrix array slot is not proof of normal AUX meter semantics.
-  assert.equal(model.mixes[3].meter.status, 'missing');
+  assert.notEqual(model.mixes[0].meter.values[0].position, model.mixes[0].meter.values[1].position);
+  assert.equal(model.mixes[0].meter.channelCount, 2); // Individual linked output readbacks, never averaged.
+  assert.equal(model.mixes[1].meter.status, 'missing'); // Matrix array slot is not proof of normal AUX meter semantics.
+  assert.equal(model.mixes[2].meter.status, 'missing');
   assert.match(model.sources[0].meter.label, /Source post-fader.*NOT AUX send/);
   assert.equal(model.sources[0].meter.values[0].position, 120 * 0.004167508166392142);
   assert.match(model.sources[0].stateText, /Muted.*Pre-fader/); // Does not alter the independent source meter.

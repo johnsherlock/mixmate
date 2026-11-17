@@ -1,6 +1,18 @@
 # Orchestrator handoff — F09-S04 batch complete, 2026-11-17
 
-## Current delivery checkpoint
+## New active UI-alignment batch
+
+After S04 completion, the user requested live UI alignment with `mockups/iem.html`: remove engineering metadata from primary channel/pan controls, repair the inaccessible Edit Groups setup path, use one landscape overview row on phones/tablets, keep stereo members visually together and moving in tandem, and show the combined stereo AUX name on entry from either side. This authorizes the existing **F04-S03 → F04-S04 → F02-S04** stories sequentially, scoped to these requests and their existing acceptance. No EQ/recording/snapshot/new writer or dependency-upgrade work. Start from verified main `6c303de2ddecd8bec1b0d3ccbc1c01c6482d3219`, no open PR, with only the unrelated untracked integration handoff.
+
+The prototype's overview uses five logical cards for five received stereo AUX pairs. Retain actual individual readbacks privately and known/unequal eligibility; both legacy side selections resolve to the same mix identity/combined received name. Channel banks retain both linked input strips with paired preview motion. Landscape overview is one row; landscape channel capacity should be even and keep valid adjacent pairs together; phone portrait remains three columns. The prototype governs visual design, not wire semantics. Full diagnostic detail must not consume routine fader travel; actionable unavailable/error/partial outcomes and accessible labels remain. Saved-rig setup must be explicit, never inferred from a matching IP. Standing story-scoped testing permission persists; prefer isolated Playwright browsers and preserve the user's existing local server/tabs.
+
+The former batch stop below is historical for S04; this new user request resumes authorized work only for the stated UI batch. Delegate each story to a fresh-context Sol Medium agent, obtain affirmative final-head review and green CI before merge/next story, then produce a reviewed closing handoff and stop.
+
+## Active F04-S03 checkpoint
+
+Branch `codex/f04-s03-logical-mixes` implements the first story only; independent root browser acceptance, final-head Codex review and CI remain pending. Local Node26.13.1: npm ci passed,336 fake tests passed; no dependency/writer/allowlist changes or live agent actions. [F04-S03](stories/F04-S03.md) records projection/navigation/keyed-preview behavior. The root owns browser acceptance and merge; do not begin F04-S04 before confirmed merge. The three-story UI batch continues only after each reviewed story boundary; its final delivery must contain the closing reviewed handoff.
+
+## Historical S04 delivery checkpoint
 
 Start with [AGENTS](../AGENTS.md), [lifecycle](orchestration.md), [backlog](backlog.md), assigned story/feature and contracts. **F09-S04 is complete and merged.** Root verified [PR #42](https://github.com/johnsherlock/mixmate/pull/42) merged at **`2b3972df9b3d2e0e10c891d4dcc5a819b1e7fa1e`** on 2026-11-17 at **22:58:11 UTC**, after [affirmative final-head review](https://github.com/johnsherlock/mixmate/pull/42#issuecomment-6963443125) of `6e8090dc75f50ae3c500c56d20d6ca91b46f0b83`, [passing CI](https://github.com/johnsherlock/mixmate/actions/runs/44194367234) and zero review threads. Earlier checkpoint `a8c1f1b` approval covers old changes only. This closing documentation delivery records verified post-merge facts and is identified by its containing reviewed PR/history; verify that delivery's final review/CI/merge separately.
 
