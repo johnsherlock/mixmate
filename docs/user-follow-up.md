@@ -196,3 +196,8 @@ Original eight-gesture/twenty-command scope was approved and remains historical 
 ### S04 draft publication review block
 
 Remote branch checkpoint `b13bca5c744a8112e5bc2a11551e5939272b3c51` was pushed, but automatic approval review rejected the GitHub connector's draft-PR action, citing possible sensitive internal hardware/network details and missing explicit authorization to publish that payload externally. No PR, Codex review or PR CI exists; no alternative publication path was used. Root has the rejection and relevant existing scope/public-data evidence. Reconsider only with proof of authorization/low risk or explicit payload approval. Hardware acceptance remains separately blocked and the fresh continuation-budget request remains pending.
+
+
+### Fresh S04 continuation budget approved
+
+The user explicitly approved a fresh **three-minute / at-most-two-connection** window for the same eight-gesture / twenty-command target/change bounds, without native edits, fault injection or new write fields. Root restarted the owned 4174 preview (session 50803), owns fresh-baseline checks and tested-recorder reinstallation, and will supply exact new evidence. This does not pass or erase the first zero-parameter interrupted attempt. Story agent makes no hardware/browser action. Draft-PR retry/push remains stopped; root will assess sanitized payload/authorization separately after the live evidence.
