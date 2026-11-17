@@ -73,12 +73,36 @@ function retire(s) {
 }
 function barrier(s) {
   if (!s.chain?.touched && !(active(s) && s.operation.authorized)) return;
+  // Retain the entire uncertain closure. Conservatively union intersecting
+  // closures so shrinking selection/topology cannot discard an unresolved side.
+  // One record per bounded typed path prevents unbounded invalidation history.
+  // Completed recovery must not connect a later uncertain closure to an
+  // otherwise disjoint target. Retire only fully recovered components.
+  s.barriers = s.barriers.filter(b => !b.closure.every(path => {
+    const member = s.barriers.find(x => x.path === path && x.generation === b.generation);
+    return member && unit(row(s, path)?.value) && row(s, path).receipt > member.floor;
+  }));
+  const closure = new Set(s.scope.members.map(x => x.path));
+  let expanded;
+  do {
+    expanded = false;
+    for (const b of s.barriers) if (b.generation === s.generation && b.closure.some(path => closure.has(path))) {
+      for (const path of b.closure) if (!closure.has(path)) { closure.add(path); expanded = true; }
+    }
+  } while (expanded);
+  if (closure.size > 1024) throw Error('Bounded recovery closure exhausted.');
+  const paths = [...closure];
+  for (const b of s.barriers) if (b.generation === s.generation && closure.has(b.path)) b.closure = paths;
   for (const member of s.scope.members) {
     const old = s.barriers.find(x => x.path === member.path);
-    if (old) { old.floor = old.generation === s.generation ? Math.max(old.floor, s.lastReceipt) : s.lastReceipt; old.generation = s.generation; }
-    else s.barriers.push({ path: member.path, floor: s.lastReceipt, generation: s.generation });
+    if (old) { old.floor = old.generation === s.generation ? Math.max(old.floor, s.lastReceipt) : s.lastReceipt; old.generation = s.generation; old.closure = paths; }
+    else {
+      if (s.barriers.length >= 1024) throw Error('Bounded recovery journal exhausted.');
+      s.barriers.push({ path: member.path, floor: s.lastReceipt, generation: s.generation, closure: paths });
+    }
   }
 }
+
 function stop(s, status) {
   barrier(s);
   if (active(s)) s.operation.status = status;
@@ -87,7 +111,7 @@ function stop(s, status) {
 function eligible(s) {
   if (!s.scopeCurrent || s.scope.members.some(x => !unit(row(s, x.path)?.value))) return false;
   if (s.scope.closures.some(paths => paths.some(path => row(s, path).value !== row(s, paths[0]).value))) return false;
-  return !s.scope.members.some(x => s.barriers.some(b => b.path === x.path && b.generation === s.generation && row(s, x.path).receipt <= b.floor));
+  return !s.barriers.some(b => b.generation === s.generation && b.closure.some(path => s.scope.members.some(x => x.path === path)) && (!unit(row(s, b.path)?.value) || row(s, b.path).receipt <= b.floor));
 }
 function establish(s) {
   if (!eligible(s) || s.operation?.flight !== null && s.operation?.flight !== undefined) throw Error('Fresh complete recovery and equal linked actuals required.');

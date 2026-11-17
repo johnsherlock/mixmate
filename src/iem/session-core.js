@@ -92,7 +92,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (selected) {
       try {
         const currentScope = scope(); if (selected.kind === 'group') groupName = readGroup(selected.groupId).name;
-        const blocked = model?.generation === generation && model.barriers.some(b => b.generation === generation && currentScope.members.some(m => m.path === b.path) && (receipts.get(b.path) ?? 0) <= b.floor);
+        const blocked = model?.generation === generation && model.barriers.some(b => b.generation === generation && b.closure.some(path => currentScope.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor);
         eligible = socket?.readyState === 1 && !blocked;
         reason = blocked ? 'Fresh complete received recovery required before enabling.' : eligible ? '' : 'Socket is not open.';
       } catch (error) { reason = error.message; }
@@ -133,6 +133,11 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
         revalidate();
         if (socket !== current || generation !== ownerGeneration || model.operation?.id !== op.id) throw Error('Dispatch interrupted.');
         step({ type: 'authorize', id: op.id, ordinal });
+        const authorized = model.operation;
+        if (socket !== current || current.readyState !== 1 || globalThis.document?.hidden === true || generation !== ownerGeneration ||
+            model.generation !== ownerGeneration || model.revision !== op.revision || !model.scopeCurrent || !model.armed ||
+            model.scope !== op.scope || authorized?.id !== op.id || authorized.status !== 'dispatching' ||
+            authorized.flight !== ordinal || authorized.authorized !== ordinal + 1 || authorized.returned !== ordinal) throw Error('Exact owned authorization was revoked.');
         // No callback or await between owned authorization and exact typed send.
         const command = { ...op.expected[ordinal].target, value: op.expected[ordinal].value };
         const message = selected.kind === 'pan' ? encodeAuxPanCommand(command) : encodeAuxLevelCommand(command);
@@ -146,7 +151,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
         step({ type: 'returned', id: op.id, ordinal });
         if (socket !== current || generation !== ownerGeneration || model.operation?.id !== op.id || !model.armed || !['dispatching', 'pending', 'observed-match'].includes(model.operation.status)) { emit('controls'); return false; }
       } catch {
-        if (socket === current && generation === ownerGeneration && model.operation?.id === op.id) cancelControl('Dispatch interrupted; some values may have changed.');
+        if (socket === current && generation === ownerGeneration && model.operation?.id === op.id && model.armed) cancelControl('Dispatch interrupted; some values may have changed.');
         emit('controls'); return false;
       }
     }

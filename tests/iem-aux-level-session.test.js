@@ -378,3 +378,45 @@ test('F09 cumulative group clamp uses original actual anchor and exact cached co
     assert.equal(app.session.snapshot().control.lastDelta, expectedTotal);
   } finally { app.session.disconnect(); await app.repository.close(); }
 });
+
+test('F09 recovery cannot shrink to a fresh individual or canonical group subset; disjoint scope stays independent', async () => {
+  for (const shrink of ['individual', 'membership', 'overlap']) {
+    const app = await groupFixture();
+    try {
+      const token = app.beginGroup(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2); app.session.disarmLevel();
+      app.socket.receive('3:::SETD^i.0.aux.0.value^0.35');
+      app.session.selectLevelTarget(master); assert.equal(app.session.armLevel(), true); // disjoint value closure
+      if (shrink === 'individual') app.session.selectLevelTarget(send);
+      else {
+        await app.repository.update(settings => { settings.profiles[0].groups[0].members = shrink === 'membership' ? ['i.0'] : ['i.0', 'i.1']; });
+        app.session.selectGroupTarget('band', 0);
+      }
+      assert.equal(app.session.snapshot().control.eligible, false, shrink); assert.equal(app.session.armLevel(), false, shrink);
+      app.socket.receive('3:::SETD^f.0.aux.0.value^0.65'); assert.equal(app.session.armLevel(), true, shrink);
+      assert.equal(writes(app.socket).length, 2);
+    } finally { app.session.disconnect(); await app.repository.close(); }
+  }
+});
+
+test('F09 split topology still requires every old linked side to recover before rearming the overlapping mono side', () => {
+  const app = setup(), socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+  app.session.commitLevelGesture(app.begin(), 0.6); app.session.disarmLevel();
+  socket.receive('3:::SETD^a.0.stereoIndex^-1\nSETD^a.1.stereoIndex^-1\nSETD^a.0.mix^0.4');
+  app.session.selectLevelTarget(master); assert.equal(app.session.snapshot().control.eligible, false); assert.equal(app.session.armLevel(), false);
+  socket.receive('3:::SETD^a.1.mix^0.4'); assert.equal(app.session.armLevel(), true);
+});
+
+test('F09 every clock-sample fault around dispatch preserves exact authorization before any write', () => {
+  let revoked = 0;
+  for (let fault = 1; fault <= 40; fault++) {
+    let samples = 0, inject = false, wall = 100;
+    const app = setup(createAuxLevelSession, { now: () => { if (inject && ++samples === fault) wall += 1500; return 100; }, wallNow: () => wall });
+    const socket = app.connect(); socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+    const token = app.begin(); inject = true; app.session.commitLevelGesture(token, 0.6);
+    const state = app.session.snapshot().control;
+    assert.ok(writes(socket).length <= state.authorized, `fault ${fault}: no unauthorized sends`);
+    assert.equal(state.dispatched, writes(socket).length, `fault ${fault}: exact returned sends`);
+    if (state.authorized === 0) { revoked++; assert.equal(writes(socket).length, 0); }
+  }
+  assert.ok(revoked > 0);
+});

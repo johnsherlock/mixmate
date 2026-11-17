@@ -376,3 +376,32 @@ test('changed historical disjoint readbacks preserve current permission and old 
   b.step('select', { scope: single, revision: 2 }); b.step('select', { scope: groupScope, revision: 3 }); b.step('arm');
   b.receive('i.0.aux.0.value', 0.7); assert.equal(b.state.armed, false); assert.equal(b.state.status, 'native-invalidated');
 });
+
+test('overlapping subset recovery retains full uncertain closure; completed old closure does not join a later disjoint target', () => {
+  const a = fixture('group', false, [0.4, 0.6]); a.step('arm'); a.gesture(2); a.dispatch();
+  a.step('invalidate', { reason: 'cancel', revision: 2 }); a.receive('i.0.aux.0.value', 0.4);
+  const individual = createControlScope({ kind: 'level', received: a.received, receipts: a.receipts, target: { kind: 'send', sourceId: 'i.0', auxIndex: 0 }, group: null });
+  a.step('select', { scope: individual, revision: 3 }); assert.throws(() => a.step('arm'));
+  a.receive('i.1.aux.0.value', 0.6); a.step('arm');
+  // Fully recovered {i0,i1} must be retired before later {i1,i2} uncertainty.
+  a.received.set('i.2.stereoIndex', -1); a.received.set('i.2.aux.0.value', 0.5); a.receipts.set('i.2.aux.0.value', a.state.lastReceipt + 1);
+  const other = createControlScope({ kind: 'group', received: a.received, receipts: a.receipts, target: { auxIndex: 0 }, group: { id: 'other', members: ['i.1', 'i.2'] } });
+  a.step('select', { scope: other, revision: 4 }); a.step('arm'); a.gesture(1); a.dispatch(); a.step('invalidate', { reason: 'cancel', revision: 5 });
+  assert.equal(a.state.barriers.length, 2);
+  assert.ok(a.state.barriers.every(b => !b.closure.includes('i.0.aux.0.value')));
+  a.step('select', { scope: individual, revision: 6 }); a.step('arm'); assert.equal(a.state.armed, true);
+});
+
+test('repeated overlapping recovered closures keep recovery history bounded without blocking disjoint scopes', () => {
+  const a = fixture('group', false, [0.4, 0.6]);
+  a.received.set('i.2.stereoIndex', -1); a.received.set('i.2.aux.0.value', 0.5); a.receipts.set('i.2.aux.0.value', 2);
+  for (let i = 0; i < 150; i++) {
+    const members = i % 2 ? ['i.1', 'i.2'] : ['i.0', 'i.1'];
+    const scope = createControlScope({ kind: 'group', received: a.received, receipts: a.receipts, target: { auxIndex: 0 }, group: { id: 'overlap', members } });
+    a.step('select', { scope, revision: a.state.revision + 1 }); a.step('arm'); a.gesture(1); a.dispatch();
+    a.step('invalidate', { reason: 'cancel', revision: a.state.revision + 1 });
+    assert.equal(a.state.barriers.length, 2); assert.ok(a.state.barriers.every(b => b.closure.length === 2));
+    for (const member of members) a.receive(`${member}.aux.0.value`, a.received.get(`${member}.aux.0.value`));
+    assert.ok(a.state.retired.length <= 128);
+  }
+});
