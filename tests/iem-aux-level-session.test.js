@@ -475,3 +475,19 @@ test('F04-S05 device-local group owners drive relative groups and any owner chan
     assert.match(writes(socket).at(-1), /^3:::SETD\^p\.0\.aux\.0\.value/);
   } finally { app.session.disconnect(); await repository.close(); }
 });
+
+// F06-S04 broadened reentrancy: an unchanged receipt for a not-yet-sent closure
+// path during synchronous dispatch also stops the remainder.
+test('level and group dispatch stop on a reentrant unchanged receipt for an unattempted path; full closure recovery needs no Enable', async () => {
+  const app = setup(), socket = app.connect(LIVE.replace('a.0.stereoIndex^-1', 'a.0.stereoIndex^0').replace('a.1.stereoIndex^-1', 'a.1.stereoIndex^1'));
+  const token = app.begin(master); app.session.previewLevelGesture(token, 0.7);
+  socket.hook = () => { socket.hook = null; socket.receive('3:::SETD^a.1.mix^0.4'); };
+  assert.equal(app.session.commitLevelGesture(token, 0.7), false); assert.equal(writes(socket).length, 1);
+  assert.equal(app.session.canEditLevelTarget(master), false);
+  socket.receive('3:::SETD^a.0.mix^0.7'); assert.equal(app.session.canEditLevelTarget(master), false, 'unattempted side unresolved');
+  socket.receive('3:::SETD^a.1.mix^0.4'); assert.equal(app.session.canEditLevelTarget(master), false, 'linked sides unequal stay read-only');
+  socket.receive('3:::SETD^a.0.mix^0.4'); assert.equal(app.session.canEditLevelTarget(master), true);
+  const group = await groupFixture(); const groupToken = group.beginGroup(); group.session.previewLevelGesture(groupToken, 2);
+  group.socket.hook = () => { group.socket.hook = null; group.socket.receive('3:::SETD^f.0.aux.0.value^0.65'); };
+  assert.equal(group.session.commitLevelGesture(groupToken, 0), false); assert.equal(writes(group.socket).length, 1);
+});

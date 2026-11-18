@@ -14,10 +14,14 @@ const hzText = f => f >= 1000 ? `${(f / 1000).toFixed(f < 10000 ? 2 : 1)} kHz` :
 const dbText = value => `${value > 0 ? '+' : ''}${value.toFixed(1)} dB`;
 const flatPoints = () => [0.233, 0.566, 0.85].map(x => ({ x, gainDb: 0, q: 0.5 }));
 export const EQ_APPROXIMATION_NOTE = 'Approximation: band centres are the native display labels (20 Hz–20 kHz), not verified DSP centres. Lines join band values; they are not a measured response. No shelves, cuts, filters or parametric bands.';
+// Editable basis: the session coordinate at gesture start — received band
+// values, or the last requested values while the desk has not echoed them
+// (that requested curve is shown dashed).
 export const EQ_MODE_NOTES = Object.freeze({
-  points: 'Points: three requested shape points sampled at the 31 bands. Release sets every band of this mix (replacing current band values).',
-  draw: 'Draw: starts from the current band values; drag across the graph to redraw bands. Release applies the drawn bands.',
+  points: 'Points: a relative Δ adjustment on top of the current editable basis (received bands, or your last requested curve if the desk has not echoed it). Bands outside a point\'s influence keep their exact value; points return to 0 dB Δ after each release.',
+  draw: 'Draw: starts from the current editable basis (received bands, or your last requested curve if the desk has not echoed it); drag across the graph to redraw bands. Release applies the drawn bands.',
 });
+export const EQ_SIDE_COLOURS = Object.freeze(['#7fd17f', '#e58ee5']);
 
 export function projectEqReadback(snapshot, auxIndex) {
   const observations = snapshot?.observations instanceof Map ? snapshot.observations : new Map(), eq = snapshot?.eq instanceof Map ? snapshot.eq : new Map();
@@ -75,11 +79,15 @@ export function mountEqControls({ root, session, controller, window = globalThis
   sidebar.append(modes, tabs, bank, unverified); shell.append(plot, sidebar);
   const status = make('p', 'mm-live-eq-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const modeNote = make('p', 'mm-caption mm-live-eq-mode-note');
-  const legend = make('p', 'mm-caption', 'Dots/solid lines: received band values per side (last received). Dashed: requested curve at the 31 band centres. Dotted: point-shape editor (not yet sent).');
-  const approximation = make('p', 'mm-caption mm-live-eq-approximation', EQ_APPROXIMATION_NOTE);
-  const details = make('details', 'mm-live-eq-details'), summary = make('summary', '', 'Band readback'), readbackRows = make('div', 'mm-live-eq-readbacks'), requestedRow = make('p', 'mm-live-eq-requested-text');
-  details.append(summary, readbackRows, requestedRow);
-  section.append(head, shell, status, modeNote, legend, approximation, details);
+  const legendText = 'Received band values: L filled green dots, R hollow magenta dots (one green line when both sides are equal). Dashed: requested curve at the 31 band centres. Dotted: basis plus point Δ (not yet sent).';
+  const legend = make('p', 'mm-caption mm-live-eq-legend', legendText);
+  const approximation = make('p', 'mm-caption mm-live-eq-approximation', EQ_APPROXIMATION_NOTE); approximation.setAttribute('title', EQ_APPROXIMATION_NOTE);
+  // Explicit two-step reset, like Delete group: the first tap only asks.
+  const confirmRow = make('div', 'mm-dialog-actions mm-live-eq-reset-confirm'), confirmText = make('p'), confirmReset = button('Reset bands', 'Confirm: reset every GEQ band of this mix to 0 dB'), keepBands = button('Keep bands', 'Cancel reset; send nothing');
+  confirmReset.dataset.eqResetConfirm = ''; keepBands.dataset.eqResetCancel = ''; confirmReset.className = 'mm-danger'; confirmRow.hidden = true; confirmRow.append(confirmText, confirmReset, keepBands);
+  const details = make('details', 'mm-live-eq-details'), summary = make('summary', '', 'Band readback'), readbackRows = make('div', 'mm-live-eq-readbacks'), requestedRow = make('p', 'mm-live-eq-requested-text'), detailNotes = make('p', '', legendText);
+  details.append(summary, detailNotes, readbackRows, requestedRow);
+  section.append(head, shell, confirmRow, status, modeNote, legend, approximation, details);
   const content = root.querySelector('.mm-content');
   if (content?.insertAdjacentElement) content.insertAdjacentElement('afterend', section); else (content?.parentElement || root).append(section);
   const mixButton = root.querySelector('.mm-local-tabs [data-mode="eq"]');
@@ -89,20 +97,39 @@ export function mountEqControls({ root, session, controller, window = globalThis
   const gridLines = [-12, 0, 12].map(db => { const line = svgNode('line'), label = svgNode('text'); label.textContent = `${db > 0 ? '+' : ''}${db}`; grid.append(line, label); return { db, line, label }; });
   const gridFreqs = [20, 100, 1000, 10000, 20000].map(f => { const line = svgNode('line'), label = svgNode('text'); label.textContent = f >= 1000 ? `${f / 1000}k` : String(f); grid.append(line, label); return { f, line, label }; });
   const sideNodes = [0, 1].map(index => {
-    const group = svgNode('g', `mm-eq-actual-side mm-eq-actual-${index}`), path = svgNode('path'); group.append(path);
-    const dots = AUX_EQ_DISPLAY_CENTRES.map(() => { const dot = svgNode('circle'); dot.setAttribute('r', '2.6'); group.append(dot); return dot; });
-    group.dataset.eqSide = String(index); actualGroup.append(group); return { group, path, dots };
+    const colour = EQ_SIDE_COLOURS[index], group = svgNode('g', `mm-eq-actual-side mm-eq-actual-${index}`), path = svgNode('path'), label = svgNode('text'); group.append(path, label);
+    path.setAttribute('fill', 'none'); path.setAttribute('stroke', colour); path.setAttribute('stroke-width', '1.6');
+    label.setAttribute('text-anchor', 'end'); label.setAttribute('fill', colour); label.dataset.eqSideLabel = String(index);
+    const dots = AUX_EQ_DISPLAY_CENTRES.map(() => { const dot = svgNode('circle'); dot.setAttribute('r', index ? '3.2' : '2.6'); dot.setAttribute('fill', index ? 'none' : colour); dot.setAttribute('stroke', colour); dot.setAttribute('stroke-width', '1.4'); group.append(dot); return dot; });
+    group.dataset.eqSide = String(index); actualGroup.append(group); return { group, path, label, dots };
   });
   const handles = Array.from({ length: AUX_EQ_POINT_COUNT }, (_, index) => {
     const group = svgNode('g', 'mm-eq-handle'), halo = svgNode('circle'), dot = svgNode('circle'), label = svgNode('text');
     halo.setAttribute('r', '20'); halo.setAttribute('fill-opacity', '.18'); dot.setAttribute('r', '12'); label.setAttribute('text-anchor', 'middle'); label.textContent = String(index + 1);
-    group.dataset.eqHandle = String(index); group.setAttribute('role', 'button'); group.append(halo, dot, label); handleGroup.append(group); return { group, halo, dot, label };
+    group.dataset.eqHandle = String(index); group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.append(halo, dot, label); handleGroup.append(group); return { group, halo, dot, label };
   });
   const readbackNodes = new Map();
 
   let open = false, auxIndex = null, binding = null, destroyed = false, mode = 'points', selectedPoint = 0, points = flatPoints();
+  // Points are a relative Δ for one gesture; between gestures they rest at 0 dB.
+  const neutralize = () => { points = points.map(point => ({ ...point, gainDb: 0 })); };
   let gesture = null, drag = null, previewValues = null, snapshot = null, editable = false, focusBefore = null;
   const owned = control => control?.selected?.kind === 'geq' && control.selected.auxIndex === auxIndex;
+  // Display-only basis for handles/shape: the gesture basis, else the session
+  // coordinate, else complete equal received bands. Never sent by itself.
+  function displayBasis(readback) {
+    if (gesture?.basis) return gesture.basis;
+    const coordinate = owned(snapshot?.control) ? snapshot.control.eqCoordinate : null;
+    if (coordinate) return coordinate.map(auxEqPositionToDb);
+    const side = readback?.sides[0];
+    return side && side.bands.every(value => value !== undefined) ? side.bands.map(auxEqPositionToDb) : null;
+  }
+  function basisAt(basis, x) {
+    const xs = AUX_EQ_DISPLAY_CENTRES.map(auxEqCentreX);
+    if (x <= 0) return basis[0];
+    for (let index = 1; index < xs.length; index++) if (x <= xs[index]) return basis[index - 1] + (basis[index] - basis[index - 1]) * (x - xs[index - 1]) / (xs[index] - xs[index - 1]);
+    return basis.at(-1);
+  }
   function geometry() {
     const rect = svg.getBoundingClientRect?.() || { width: 0, height: 0 }, w = Math.max(150, rect.width || 0), h = Math.max(80, rect.height || 0);
     return { rect, w, h, left: w < 260 ? 28 : 35, right: w - 14, top: 14, bottom: h - 25, range: h - 39 };
@@ -134,6 +161,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
     sideNodes.forEach((node, index) => {
       const side = readback?.sides[index], visible = Boolean(side) && !(index === 1 && readback.equal);
       node.group.setAttribute('visibility', visible ? 'visible' : 'hidden');
+      const linked = readback?.sides.length === 2;
+      node.label.textContent = side ? `${linked ? readback.equal ? 'L=R · ' : index ? 'R · ' : 'L · ' : ''}Output ${side.auxIndex + 1}${linked && readback.equal ? `/${readback.sides[1].auxIndex + 1}` : ''}` : '';
+      node.label.setAttribute('x', g.right - 2); node.label.setAttribute('y', g.top + 10 + index * 13);
       const values = side ? side.bands.map(value => value === undefined ? undefined : auxEqPositionToDb(value)) : [];
       node.path.setAttribute('d', visible ? linePath(g, values) : '');
       node.dots.forEach((dot, band) => {
@@ -144,22 +174,22 @@ export function mountEqControls({ root, session, controller, window = globalThis
     });
     const control = snapshot?.control, requested = previewValues || (owned(control) ? control.eqRequested : null);
     requestedPath.setAttribute('d', requested ? linePath(g, requested.map(auxEqPositionToDb)) : '');
-    const shape = mode === 'points' ? requestedPointSamples(points).samples.map(sample => sample.gainDb) : [];
-    shapePath.setAttribute('d', mode === 'points' ? linePath(g, shape) : '');
+    const basis = displayBasis(readback), shape = mode === 'points' && basis ? requestedPointSamples(points, basis).samples.map(sample => sample.gainDb) : null;
+    shapePath.setAttribute('d', shape ? linePath(g, shape) : '');
     handles.forEach((handle, index) => {
-      const point = points[index], x = xPixel(g, point.x), y = yPixel(g, auxEqPointGain(points, point.x));
+      const point = points[index], x = xPixel(g, point.x), y = yPixel(g, (basis ? basisAt(basis, point.x) : 0) + auxEqPointGain(points, point.x));
       handle.group.setAttribute('visibility', mode === 'points' ? 'visible' : 'hidden');
       for (const circle of [handle.halo, handle.dot]) { circle.setAttribute('cx', x.toFixed(2)); circle.setAttribute('cy', y.toFixed(2)); }
       handle.halo.setAttribute('fill', '#abbea0'); handle.dot.setAttribute('fill', index === selectedPoint ? '#ecd3a7' : '#bcc7a8'); handle.dot.setAttribute('stroke', '#879b80');
       handle.label.setAttribute('x', x.toFixed(2)); handle.label.setAttribute('y', (y + 4).toFixed(2));
-      handle.group.setAttribute('aria-label', `Requested point ${index + 1}, ${hzText(20 * Math.pow(1000, point.x))}, ${dbText(point.gainDb)}`);
+      handle.group.setAttribute('aria-label', `Requested point ${index + 1}, ${hzText(20 * Math.pow(1000, point.x))}, Δ ${dbText(point.gainDb)}; Enter or Space selects it for the sliders`);
     });
     svg.setAttribute('aria-label', `AUX GEQ graph. ${readback ? readback.sides.map(eqSideText).join('. ') : 'No received bands.'} ${requested ? 'Requested curve shown dashed.' : 'No requested curve.'}`);
     svg.dataset.draw = String(mode === 'draw' && editable);
   }
   function syncParams() {
     const point = points[selectedPoint], width = 0.13 / Math.sqrt(0.1 * Math.pow(100, point.q));
-    const values = { freq: point.x, q: point.q, gain: point.gainDb }, text = { freq: hzText(20 * Math.pow(1000, point.x)), q: `σ ${width.toFixed(2)}`, gain: dbText(point.gainDb) };
+    const values = { freq: point.x, q: point.q, gain: point.gainDb }, text = { freq: hzText(20 * Math.pow(1000, point.x)), q: `σ ${width.toFixed(2)}`, gain: `Δ ${dbText(point.gainDb)}` };
     for (const [id, { input, output }] of params) {
       input.disabled = !editable || mode !== 'points';
       if (!(gesture?.input === input)) input.value = String(values[id]);
@@ -172,9 +202,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
     for (const node of [pointsButton, drawButton]) { const chosen = node.dataset.eqMode === mode; node.className = chosen ? 'mm-active' : ''; node.setAttribute('aria-pressed', String(chosen)); }
     gestures?.sync();
   }
-  function render(next = session.snapshot()) {
+  function render(next = session.snapshot(), kind) {
     snapshot = next;
-    if (!open || destroyed) return;
+    if (!open || destroyed || kind === 'meters') return; // Meter-only emits change nothing here.
     if (!['connecting', 'connected', 'partial', 'live'].includes(next.phase)) { close(); return; }
     const control = next.control, readback = projectEqReadback(next, auxIndex);
     const name = next.observations?.get(`a.${auxIndex}.name`);
@@ -182,16 +212,18 @@ export function mountEqControls({ root, session, controller, window = globalThis
     bypassBadge.textContent = readback.bypassed ? 'GEQ BYPASSED on desk · status only' : '';
     bypassBadge.dataset.bypass = String(readback.bypassed);
     editable = Boolean(session.canEditEqTarget(auxIndex) && !control?.dispatching);
-    if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; gestures?.cancel(); drag = null; }
+    if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; gestures?.cancel(); drag = null; neutralize(); }
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
+    if (!editable && !confirmRow.hidden) hideConfirm(false);
+    confirmText.textContent = `Reset all ${BANDS} GEQ bands of Output ${readback.sides.map(side => side.auxIndex + 1).join(' and ')} to 0 dB? Bypass, filters and other processing are untouched.`;
     status.textContent = owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Release applies.' : unavailableReason(readback);
-    modeNote.textContent = EQ_MODE_NOTES[mode];
+    modeNote.textContent = EQ_MODE_NOTES[mode]; detailNotes.textContent = `${EQ_MODE_NOTES[mode]} ${legendText}`;
     const sides = new Set(readback.sides.map(side => side.auxIndex));
     for (const [key, row] of readbackNodes) if (!sides.has(key)) { row.remove(); readbackNodes.delete(key); }
     readback.sides.forEach((side, index) => {
       let row = readbackNodes.get(side.auxIndex); if (!row) { row = make('p'); readbackNodes.set(side.auxIndex, row); readbackRows.append(row); }
       if (readbackRows.children[index] !== row) readbackRows.insertBefore(row, readbackRows.children[index] || null);
-      row.textContent = `${eqSideText(side)}: ${side.bands.map((value, band) => `${hzText(AUX_EQ_DISPLAY_CENTRES[band])} ${value === undefined ? 'not received' : `${dbText(auxEqPositionToDb(value))} (raw ${value})`}`).join(' · ')}`;
+      row.textContent = `${readback.sides.length === 2 ? index ? 'R · ' : 'L · ' : ''}${eqSideText(side)}: ${side.bands.map((value, band) => `${hzText(AUX_EQ_DISPLAY_CENTRES[band])} ${value === undefined ? 'not received' : `${dbText(auxEqPositionToDb(value))} (raw ${value})`}`).join(' · ')}`;
     });
     const requested = owned(control) ? control.eqRequested : null;
     requestedRow.textContent = requested ? `Requested (not proof of application): ${requested.map((value, band) => `${hzText(AUX_EQ_DISPLAY_CENTRES[band])} ${dbText(auxEqPositionToDb(value))}`).join(' · ')}`
@@ -206,7 +238,11 @@ export function mountEqControls({ root, session, controller, window = globalThis
     const token = session.beginEqGesture();
     if (!token) { render(); return null; }
     const coordinate = session.snapshot().control?.eqCoordinate;
-    gesture = { token, input, points: points.map(point => ({ ...point })), draw: coordinate ? coordinate.map(auxEqPositionToDb) : null, lastDraw: null };
+    if (!coordinate) { session.cancelEqGesture(); render(); return null; }
+    // Freeze this gesture's basis: the session coordinate at gesture start.
+    const basis = Object.freeze(coordinate.map(auxEqPositionToDb));
+    neutralize();
+    gesture = { token, input, basis, draw: [...basis], lastDraw: null };
     previewValues = null;
     return token;
   }
@@ -221,8 +257,8 @@ export function mountEqControls({ root, session, controller, window = globalThis
     const active = gesture; gesture = null; drag = null;
     if (!active) return;
     if (commit) session.commitEqGesture(active.token);
-    else { points = active.points; session.cancelEqGesture(); }
-    previewValues = null; render();
+    else session.cancelEqGesture();
+    neutralize(); previewValues = null; render();
   }
   const gestures = installFaderGestures(section, {
     onBegin: input => begin(input),
@@ -230,7 +266,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
       if (!gesture || gesture.token !== token) return null;
       const key = { freq: 'x', q: 'q', gain: 'gainDb' }[input.dataset.eqParam], previous = points[selectedPoint][key];
       points[selectedPoint] = { ...points[selectedPoint], [key]: value };
-      if (!previewIntent(requestedPointSamples(points))) { points[selectedPoint] = { ...points[selectedPoint], [key]: previous }; syncParams(); return previous; }
+      if (!previewIntent(requestedPointSamples(points, gesture.basis))) { points[selectedPoint] = { ...points[selectedPoint], [key]: previous }; syncParams(); return previous; }
       syncParams(); return value;
     },
     onCommit: () => finish(true),
@@ -270,8 +306,8 @@ export function mountEqControls({ root, session, controller, window = globalThis
     // The handle follows the pointer: its own gain is the remainder after the
     // other points' shape at the new position.
     const others = auxEqPointGain(points.filter((_, index) => index !== selectedPoint), p.x);
-    points[selectedPoint] = { ...previous, x: p.x, gainDb: clamp(p.db - others, -12, 12) };
-    if (previewIntent(requestedPointSamples(points))) drag.changed = true; else points[selectedPoint] = previous;
+    points[selectedPoint] = { ...previous, x: p.x, gainDb: clamp(p.db - basisAt(gesture.basis, p.x) - others, -12, 12) };
+    if (previewIntent(requestedPointSamples(points, gesture.basis))) drag.changed = true; else points[selectedPoint] = previous;
     syncParams();
   }
   function onPointerUp(event) {
@@ -286,7 +322,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function setMode(next) {
     if (mode === next) return;
     if (gesture) { gestures.cancel(); finish(false); }
-    mode = next; render(); // Mutually exclusive intents; switching sends nothing.
+    hideConfirm(false); mode = next; render(); // Mutually exclusive intents; switching sends nothing.
   }
   function onClick(event) {
     const target = event.target.closest?.('button');
@@ -296,12 +332,29 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (target.dataset.eqPoint !== undefined && mode === 'points') { if (gesture) { gestures.cancel(); finish(false); } selectedPoint = Number(target.dataset.eqPoint); render(); return; }
     if (target === resetButton && editable) {
       if (gesture) { gestures.cancel(); finish(false); }
+      confirmRow.hidden = false; render(); keepBands.focus?.(); return;
+    }
+    if (target === keepBands) { hideConfirm(true); return; }
+    if (target === confirmReset) {
+      hideConfirm(true);
+      if (!editable) return;
       if (!owned(session.snapshot().control)) session.selectEqTarget(auxIndex);
-      points = flatPoints(); session.resetEqBands(); render();
+      neutralize(); session.resetEqBands(); render();
     }
   }
+  function hideConfirm(focusReset) { confirmRow.hidden = true; if (focusReset) resetButton.focus?.(); }
   section.addEventListener('click', onClick);
-  function onKey(event) { if (open && event.key === 'Escape' && !gesture && !event.target?.closest?.('.mm-fader-control')) close(); }
+  function onKey(event) {
+    if (!open) return;
+    const handle = event.target?.closest?.('[data-eq-handle]');
+    if (handle && (event.key === 'Enter' || event.key === ' ') && mode === 'points') {
+      event.preventDefault?.(); if (gesture) { gestures.cancel(); finish(false); }
+      selectedPoint = Number(handle.dataset.eqHandle); render(); return;
+    }
+    if (event.key !== 'Escape' || gesture || event.target?.closest?.('.mm-fader-control')) return;
+    if (!confirmRow.hidden) { event.preventDefault?.(); hideConfirm(true); return; }
+    close();
+  }
   section.addEventListener('keydown', onKey);
   function show(index) {
     if (destroyed) return false;
@@ -321,14 +374,14 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function close() {
     if (!open) return;
     if (gesture) { gestures.cancel(); finish(false); }
-    open = false; binding = null; section.hidden = true; root.dataset.eqOpen = 'false';
+    confirmRow.hidden = true; open = false; binding = null; section.hidden = true; root.dataset.eqOpen = 'false';
     if (mixButton) { mixButton.setAttribute('aria-pressed', 'false'); mixButton.classList?.remove('mm-active'); }
     session.closeEq?.();
     if (focusBefore?.isConnected !== false && !focusBefore?.disabled) focusBefore?.focus?.();
   }
   const onMixButton = () => { if (open) close(); else { const index = controller.context().selectedAux; if (index !== null) show(index); } };
   mixButton?.addEventListener('click', onMixButton);
-  const unsubscribe = session.subscribe(next => render(next));
+  const unsubscribe = session.subscribe((next, kind) => render(next, kind));
   const unsubscribeContext = controller.subscribeContext(context => {
     if (mixButton) mixButton.disabled = context.selectedAux === null || !['connecting', 'connected', 'partial', 'live'].includes(session.snapshot().phase);
     if (open && (context.profileId !== binding.profileId || context.revision !== binding.revision || context.selectedAux !== binding.selectedAux)) close();

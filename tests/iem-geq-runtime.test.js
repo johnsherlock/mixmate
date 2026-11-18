@@ -5,8 +5,9 @@ import { createAuxControlSession } from '../src/iem/aux-control-session.js';
 import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { auxEqPositionToDb, auxEqDbToPosition, parseAuxProcessingFrame } from '../src/iem/aux-eq-protocol.js';
-import { requestedDrawSamples, requestedPointSamples } from '../src/iem/aux-eq-curve.js';
-import { mountEqControls, projectEqReadback, eqSideText, EQ_APPROXIMATION_NOTE } from '../src/iem/eq-controls.js';
+import { requestedDrawSamples, requestedPointSamples, auxEqCentreX, auxEqPointGain, AUX_EQ_POINT_NEGLIGIBLE_DB } from '../src/iem/aux-eq-curve.js';
+import { mountEqControls, projectEqReadback, eqSideText, EQ_APPROXIMATION_NOTE, EQ_MODE_NOTES, EQ_SIDE_COLOURS } from '../src/iem/eq-controls.js';
+const VU = JSON.parse(await readFile(new URL('./fixtures/iem-vu2.json', import.meta.url))).frame;
 import { domFixture, Node } from './helpers/fake-dom.js';
 
 // Fake transports only. No real mixer, browser or network is used.
@@ -77,7 +78,7 @@ test('release-only commits: previews, cancel, mode-less no-op and invalid curves
   token = app.session.beginEqGesture();
   assert.equal(app.session.previewEqGesture(token, requestedDrawSamples(Array(31).fill(20))), null);
   assert.match(control(app).status, /not clipped/);
-  assert.equal(app.session.previewEqGesture(token, requestedPointSamples([0, 1, 2].map(() => ({ x: 0.5, gainDb: 12, q: 0.5 })))), null, 'summed point shape beyond ±15 dB is rejected, not clipped');
+  assert.equal(app.session.previewEqGesture(token, requestedPointSamples([0, 1, 2].map(() => ({ x: 0.5, gainDb: 12, q: 0.5 })), control(app).eqCoordinate.map(auxEqPositionToDb))), null, 'summed point shape beyond ±15 dB is rejected, not clipped');
   assert.equal(app.session.commitEqGesture(token), false, 'no cached valid preview'); assert.equal(app.writes().length, 0);
   app.session.disconnect();
 });
@@ -234,7 +235,14 @@ test('EQ view: unequal readback disables controls; context change closes; reset 
   assert.match(ui.find('.mm-live-eq-status').textContent, /Unequal linked EQ profiles/); assert.match(ui.find('.mm-live-eq-details').textContent, /raw 0\.9/);
   ui.receiver.receive('3:::SETD^a.1.eq.peak.7^0.5'); assert.equal(ui.find('[data-eq-reset]').disabled, false);
   ui.receiver.receive('3:::SETD^a.0.eq.peak.7^0.8\nSETD^a.1.eq.peak.7^0.8');
-  ui.find('[data-eq-reset]').emit('click'); assert.equal(ui.writes().length, 62); assert.ok(ui.writes().every(message => message.endsWith('^0.5')));
+  const reset = ui.find('[data-eq-reset]'), confirm = ui.find('.mm-live-eq-reset-confirm');
+  reset.emit('click'); assert.equal(confirm.hidden, false); assert.equal(ui.writes().length, 0, 'first tap only asks');
+  assert.match(confirm.textContent, /Reset all 31 GEQ bands of Output 1 and 2/); assert.equal(ui.document.activeElement, ui.find('[data-eq-reset-cancel]'), 'focus moves to the safe choice');
+  ui.document.activeElement.emit('keydown', { key: 'Escape' }); assert.equal(confirm.hidden, true); assert.equal(ui.eq.section.hidden, false, 'Escape closes the confirm, not the view');
+  assert.equal(ui.document.activeElement, reset); assert.equal(ui.writes().length, 0);
+  reset.emit('click'); ui.find('[data-eq-reset-cancel]').emit('click'); assert.equal(confirm.hidden, true); assert.equal(ui.writes().length, 0);
+  reset.emit('click'); ui.find('[data-eq-reset-confirm]').emit('click');
+  assert.equal(confirm.hidden, true); assert.equal(ui.writes().length, 62); assert.ok(ui.writes().every(message => message.endsWith('^0.5')));
   ui.context.revision++; for (const fn of ui.contexts) fn(ui.context); assert.equal(ui.eq.section.hidden, true);
   ui.eq.destroy(); ui.session.disconnect();
 });
@@ -255,6 +263,75 @@ test('EQ graph: background touch in points mode never begins; handle drag and dr
   press(svg, 'pointerup', { clientX: 130, clientY: 50 }); assert.equal(ui.writes().length, 124);
   assert.ok(ui.writes().every(message => GEQ_WRITE.test(message)));
   ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('points are a relative Δ: bands outside influence keep exact raw values; zero Δ is a no-op; out-of-range results reject whole', () => {
+  const app = fixture(); app.session.selectEqTarget(2);
+  let token = app.session.beginEqGesture(); const basis = control(app).eqCoordinate.map(auxEqPositionToDb);
+  const neutral = [0.233, 0.566, 0.85].map(x => ({ x, gainDb: 0, q: 0.5 }));
+  assert.ok(app.session.previewEqGesture(token, requestedPointSamples(neutral, basis)));
+  app.session.commitEqGesture(token); assert.equal(app.writes().length, 0, 'all-zero Δ release writes nothing'); assert.equal(control(app).outcome, 'no-op');
+  token = app.session.beginEqGesture();
+  const points = [{ x: auxEqCentreX(1000), gainDb: 3, q: 1 }, { x: 0.233, gainDb: 0, q: 0.5 }, { x: 0.85, gainDb: 0, q: 0.5 }];
+  app.session.previewEqGesture(token, requestedPointSamples(points, basis)); assert.equal(app.session.commitEqGesture(token), true);
+  const writes = app.writes(); assert.equal(writes.length, 31);
+  let untouched = 0;
+  writes.forEach((message, band) => {
+    const bump = auxEqPointGain(points, auxEqCentreX([20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000][band]));
+    if (Math.abs(bump) < AUX_EQ_POINT_NEGLIGIBLE_DB) { untouched++; assert.equal(message, `3:::SETD^a.2.eq.peak.${band}^${MONO(band)}`, `band ${band} kept exactly`); }
+  });
+  assert.ok(untouched >= 20); assert.equal(writes[17], `3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(auxEqPositionToDb(MONO(17)) + 3)}`, 'Δ applies on top of the received −value, not around 0 dB');
+  // A received +14 dB band plus +3 dB Δ leaves the range: rejected whole, never clipped.
+  app.receiver.receive(`3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(14)}`);
+  token = app.session.beginEqGesture();
+  assert.equal(app.session.previewEqGesture(token, requestedPointSamples(points, control(app).eqCoordinate.map(auxEqPositionToDb))), null);
+  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 31);
+  app.session.disconnect();
+});
+
+test('EQ view: points adjust relative to a native edit made while open, then return to 0 dB Δ; notes describe the editable basis', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  assert.match(ui.find('.mm-live-eq-mode-note').textContent, /relative Δ adjustment on top of the current editable basis/);
+  ui.receiver.receive('3:::SETD^a.0.eq.peak.26^0.2\nSETD^a.1.eq.peak.26^0.2'); // native −9 dB at 3.15 kHz while open
+  const gain = ui.find('[data-eq-param="gain"]'), cap = gain.parentElement.querySelector('.mm-fader-hit');
+  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); press(cap, 'pointerup', { clientY: 60 });
+  const first = ui.writes(); assert.equal(first.length, 62);
+  assert.equal(first[26], '3:::SETD^a.0.eq.peak.26^0.2', 'native −9 dB band outside the point influence is preserved exactly');
+  assert.notEqual(first[3], '3:::SETD^a.0.eq.peak.3^0.5');
+  assert.equal(gain.value, '0'); assert.match(gain.closest('.mm-eq-param').querySelector('output').textContent, /Δ 0\.0 dB/);
+  for (const message of first) ui.receiver.receive(message);
+  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); press(cap, 'pointerup', { clientY: 60 });
+  const second = ui.writes().slice(62); assert.equal(second.length, 62);
+  const firstDb = auxEqPositionToDb(Number(first[3].split('^')[2])), secondDb = auxEqPositionToDb(Number(second[3].split('^')[2]));
+  assert.ok(Math.abs((secondDb - firstDb) - (firstDb - 0)) < 1e-9, 'the second gesture adds one fresh Δ on top of the new basis, not the previous bump twice');
+  ui.find('[data-eq-mode="draw"]').emit('click'); assert.equal(ui.find('.mm-live-eq-mode-note').textContent, EQ_MODE_NOTES.draw); assert.match(EQ_MODE_NOTES.draw, /last requested curve if the desk has not echoed/);
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view: handles are keyboard reachable; L/R readback is distinct and labelled; meter-only emits skip rendering', () => {
+  const ui = uiFixture(); let checks = 0; const original = ui.session.canEditEqTarget;
+  ui.eq.destroy(); ui.eq = mountEqControls({ root: ui.root, session: { ...ui.session, canEditEqTarget(index) { checks++; return original(index); } }, controller: { context: () => ui.context, selectAux: () => false, clearLevelContext() {}, subscribeContext(fn) { fn(ui.context); return () => {}; } }, window: new Node(ui.document) });
+  ui.eq.open(0);
+  const handle = ui.eq.section.querySelectorAll('[data-eq-handle]').find(node => node.dataset.eqHandle === '2');
+  assert.equal(handle.attributes.tabindex, '0'); handle.emit('keydown', { key: 'Enter' });
+  assert.equal(ui.eq.section.querySelectorAll('[data-eq-point]').find(node => node.dataset.eqPoint === '2').attributes['aria-pressed'], 'true'); assert.equal(ui.writes().length, 0);
+  ui.receiver.receive('3:::SETD^a.1.eq.peak.4^0.7');
+  const sides = ui.eq.section.querySelectorAll('[data-eq-side]');
+  assert.equal(sides[1].attributes.visibility, 'visible'); assert.notEqual(EQ_SIDE_COLOURS[0], EQ_SIDE_COLOURS[1]);
+  assert.equal(sides[0].children[0].attributes.stroke, EQ_SIDE_COLOURS[0]); assert.equal(sides[1].children[0].attributes.stroke, EQ_SIDE_COLOURS[1]); assert.equal(sides[1].children[2].attributes.fill, 'none');
+  assert.equal(ui.eq.section.querySelectorAll('[data-eq-side-label]').map(node => node.textContent).join('|'), 'L · Output 1|R · Output 2');
+  assert.match(ui.eq.section.querySelector('.mm-live-eq-readbacks').textContent, /L · Output 1.*R · Output 2/);
+  const before = checks; ui.receiver.receive(VU); ui.advance(100); ui.advance(2000);
+  assert.equal(checks, before, 'meter emits do not rebuild the GEQ view');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('processing receipts on the selected output during GEQ dispatch stop the remainder', () => {
+  const app = fixture(); app.session.selectEqTarget(0); const token = app.session.beginEqGesture();
+  app.session.previewEqGesture(token, drawFrom(app, draw => { draw.fill(2); }));
+  app.writer.hook = () => { if (app.writes().length === 8) { app.writer.hook = null; app.receiver.receive('3:::SETD^a.0.eq.hpf.freq^0.1'); } };
+  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 8, 'even an unchanged processing value');
+  app.session.disconnect();
 });
 
 test('live entry wires GEQ only through the private control session; demo stays isolated; pure lease stays unwired', async () => {

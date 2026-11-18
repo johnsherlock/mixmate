@@ -295,11 +295,14 @@ Not verified: real browser/phone UI and physical storage retention (F08-S01).
 
 ## F06-S04 AUX GEQ runtime/UI — 2026-11-18
 
-Implementation checkpoint on `codex/f06-s04-aux-geq` (from main `0a387d6`); not pushed/reviewed/merged. No mixer connection, browser or device check occurred. Routine decisions made by the story agent, for review:
+Implementation on `codex/f06-s04-aux-geq` (from main `0a387d6`), opened as [PR #49](https://github.com/johnsherlock/mixmate/pull/49); review fixes committed, not merged. No mixer connection, browser or device check occurred. Routine decisions made by the story agent, for review:
 
 - **Reducer reuse, not the S03 lease.** GEQ uses the ADR-0008 peer reducer's existing `geq` scope; the historical `createAuxEqGuard` stays an unwired fixture. Its eq/processing-revision duties are met by journal invalidation (contract table).
 - **Curve-intent API.** The runtime accepts `{mode, samples}` intents (copied once) and an internal reset constant, never caller paths or raw band arrays.
-- **Points semantics.** Three requested shape points (smooth bumps) sampled at the 31 centres; a point gesture sets all bands and starts from a flat editor shape (no inverse fitting of native bands). Draw starts from the current coordinate and preserves exact raw values for unedited bands.
+- **Points semantics (revised after PR #49 review P1).** Points are a relative Δ (smooth bump sum) added to the gesture's frozen editable basis at the 31 centres; never a flat replacement and never an inverse fit. Bands with bump < 0.001 dB keep their exact raw coordinate; a zero-Δ release is a no-op; any band beyond ±15 dB rejects the whole request; points return to 0 dB Δ after every release/cancel/native cancellation. The original flat-replacement design could have jumped a received −9 dB band to 0 dB.
+- **Editable basis.** Per ADR-0008, after sent-unverified the basis is the last requested vector (not yet echoed), shown dashed; the mode notes now say so rather than claiming current band values.
+- **Reset confirm.** ↺ opens an in-panel two-step confirm (focus to Keep bands, Escape cancels) before the 31/62-write reset.
+- **Presentation.** Distinct labelled L/R side colours, keyboard-focusable handles, meter-only emits skip re-render, compact-landscape graph fit and points-mode touch panning (prototype CSS had `touch-action:none` on the plot). Compact layout is CSS-only and was not re-verified in a browser by the story agent.
 - **Conservative processing invalidation.** Any new/changed unmodelled `a.N.*` field on the selected output cancels an in-progress EQ gesture. If real firmware streams frequent unrelated fields, EQ gestures may cancel often; this needs live observation before relaxing.
 - **Stricter reentrancy.** During any dispatch (level/pan/group/GEQ), a receipt for an unattempted closure path now also stops the remainder (previously only changed values or already-authorized paths did). Existing tests are unchanged.
 - **Recovery after partial GEQ dispatch** requires all 62/31 band paths re-received after the floor; in practice this is usually an explicit reconnect.

@@ -31,25 +31,35 @@ export function mapRequestedAuxEqCurve(input) {
   return Object.freeze({ mode, basis: 'native-display-centres', values: Object.freeze(values) });
 }
 
-// Point intent: three user shape points (log-frequency position 0..1 over the
-// display range, requested gain and normalized narrowness 0..1). Their smooth
-// sum is sampled ONLY at the 31 native display centres. It is a requested-curve
-// drawing aid, not three parametric hardware filters; results outside ±15 dB are
+// Point intent is a RELATIVE adjustment: three user shape points (log-frequency
+// position 0..1 over the display range, requested gain change and normalized
+// narrowness 0..1) form a smooth bump sum added to the caller-supplied basis
+// (the session's current editable coordinate in dB, captured at gesture start).
+// It is sampled ONLY at the 31 native display centres. It is a requested-curve
+// drawing aid, not three parametric hardware filters and never an inverse fit
+// of native bands. A band whose bump is negligible keeps its exact basis dB, so
+// the session preserves its raw coordinate; any result outside ±15 dB is
 // rejected whole by mapRequestedAuxEqCurve rather than clipped.
 export const AUX_EQ_POINT_COUNT = 3;
+export const AUX_EQ_POINT_NEGLIGIBLE_DB = 1e-3;
 export const auxEqCentreX = frequencyHz => Math.log(frequencyHz / 20) / Math.log(1000);
 const unitNumber = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 export function auxEqPointWidth(q) { return 0.13 / Math.sqrt(0.1 * Math.pow(100, q)); }
 export function auxEqPointGain(points, x) {
   return points.reduce((total, point) => total + point.gainDb * Math.exp(-0.5 * Math.pow((x - point.x) / auxEqPointWidth(point.q), 2)), 0);
 }
-export function requestedPointSamples(input) {
+export function requestedPointSamples(input, basisInput) {
   const points = eqArray(input, AUX_EQ_POINT_COUNT).map(item => {
     const point = eqDataFields(item, ['x', 'gainDb', 'q']);
     if (!unitNumber(point.x) || !unitNumber(point.q) || typeof point.gainDb !== 'number' || !Number.isFinite(point.gainDb) || Math.abs(point.gainDb) > 15) throw Error('Invalid requested EQ point.');
     return point;
   });
-  return Object.freeze({ mode: 'points', samples: Object.freeze(AUX_EQ_DISPLAY_CENTRES.map(frequencyHz => Object.freeze({ frequencyHz, gainDb: auxEqPointGain(points, auxEqCentreX(frequencyHz)) }))) });
+  const basis = eqArray(basisInput, AUX_EQ_DISPLAY_CENTRES.length);
+  if (!basis.every(value => typeof value === 'number' && Number.isFinite(value))) throw Error('A finite current EQ basis is required.');
+  return Object.freeze({ mode: 'points', samples: Object.freeze(AUX_EQ_DISPLAY_CENTRES.map((frequencyHz, index) => {
+    const bump = auxEqPointGain(points, auxEqCentreX(frequencyHz));
+    return Object.freeze({ frequencyHz, gainDb: Math.abs(bump) < AUX_EQ_POINT_NEGLIGIBLE_DB ? basis[index] : basis[index] + bump });
+  })) });
 }
 // Draw intent: one requested gain per native display centre, in index order.
 export function requestedDrawSamples(input) {

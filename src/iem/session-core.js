@@ -265,9 +265,10 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       controlStatus = 'Requested curve rejected (outside ±15 dB or invalid); not clipped. The last valid preview is kept; release applies only that.';
       emit('controls'); return null;
     }
-    // A drawn band identical to the session-provided coordinate keeps that exact
-    // coordinate instead of a dB round trip, so unedited bands stay unchanged.
-    if (request.mode === 'draw' && request.samples.length === AUX_EQ_DISPLAY_CENTRES.length && request.samples.every((sample, index) => sample.frequencyHz === AUX_EQ_DISPLAY_CENTRES[index])) {
+    // A drawn or relative-point band identical to the session-provided coordinate
+    // keeps that exact coordinate instead of a dB round trip, so unedited bands
+    // stay unchanged and an all-zero adjustment is a no-op.
+    if (request.samples.length === AUX_EQ_DISPLAY_CENTRES.length && request.samples.every((sample, index) => sample.frequencyHz === AUX_EQ_DISPLAY_CENTRES[index])) {
       const seed = eqValues(model.chain.requested);
       request.samples.forEach((sample, index) => { if (sample.gainDb === auxEqPositionToDb(seed[index])) values[index] = seed[index]; });
     }
