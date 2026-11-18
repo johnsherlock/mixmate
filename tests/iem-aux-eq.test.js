@@ -125,8 +125,8 @@ test('readback rejects changed topology/bypass/processing or missing bands even 
   }
   const app = fixture(); app.guard.arm(app.target); const plan = app.guard.prepareReset(); dispatch(app, plan); app.context.processingRevision++; assert.equal(app.guard.readback(plan), 'invalidated');
 });
-test('EQ modules remain unwired from production sessions/entry, with no options upgrade or vendor dependency', async () => {
-  for (const file of ['src/iem/live-entry.js', 'src/iem/session-core.js', 'src/iem/aux-control-session.js', 'src/iem/live-view.js']) assert.doesNotMatch(await readFile(new URL('../' + file, import.meta.url), 'utf8'), /aux-eq-(?:protocol|safety|curve)/);
+test('historical pure EQ lease stays unwired; runtime wiring is reviewed in F06-S04 tests', async () => {
+  for (const file of ['src/iem/live-entry.js', 'src/iem/session-core.js', 'src/iem/aux-control-session.js', 'src/iem/live-view.js', 'src/iem/eq-controls.js']) assert.doesNotMatch(await readFile(new URL('../' + file, import.meta.url), 'utf8'), /aux-eq-safety/);
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')); assert.equal(pkg.dependencies['dissect.extfs'], undefined);
 });
 

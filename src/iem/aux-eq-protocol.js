@@ -45,8 +45,8 @@ export function auxEqDbToPosition(value) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < -15 || value > 15) throw Error('Requested EQ gain exceeds the verified ±15 dB range.');
   return (value + 15) / 30;
 }
-// Kept separate from the production state parser until S04's reviewed owner.
-// Only synthetic fixtures are bundled; no actual mixer state is persisted.
+// Separate bounded receive parser, used only by the private F06-S04 control
+// session owner beside the main state parser. No mixer state is persisted.
 export function parseAuxEqStateFrame(frame) {
   if (typeof frame !== 'string' || !frame.startsWith('3:::') || !bounded(frame, IEM_RECEIVE_LIMITS.frameBytes)) return [];
   const lines = frame.slice(4).split('\n');
@@ -62,6 +62,25 @@ export function parseAuxEqStateFrame(frame) {
     const value = Number(raw);
     if (!auxEqPosition(value) || match[4] && value !== 0 && value !== 1) continue;
     updates.push(Object.freeze({ kind: 'auxEq', path: match[1], auxIndex: Number(match[2]), field: match[4] ? 'bypass' : 'band', ...(match[4] ? {} : { bandIndex: Number(match[3]) }), value: match[4] ? value === 1 : value }));
+  }
+  return updates;
+}
+// Conservative receive-only change detector for selected-output processing that
+// MixMate does not model (filters, dynamics, presets, AFS and unknown fields).
+// Values stay opaque bounded text: no semantics, ranges or write forms are
+// inferred. An overlong value is reported as raw null, meaning "always changed".
+const KNOWN_OUTPUT_FIELD = /^(?:name|mix|pan|mute|stereoIndex|matrix|eq\.bypass|eq\.peak\.(?:0|[1-2][0-9]|30|[1-9]))$/;
+export function parseAuxProcessingFrame(frame) {
+  if (typeof frame !== 'string' || !frame.startsWith('3:::') || !bounded(frame, IEM_RECEIVE_LIMITS.frameBytes)) return [];
+  const lines = frame.slice(4).split('\n');
+  if (lines.length > IEM_RECEIVE_LIMITS.lines) return [];
+  const updates = [];
+  for (let line of lines) {
+    if (line.endsWith('\r')) line = line.slice(0, -1);
+    if (!bounded(line, IEM_RECEIVE_LIMITS.lineBytes)) continue;
+    const match = /^SET[DS]\^(a\.([0-9])\.([A-Za-z0-9_.]{1,48}))\^(.*)$/.exec(line);
+    if (!match || KNOWN_OUTPUT_FIELD.test(match[3])) continue;
+    updates.push(Object.freeze({ path: match[1], auxIndex: Number(match[2]), raw: bounded(match[4], 128) ? match[4] : null }));
   }
   return updates;
 }
