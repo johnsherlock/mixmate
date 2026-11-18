@@ -128,6 +128,16 @@ test('F04-S05 device-local groups render, navigate and persist view without an A
     assert.equal(app.controller.toggleGroup('7_group-Z'), false, 'saved-rig groups are not addressable without that rig');
   } finally { await app.close(); }
 });
+test('F04-S05 device-local saved view is restored on AUX selection without a mix identity', async () => {
+  const settings = definitions(); settings.selectedProfileId = null;
+  settings.localDefinitions = { id: 'local-set', groups: [{ id: 'mine', name: 'Mine', members: ['i.2', 'i.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: 'mine' } };
+  const app = await fixture({ settings });
+  try {
+    app.connect(); app.controller.selectAux(0); await app.controller.whenNavigationIdle();
+    assert.deepEqual(app.view.last.sources.slice(1).map(source => source.sourceId), ['i.2', 'i.0']);
+    assert.deepEqual(app.repository.snapshot().settings.localDefinitions.navigation, { mixId: null, view: 'groups', expandedGroupId: 'mine' });
+  } finally { await app.close(); }
+});
 test('unsupported EQ/missing group preferences fall back without mutating saved definitions', () => {
   const groups = definitions().profiles[0].groups, preference = { view: 'eq', expandedGroupId: '7_group-Z' }, before = structuredClone(preference);
   assert.equal(resolveGroupNavigation(groups, preference).view, 'groups'); assert.match(resolveGroupNavigation(groups, preference).notice, /EQ.*unavailable/);

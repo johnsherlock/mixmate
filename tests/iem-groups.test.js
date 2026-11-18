@@ -189,6 +189,27 @@ test('editor DOM keeps source names inert and member buttons stable through rena
 });
 
 
+test('F04-S05 delete confirmation keeps keyboard focus inside the editor when it closes', () => {
+  const document = { activeElement: null, createElement(tag) { return Object.assign(new Element(this), { tag }); } }, root = new Element(document), nodes = {};
+  for (const selector of ['.mm-layer', '.mm-dialog', '.mm-dialog-body', '.mm-dialog-head', '#mm-dialog-title', '.mm-feedback', '[data-action="edit-groups"]']) nodes[selector] = document.createElement('div');
+  nodes['.mm-dialog-head'].append(document.createElement('button'));
+  root.querySelector = selector => nodes[selector];
+  const ui = createGroupEditorUI(root, { close() {}, beforeOpen() {} });
+  ui.bind({}); ui.show('Saved rig: A'); ui.deletable(true);
+  const content = nodes['.mm-dialog-body'].children[0], remove = content.querySelectorAll('button').find(button => button.textContent === 'Delete group' && !button.parentElement.className.includes('confirm'));
+  ui.confirmDelete('Band');
+  assert.equal(document.activeElement.textContent, 'Keep group');
+  ui.confirmDelete(null);
+  assert.equal(document.activeElement, remove, 'Keep/Escape returns focus to the Delete group button');
+  ui.confirmDelete('Band'); ui.deletable(false); ui.confirmDelete(null);
+  assert.equal(document.activeElement, ui.name, 'a hidden Delete button falls back to the name field');
+  ui.busy(true); ui.busy(false); ui.focusEditor();
+  assert.equal(document.activeElement, ui.name, 'temporary/failed delete refocuses the open editor');
+  ui.hide(); document.activeElement = null; ui.focusEditor();
+  assert.equal(document.activeElement, null, 'a closed editor never steals focus');
+  ui.destroy();
+});
+
 test('repeated Save during persistence cannot create multiple groups or mutate a newer editor context', async () => {
   const app = await fixture(); app.editor.open(); app.ui.name.value = 'Saved once';
   let release, calls = 0;

@@ -284,6 +284,12 @@ export function mountLiveController({ session, repository, view, ui, document = 
       const snapshot = session.snapshot(), candidate = projectLiveState(snapshot, index);
       if (candidate.selectedAux === null || selectedAux === candidate.selectedAux) return false;
       selectedAux = candidate.selectedAux;
+      if (owner()?.kind === 'local') {
+        // The device-local set has no AUX identity: restore its last view on any AUX.
+        const saved = definition()?.navigation;
+        chooseNavigation(saved ? { mixId: null, view: saved.view, expandedGroupId: saved.expandedGroupId } : null);
+        return true;
+      }
       const saved = boundProfileId ? profile()?.navigation : null, legacy = /^a\.([0-9])$/.exec(saved?.mixId || '');
       const sameMix = legacy && projectLiveState(snapshot, Number(legacy[1])).selectedAux === selectedAux;
       chooseNavigation(sameMix ? structuredClone(saved) : null);

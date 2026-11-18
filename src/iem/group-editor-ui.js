@@ -114,6 +114,7 @@ export function createGroupEditorUI(root, connectionUI) {
       remove.hidden = !value;
     },
     confirmDelete(groupName) {
+      const wasConfirming = confirming;
       confirming = groupName !== null && groupName !== undefined;
       confirmRow.hidden = !confirming;
       confirmText.textContent = confirming
@@ -122,6 +123,13 @@ export function createGroupEditorUI(root, connectionUI) {
       for (const node of [name, clear, remove, save, ...picks.querySelectorAll("button"), ...members.querySelectorAll("button")])
         node.disabled = busy || confirming;
       if (confirming) keep.focus?.();
+      else if (wasConfirming || confirmRow.contains?.(document.activeElement)) this.focusEditor();
+    },
+    // Keep keyboard/AT focus inside the dialog when transient controls hide.
+    focusEditor() {
+      if (!active) return;
+      const target = !remove.hidden && !remove.disabled ? remove : name;
+      target.focus?.();
     },
     show(profileName) {
       if (connectionUI.dialogOwner && !connectionUI.dialogOwner.owns(dialogLease)) {

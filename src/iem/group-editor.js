@@ -359,6 +359,8 @@ export function mountGroupEditor({
         if (!destroyed && operation === token.operation) {
           saving = false;
           ui.busy(false);
+          // Temporary or failed deletes leave the dialog open; keep focus in it.
+          ui.focusEditor?.();
         }
       });
     return pending;
