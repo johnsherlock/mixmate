@@ -10,7 +10,7 @@ The former batch stop below is historical for S04; this new user request resumes
 
 ## Active F04-S03 checkpoint
 
-Branch `codex/f04-s03-logical-mixes` implements the first story only; independent root browser acceptance, final-head Codex review and CI remain pending. Local Node26.13.1: npm ci passed,337 fake tests passed; no dependency/writer/allowlist changes or live agent actions. [F04-S03](stories/F04-S03.md) records projection/navigation/keyed-preview behavior. The root owns browser acceptance and merge; do not begin F04-S04 before confirmed merge. The three-story UI batch continues only after each reviewed story boundary; its final delivery must contain the closing reviewed handoff.
+Branch `codex/f04-s03-logical-mixes` implements the first story only; independent root fake-browser acceptance passed on worker `411c6a9c135c7733` (Chrome157); final-head Codex review and CI remain pending. Local Node26.13.1: npm ci passed,337 fake tests passed; no dependency/writer/allowlist changes or live agent actions. [F04-S03](stories/F04-S03.md) records projection/navigation/keyed-preview behavior. The root independently accepted layout, linked preview/release-only fake dispatch and unequal-state presentation (see story evidence), and owns merge; do not begin F04-S04 before confirmed merge. The three-story UI batch continues only after each reviewed story boundary; its final delivery must contain the closing reviewed handoff.
 
 ## Historical S04 delivery checkpoint
 
