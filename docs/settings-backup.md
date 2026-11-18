@@ -4,8 +4,8 @@ F02-S03 provides local files for moving settings between devices or restoring th
 
 ## Export
 
-1. Save rig if you want current name/address editor changes included. Uncommitted text is not a rig definition.
-2. Expand **Settings backup & recovery**, then choose **Export settings**.
+1. Save rig/group if you want current editor changes included. Uncommitted text and group drafts are excluded.
+2. In live IEM, choose **Export settings** directly in connection setup or the group editor. This exports that page's current accepted definitions, including temporary memory-only changes. Export before closing or leaving the live page: Settings / test opens a different document and cannot access unsaved live memory. In Settings / test itself, expand **Settings backup & recovery**, then choose **Export settings**.
 3. Keep the downloaded `mixmate-settings-v1.json` file somewhere you can access later. The app reports that a download was requested; browser download handling can differ.
 
 The file contains validated version-1 local profile IDs/names/addresses, ordered group definitions/source IDs, navigation and display preferences. It includes accepted temporary memory settings when device storage is unavailable or has a conflict. The export message makes this explicit. It excludes received mixer channel names, levels, meters, EQ, linking state, armed controls, gestures, queued commands and credentials. Rig/group names and private addresses can still be personal information; share the file deliberately. No file is sent anywhere automatically.

@@ -32,7 +32,7 @@ function definitions() {
   settings.selectedProfileId = 'rig-a'; return settings;
 }
 const field = value => Object.assign(new Events(), { value, textContent: '', disabled: false, setCustomValidity(value) { this.validity = value; }, reportValidity() {} });
-async function fixture({ settings = definitions(), memory = false, repository: provided, factory = new IDBFactory() } = {}) {
+async function fixture({ settings = definitions(), memory = false, repository: provided, factory = new IDBFactory(), downloadBackup } = {}) {
   const repository = provided || new SettingsRepository({ indexedDB: memory ? undefined : factory });
   if (!provided) await repository.replace(settings);
   const sockets = [], timers = new Clock();
@@ -45,10 +45,10 @@ async function fixture({ settings = definitions(), memory = false, repository: p
     receive(data) { this.onmessage?.({ data }); }
   }
   const session = createReadOnlySession({ WebSocketClass: FakeSocket, timers, now: () => timers.now, wallNow: () => timers.now });
-  const ui = { name: field(''), newRig: field(''), saveRig: field(''), feedback: field(''), address: field('192.168.0.60'), profile: field(''), connect: field(''), disconnect: field(''), note: field(''), settings: field(''), form: new Events(), navigation: [new Events()], close() {}, profiles(rows, id = '') { this.profile.value = id; } };
+  const ui = { exportSettings: field(''), name: field(''), newRig: field(''), saveRig: field(''), feedback: field(''), address: field('192.168.0.60'), profile: field(''), connect: field(''), disconnect: field(''), note: field(''), settings: field(''), form: new Events(), navigation: [new Events()], close() {}, profiles(rows, id = '') { this.profile.value = id; } };
   const view = { renders: 0, meterRenders: 0, render(model) { this.last = model; this.renders++; }, renderMeters(model) { this.meters = model; this.meterRenders++; }, preferences() {}, destroy() {} };
   const document = Object.assign(new Events(), { hidden: false }), window = new Events();
-  const controller = mountLiveController({ session, repository, view, ui, document, window });
+  const controller = mountLiveController({ session, repository, view, ui, document, window, downloadBackup });
   await controller.ready;
   return { factory, repository, session, sockets, timers, ui, view, controller, document, window,
     connect(frame = state) { ui.form.emit('submit'); const socket = sockets.at(-1); socket.open(); if (frame) socket.receive(frame); return socket; },
@@ -72,7 +72,7 @@ test('group projection preserves exact ordered IDs with unresolved placeholders,
 
 test('F08-S03 manual same-IP connect cannot grant editor eligibility; explicit saved-rig selection restores it without connecting', async () => {
   const app = await fixture(); let enabled;
-  const ui = { name: field(''), cancel: field(''), message: field(''), status: field(''), show() {}, hide() {}, members() {}, choices() {}, busy() {}, bind() {}, destroy() {} };
+  const ui = { exportSettings: field(''), name: field(''), cancel: field(''), message: field(''), status: field(''), show() {}, hide() {}, members() {}, choices() {}, busy() {}, bind() {}, destroy() {} };
   const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui, setEnabled: value => { enabled = value; } });
   try {
     assert.equal(enabled, true); assert.equal(app.controller.context().profileId, 'rig-a');
@@ -165,7 +165,7 @@ test('incoming state/meters never save navigation or override a chosen group, an
   for (let n = 0; n < 25; n++) { socket.receive(vu); app.timers.tick(4); }
   assert.equal(writes, 0); assert.equal(app.view.renders, before); assert.equal(app.view.meters.expandedGroupId, 'empty');
   socket.receive('3:::SETS^i.0.name^Synthetic rename'); assert.equal(writes, 0); assert.equal(app.view.last.expandedGroupId, 'empty');
-  const ui = { name: field(''), cancel: field(''), save: field(''), message: field(''), status: field(''), show() {}, hide() {}, members(sources, members) { this.catalog = sources; this.ordered = members; }, choices(groups, id) { this.selected = id; }, busy() {}, saved() {}, bind(actions) { this.actions = actions; }, destroy() {} };
+  const ui = { exportSettings: field(''), name: field(''), cancel: field(''), save: field(''), message: field(''), status: field(''), show() {}, hide() {}, members(sources, members) { this.catalog = sources; this.ordered = members; }, choices(groups, id) { this.selected = id; }, busy() {}, saved() {}, bind(actions) { this.actions = actions; }, destroy() {} };
   const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui });
   editor.open(); assert.equal(ui.selected, 'empty'); assert.deepEqual(ui.catalog.map(source => source.id), ['i.0', 'i.2', 'l.0', 'p.1', 'f.1']); assert.deepEqual(ui.ordered, []); ui.name.value = 'Renamed empty'; await ui.actions.save();
   assert.equal(app.view.last.expandedGroupId, 'empty'); assert.equal(app.view.last.sources[0].name, 'Renamed empty'); assert.equal(app.controller.context().profileId, 'rig-a'); assert.equal(app.sockets.length, 1);
@@ -332,5 +332,37 @@ test('rig Save moves its focused button to the visible name before disabling, wi
     app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change');
     release(); await app.controller.whenSetupIdle();
     assert.equal(app.document.activeElement, nextFocus); assert.equal(app.controller.context().profileId, 'rig-b');
+  } finally { await app.close(); }
+});
+
+
+test('live setup and group recovery export their own temporary definitions before navigation', async () => {
+  for (const memory of [true, false]) {
+    const downloads = [], app = await fixture({ memory, downloadBackup: text => downloads.push(JSON.parse(text)) }); let other, editor;
+    try {
+      if (!memory) { other = new SettingsRepository({ indexedDB: app.factory }); await other.initialize(); await other.update(s => { s.profiles[0].name = 'New durable version'; }); }
+      app.ui.newRig.emit('click'); app.ui.name.value = 'Temporary live rig'; app.ui.saveRig.emit('click'); await app.controller.whenSetupIdle();
+      const id = app.controller.context().profileId;
+      app.ui.exportSettings.emit('click'); assert.equal(downloads[0].profiles.find(p => p.id === id).name, 'Temporary live rig');
+      assert.match(app.ui.feedback.textContent, /Includes temporary settings/);
+      const ui = { name: field(''), cancel: field(''), message: field(''), status: field(''), show() {}, hide() {}, members() {}, choices() {}, busy() {}, bind(actions) { this.actions = actions; }, destroy() {} };
+      editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui, createID: () => 'offline-group' });
+      editor.open(); ui.name.value = 'Temporary live group'; await ui.actions.save();
+      ui.actions.exportSettings();
+      assert.deepEqual(downloads[1], app.repository.snapshot().settings);
+      assert.deepEqual(downloads[1].profiles.find(p => p.id === id).groups, [{ id: 'offline-group', name: 'Temporary live group', members: [] }]);
+      assert.match(ui.message.textContent, /Includes temporary settings.*drafts are excluded/);
+      if (other) { const reopened = new SettingsRepository({ indexedDB: app.factory }); await reopened.initialize(); assert.deepEqual(reopened.snapshot().settings, other.snapshot().settings); await reopened.close(); }
+      assert.equal(app.sockets.length, 0);
+    } finally { editor?.destroy(); await other?.close(); await app.close(); }
+  }
+});
+
+test('live export reports download failures without losing temporary definitions or connecting', async () => {
+  const app = await fixture({ memory: true, downloadBackup() { throw Error('Download blocked'); } });
+  try {
+    const before = app.repository.snapshot().settings;
+    app.ui.exportSettings.emit('click'); assert.match(app.ui.feedback.textContent, /Could not start.*before leaving/);
+    assert.deepEqual(app.repository.snapshot().settings, before); assert.equal(app.sockets.length, 0);
   } finally { await app.close(); }
 });

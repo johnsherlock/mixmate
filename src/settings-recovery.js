@@ -18,6 +18,13 @@ function downloadBackup(text) {
   try { link.click(); }
   finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 }
+// Export the owning document's accepted definitions, including memory-only edits.
+export function exportSettingsBackup(repository, download = downloadBackup) {
+  const snapshot = repository.snapshot();
+  download(settingsBackupText(snapshot.settings));
+  return `Backup download requested.${snapshot.status.mode === 'memory' ? ' Includes temporary settings that are not saved on this device.' : ''} Uncommitted editor drafts are excluded. Nothing was uploaded.`;
+}
+
 function summary(settings) {
   const groups = settings.profiles.reduce((count, profile) => count + profile.groups.length, 0);
   const selected = settings.profiles.find(profile => profile.id === settings.selectedProfileId);
