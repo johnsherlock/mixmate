@@ -274,3 +274,19 @@ F02-S04 independent corrected-build acceptance: Chrome157/worker `e89adbbd1c53ea
 F02-S04 PR46 P2 recovery correction: the initial guidance to export via separate Settings / test could not preserve memory-only live changes. Both live setup and group editor now export their owning current repository directly with the existing bounded canonical backup format; users export here before leaving. Download feedback excludes uncommitted drafts and reports failures without mutation. New fake unavailable/conflict tests include exact attempted rig/group JSON and preserve newer durable settings. Final corrected worker `8752cc378b8530ac` passed root fresh-Chrome actual setup/group download parsing for temporary definitions and exact `i.1,i.0` order, with zero parameter writes; final review/CI remain pending.
 
 2026-11-18 closing UI batch: root confirmed PR #44/#45/#46 merged after affirmative exact-head reviews, green CI and resolved findings. F04-S03 → F04-S04 → F02-S04 is complete; no next story is authorized. The reviewed closing handoff owns current receipts/cleanup/stop. All UI-batch transports were fake, actual IndexedDB/download checks were isolated, and no hardware changes occurred. Unknown physical tablet behavior, F08 qualification, served-source provenance and the unchanged dependency audit remain parked.
+
+## F04-S05 group editor usability — 2026-11-18
+
+User report (phone, live, All Mixes, no AUX selected): Edit Groups showed no channels; a group could not be deleted; Edit Groups forced rig setup first. Story [F04-S05](stories/F04-S05.md) addresses all three with local definitions only (no writer/allowlist change).
+
+Routine decisions recorded here:
+
+- Groups edited without a saved rig belong to a single device-local definition set (settings schema v2 `localDefinitions`); its stable ID is created lazily on first save. A bound saved rig keeps its own groups unchanged; nothing is migrated or moved between owners implicitly. Manual address connections still never bind a saved rig.
+- Version-1 settings/backups migrate purely on read; reading never writes; exports are v2. IndexedDB database version stays 1. Newer/unknown versions stay untouched.
+- With no AUX selected, the editor catalog is the union of sources received on available AUX outputs; a selected AUX keeps the per-AUX catalog.
+- Delete group uses an in-dialog two-step confirmation within the editor's dialog lease rather than a native `confirm()`; Clear keeps its existing confirmation.
+- Device-local navigation never stores an AUX ID.
+
+Not verified: real browser/phone UI and physical storage retention (F08-S01).
+
+**Future direction (user-raised; record only, not implemented):** automatically associate MixMate groups/layout with the desk's current snapshot. The visible label would be the snapshot name, but the binding must use a verified stable snapshot identity so renames or duplicate names cannot select the wrong groups. Recalling a snapshot would then restore that snapshot's local definitions (groups/layout) while live values still come only from the desk. This depends on F07 snapshot discovery/recall, which is unimplemented; it needs its own reviewed design (identity evidence, migration from the device-local/rig owners, behaviour for unknown/unsaved snapshots) and story authorization.

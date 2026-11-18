@@ -1,5 +1,5 @@
 // Device-local definitions only. No mixer state or transport capability belongs here.
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 export const SETTINGS_DB = 'mixmate-settings';
 const STORE = 'settings';
 const KEY = 'current';
@@ -53,35 +53,60 @@ function address(value) {
   return value;
 }
 export function emptySettings() {
-  return { version: SETTINGS_VERSION, profiles: [], selectedProfileId: null, preferences: { orientation: 'auto', showMeters: true } };
+  return { version: SETTINGS_VERSION, profiles: [], selectedProfileId: null, localDefinitions: null, preferences: { orientation: 'auto', showMeters: true } };
 }
 
-// Also the import/migration boundary for S03. There was no prior repository
-// schema: absent data starts empty; unsupported old/new versions are preserved.
+// Strictly validate either known document format before pure v1 → v2 migration.
+// Reading never writes; the store/database layout remains version 1.
 export function validateSettings(value) {
   // Recognize an unsupported envelope before checking fields from this version.
   const version = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'version') : null;
-  if (version && 'value' in version && Number.isInteger(version.value) && version.value !== SETTINGS_VERSION) throw new SettingsVersionError('Unsupported settings version.');
-  const data = record(value, ['version', 'profiles', 'selectedProfileId', 'preferences']);
-  if (data.version !== SETTINGS_VERSION) throw new SettingsVersionError('Unsupported settings version.');
+  if (version && 'value' in version && Number.isInteger(version.value) && ![1, SETTINGS_VERSION].includes(version.value)) throw new SettingsVersionError('Unsupported settings version.');
+  const legacy = version?.value === 1;
+  const data = record(value, ['version', 'profiles', 'selectedProfileId', 'preferences', ...legacy ? [] : ['localDefinitions']]);
+  if (![1, SETTINGS_VERSION].includes(data.version)) throw new SettingsVersionError('Unsupported settings version.');
   const profiles = unique(list(data.profiles, 32, raw => {
     const profile = record(raw, ['id', 'name', 'address', 'groups', 'navigation']);
-    const groups = unique(list(profile.groups, 64, rawGroup => {
-      const group = record(rawGroup, ['id', 'name', 'members']);
-      return { id: id(group.id), name: name(group.name), members: unique(list(group.members, 128, sourceID)) };
-    }), group => group.id);
-    const nav = record(profile.navigation, ['mixId', 'view', 'expandedGroupId']);
-    const expandedGroupId = nav.expandedGroupId === null ? null : id(nav.expandedGroupId);
-    if (expandedGroupId !== null && !groups.some(group => group.id === expandedGroupId)) invalid('Selected group does not exist.');
+    const { groups, navigation } = groupDefinitions(profile);
     return { id: id(profile.id), name: name(profile.name), address: address(profile.address), groups,
-      navigation: { mixId: mixID(nav.mixId), view: choice(nav.view, ['groups', 'channels', 'eq']), expandedGroupId } };
+      navigation };
   }), profile => profile.id);
   const selectedProfileId = data.selectedProfileId === null ? null : id(data.selectedProfileId);
   if (selectedProfileId !== null && !profiles.some(profile => profile.id === selectedProfileId)) invalid('Selected profile does not exist.');
   const preferences = record(data.preferences, ['orientation', 'showMeters']);
   if (typeof preferences.showMeters !== 'boolean') invalid('Invalid meter preference.');
-  return { version: SETTINGS_VERSION, profiles, selectedProfileId,
+  const local = legacy ? null : data.localDefinitions;
+  const localDefinitions = local === null ? null : (() => {
+    const definition = record(local, ['id', 'groups', 'navigation']);
+    return { id: id(definition.id), ...groupDefinitions(definition) };
+  })();
+  return { version: SETTINGS_VERSION, profiles, selectedProfileId, localDefinitions,
     preferences: { orientation: choice(preferences.orientation, ['auto', 'portrait', 'landscape']), showMeters: preferences.showMeters } };
+}
+
+function groupDefinitions(definition) {
+  const groups = unique(list(definition.groups, 64, raw => {
+    const group = record(raw, ['id', 'name', 'members']);
+    return { id: id(group.id), name: name(group.name), members: unique(list(group.members, 128, sourceID)) };
+  }), group => group.id);
+  const nav = record(definition.navigation, ['mixId', 'view', 'expandedGroupId']);
+  const expandedGroupId = nav.expandedGroupId === null ? null : id(nav.expandedGroupId);
+  if (expandedGroupId !== null && !groups.some(group => group.id === expandedGroupId)) invalid('Selected group does not exist.');
+  return { groups, navigation: { mixId: mixID(nav.mixId), view: choice(nav.view, ['groups', 'channels', 'eq']), expandedGroupId } };
+}
+
+// Definition owners are addresses into canonical local settings, never a group
+// payload, mixer identity, transport capability or caller-supplied member list.
+export function validateDefinitionOwner(value) {
+  if (value === null) return null;
+  const owner = record(value, ['kind', 'id']);
+  return { kind: choice(owner.kind, ['profile', 'local']), id: id(owner.id) };
+}
+export function definitionOwner(settings, value) {
+  const owner = validateDefinitionOwner(value);
+  if (!owner) return null;
+  return owner.kind === 'profile' ? settings.profiles.find(profile => profile.id === owner.id) || null
+    : settings.localDefinitions?.id === owner.id ? settings.localDefinitions : null;
 }
 
 function openDatabase(factory, timeoutMs) {

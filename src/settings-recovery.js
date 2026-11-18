@@ -13,7 +13,7 @@ export function settingsBackupText(settings) { return boundedText(JSON.stringify
 function downloadBackup(text) {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
   const link = document.createElement('a');
-  link.href = url; link.download = 'mixmate-settings-v1.json';
+  link.href = url; link.download = 'mixmate-settings-v2.json';
   document.body.append(link);
   try { link.click(); }
   finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
@@ -26,9 +26,10 @@ export function exportSettingsBackup(repository, download = downloadBackup) {
 }
 
 function summary(settings) {
-  const groups = settings.profiles.reduce((count, profile) => count + profile.groups.length, 0);
+  const localCount = settings.localDefinitions?.groups.length || 0;
+  const groups = settings.profiles.reduce((count, profile) => count + profile.groups.length, localCount);
   const selected = settings.profiles.find(profile => profile.id === settings.selectedProfileId);
-  return `${settings.profiles.length} rigs · ${groups} groups\nSelected rig: ${selected?.name || 'None'}\nOrientation: ${settings.preferences.orientation} · Meters: ${settings.preferences.showMeters ? 'shown' : 'hidden'}\n` +
+  return `${settings.profiles.length} rigs · ${groups} groups\nSelected rig: ${selected?.name || 'None'}\nDevice-local groups: ${localCount}\nOrientation: ${settings.preferences.orientation} · Meters: ${settings.preferences.showMeters ? 'shown' : 'hidden'}\n` +
     settings.profiles.map(profile => `• ${profile.name} (${profile.address}) · ${profile.groups.length} groups`).join('\n');
 }
 
@@ -72,7 +73,7 @@ export function mountSettingsRecovery({ repository, rigs, $, storageManager, dow
     const status = repository.snapshot().status;
     const temporary = status.mode === 'memory' ? '\nStorage is unavailable or protected from overwrite: this applies temporary settings only; the existing stored record stays untouched.' : '';
     $('settings-preview-text').textContent =
-      `${kind === 'reset' ? 'Reset' : 'Replace'} local settings? This removes ${previous.profiles.length} current rigs and their group definitions. Unsaved editor changes will be discarded.\n` +
+      `${kind === 'reset' ? 'Reset' : 'Replace'} local settings? This removes ${previous.profiles.length} current rigs and all local group definitions. Unsaved editor changes will be discarded.\n` +
       (kind === 'reset' ? 'Use empty rig/group lists and default display preferences.\n' : `Backup to apply:\n${summary(candidate)}\n`) +
       'MixMate will disconnect. No mixer settings change. App files, offline version history and other apps are kept.' + temporary;
     $('confirm-settings').textContent = kind === 'reset' ? 'Reset local settings' : 'Replace local settings';

@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-18. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The subsequent explicit UI-alignment batch authorizes F04-S03 → F04-S04 → F02-S04 sequentially; F04-S03 is confirmed merged in PR #44; F04-S04 is confirmed merged in PR #45; final F02-S04 is confirmed merged in PR #46. The authorized UI batch is complete and stops with its reviewed closing handoff; no next implementation is authorized. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-18. Nine features contain **38 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The subsequent explicit UI-alignment batch authorizes F04-S03 → F04-S04 → F02-S04 sequentially; F04-S03 is confirmed merged in PR #44; F04-S04 is confirmed merged in PR #45; final F02-S04 is confirmed merged in PR #46. The authorized UI batch is complete and stops with its reviewed closing handoff; no next implementation is authorized. A subsequent user-reported usability fix, F04-S05 (All Mixes group catalog, Delete group, device-local groups without a saved rig), is in review on `codex/f04-s05-group-editor-usability`. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -9,7 +9,7 @@ Current plan: 2026-11-18. Nine features contain **37 stories**. The accepted `mo
 | [F01](features/F01.md) | Offline distribution and compatibility | 7 | Merged implementation checkpoint; physical F08 qualification open |
 | [F02](features/F02.md) | Device-local settings | 4 | S01–S04 merged; physical F08 qualification open |
 | [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
-| [F04](features/F04.md) | Groups and navigation | 4 | S01–S04 merged |
+| [F04](features/F04.md) | Groups and navigation | 5 | S01–S04 merged; S05 in review |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
@@ -29,6 +29,7 @@ Feature numbers do not determine execution priority. Previously merged implement
 | 5 | [F04-S03](stories/F04-S03.md) | Passed and affirmatively reviewed/merged applicable foundation gate → logical stereo mix overview |
 | 6 | [F04-S04](stories/F04-S04.md) | F04-S03 → compact accessible channel detail |
 | 7 | [F02-S04](stories/F02-S04.md) | F04-S04 delivery order → discoverable saved-rig setup and persistence feedback |
+| 7a | [F04-S05](stories/F04-S05.md) | F02-S04 → user-reported group editor usability: All Mixes catalog, Delete group, device-local definitions |
 | 8 | [F06-S04](stories/F06-S04.md) | F06-S03 + passed and affirmatively reviewed/merged applicable F09 readiness criteria → separately reviewed GEQ runtime/UI |
 | 9 | [F07](features/F07.md) S01 → S02 → S03 → S04 | F06-S04 → exact snapshot contract, operations, recording, native access |
 | 10 | [F08-S01](stories/F08-S01.md) | All release implementation → supported physical devices, both rigs, offline/sleep/control gate |

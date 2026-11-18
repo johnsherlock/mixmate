@@ -4,7 +4,7 @@ import { decodeVu2Frame } from './meters.js';
 import { IEM_RECEIVE_LIMITS, parseIemStateFrame } from './protocol.js';
 import { createControlScope, createPeerControlState, transitionControl, OBSERVATION_WINDOW_MS } from './control-state-model.js';
 import { auxPanPath, encodeAuxPanCommand } from './aux-pan-protocol.js';
-import { validateSettings } from '../settings.js';
+import { validateSettings, validateDefinitionOwner, definitionOwner } from '../settings.js';
 import { auxLevelPath, encodeAuxLevelCommand } from './aux-level-protocol.js';
 
 // Private ownership: no socket, generic sender or queue escapes. The literal
@@ -25,14 +25,22 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   let phase = 'idle', detail = 'Not connected — no received mixer state';
   const observed = new Map(), receipts = new Map();
   let sequence = 0, revision = 0, selected = null, confirmation, model = null;
-  let controlStatus = 'Select a received control to edit.', groupProfileId = null, selectedGroupSignature = null;
+  let controlStatus = 'Select a received control to edit.', groupOwner = null, selectedGroupSignature = null;
   // Only this owner constructs scopes and reducer events from its socket journal.
   // Neither pure scopes nor public snapshots are accepted as transport authority.
   const modelTime = () => { const t = stamp(); return { mono: Math.max(0, t.mono), wall: Math.max(0, t.wall) }; };
   const step = event => { model = transitionControl(model, { ...event, now: modelTime() }); };
+  function bindGroupOwner(value) {
+    let next = null;
+    try { next = validateDefinitionOwner(value); } catch { /* Invalid owners detach, never grant caller authority. */ }
+    if (JSON.stringify(next) !== JSON.stringify(groupOwner)) {
+      cancelControl('Definition owner changed; obsolete adjustment cancelled.', 'profile');
+      selected = null; groupOwner = next;
+    }
+  }
   const readGroup = groupId => {
     const settings = validateSettings(settingsRepository?.snapshot()?.settings);
-    const profile = settings.profiles.find(profile => profile.id === groupProfileId);
+    const profile = definitionOwner(settings, groupOwner);
     const group = profile?.groups.find(group => group.id === groupId);
     if (!group) throw Error('Current bound local group is unavailable.');
     return group;
@@ -59,7 +67,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   function inspectConfirmation() { if (model) step({ type: 'tick' }); }
   function syncGroupSelection() {
     if (selected?.kind !== 'group') return;
-    try { if (JSON.stringify([groupProfileId, readGroup(selected.groupId)]) === selectedGroupSignature) return; }
+    try { if (JSON.stringify([groupOwner, readGroup(selected.groupId)]) === selectedGroupSignature) return; }
     catch { /* Missing canonical definitions revoke permission too. */ }
     cancelControl('Local group definition changed; select the current group.', 'membership'); selected = null; selectedGroupSignature = null;
   }
@@ -217,10 +225,11 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   }
   const controlAPI = {
     canEditLevelTarget: target => canEditTarget(target),
-    bindGroupProfile(profileId) { if (profileId !== groupProfileId) { cancelControl('Profile changed; obsolete adjustment cancelled.', 'profile'); selected = null; groupProfileId = typeof profileId === 'string' ? profileId : null; } },
+    bindGroupProfile(profileId) { bindGroupOwner(typeof profileId === 'string' ? { kind: 'profile', id: profileId } : null); },
+    bindGroupOwner,
     selectGroupTarget(groupId, auxIndex) {
       let target = null;
-      try { const group = readGroup(groupId); target = Object.freeze({ kind: 'group', groupId: group.id, auxIndex }); selectedGroupSignature = JSON.stringify([groupProfileId, group]); }
+      try { const group = readGroup(groupId); target = Object.freeze({ kind: 'group', groupId: group.id, auxIndex }); selectedGroupSignature = JSON.stringify([groupOwner, group]); }
       catch { /* No group authority from caller data. */ }
       return select(target, 'Relative group selected; gesture uses current received members. Requested offsets do not prove hardware balance.');
     },

@@ -139,14 +139,13 @@ test('closing an armed pan dialog disables every owned action before focus callb
 });
 
 
-test('unbound Edit Groups opens shared live rig setup through the dialog owner', () => {
+test('F04-S05 Edit Groups never detours into rig setup; it only asks the group editor to open', () => {
   const app = fixture();
   try {
-    app.groups.bind({ open: () => false, close: () => app.groups.hide() });
+    let opens = 0;
+    app.groups.bind({ open: () => { opens++; return false; }, close: () => app.groups.hide() });
     const button = app.root.querySelector('[data-action="edit-groups"]'); button.disabled = false; button.emit('click');
-    assert.equal(app.owner.active().kind, 'connection');
-    assert.equal(app.root.querySelector('.mm-layer').hidden, false);
-    assert.ok(app.connection.form.querySelector('input[maxlength]') || app.connection.name);
+    assert.equal(opens, 1); assert.equal(app.owner.active(), null);
     assert.equal(app.writes().length, 0);
   } finally { app.close(); }
 });

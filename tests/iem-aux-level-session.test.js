@@ -444,3 +444,34 @@ test('peer group outstanding basis survives subset selection, recovers from hist
     for (const command of next) assert.ok(Math.abs(continuousFaderDB(command.value) - continuousFaderDB(actual.get(command.path)) - 1) < 1e-10);
   } finally { app.session.disconnect(); await app.repository.close(); }
 });
+
+test('F04-S05 device-local group owners drive relative groups and any owner change cancels obsolete control intent', async () => {
+  const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
+  settings.profiles = [{ id: 'rig', name: 'rig', address: '192.168.0.60', groups: [{ id: 'band', name: 'Rig band', members: ['p.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }];
+  settings.localDefinitions = { id: 'local-set', groups: [{ id: 'band', name: 'Local band', members: ['i.0', 'f.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
+  await repository.replace(settings);
+  const app = setup(createAuxLevelSession, { settingsRepository: repository }), socket = app.connect();
+  socket.receive('3:::SETD^i.0.aux.0.value^0.35\nSETD^f.0.aux.0.value^0.65\nSETD^p.0.stereoIndex^-1\nSETD^p.0.aux.0.value^0.3');
+  try {
+    app.session.bindGroupOwner({ kind: 'local', id: 'local-set' });
+    assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
+    let token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2);
+    assert.deepEqual(writes(socket).map(message => parseIemStateFrame(message)[0].sourceId), ['i.0', 'f.0']);
+    for (const message of writes(socket)) socket.receive(message);
+    const sent = writes(socket).length;
+    for (const next of [{ kind: 'profile', id: 'rig' }, null, { kind: 'local', id: 'other-local' }, { kind: 'mixer', id: 'rig' }, { kind: 'local', id: 'local-set', members: ['i.0'] }]) {
+      app.session.bindGroupOwner({ kind: 'local', id: 'local-set' });
+      assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
+      token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, 1);
+      app.session.bindGroupOwner(next);
+      assert.equal(app.session.commitLevelGesture(token, 1), false, JSON.stringify(next));
+      assert.equal(app.session.snapshot().control.armed, false); assert.equal(writes(socket).length, sent);
+    }
+    // Invalid or unknown owners address nothing; an unchanged owner is not a change.
+    app.session.bindGroupOwner({ kind: 'local', id: 'other-local' }); assert.equal(app.session.selectGroupTarget('band', 0), false);
+    app.session.bindGroupOwner({ kind: 'profile', id: 'rig' }); assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
+    const before = JSON.stringify(app.session.snapshot().control); app.session.bindGroupOwner({ kind: 'profile', id: 'rig' }); assert.equal(JSON.stringify(app.session.snapshot().control), before);
+    token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, 1); app.session.commitLevelGesture(token, 1);
+    assert.match(writes(socket).at(-1), /^3:::SETD\^p\.0\.aux\.0\.value/);
+  } finally { app.session.disconnect(); await repository.close(); }
+});

@@ -1,4 +1,4 @@
-# Local settings repository: version 1
+# Local settings repository: version 2
 
 Story: [F02-S01](stories/F02-S01.md). Date: 2026-11-09. F02-S02 wires this repository into the connection test through `src/rig-settings.js`, with visible status and validated legacy address migration. The old `mixmate-address` key is no longer written. No automatic mixer connection or new mixer message is introduced.
 
@@ -21,9 +21,16 @@ Story: [F02-S01](stories/F02-S01.md). Date: 2026-11-09. F02-S02 wires this repos
     }
   ],
   "selectedProfileId": "user-generated-local-id",
+  "localDefinitions": {
+    "id": "device-local-set-id",
+    "groups": [{ "id": "local-group-id", "name": "User's group name", "members": ["i.1", "i.0"] }],
+    "navigation": { "mixId": null, "view": "groups", "expandedGroupId": null }
+  },
   "preferences": { "orientation": "auto", "showMeters": true }
 }
 ```
+
+`"version": 2` is the current document (F04-S05). `localDefinitions` is either `null` or one device-local definition set — `{ id, groups, navigation }`, validated with exactly the same group/navigation rules and limits as a profile — used by the live app when no saved rig is bound. It has no address and no rig identity; its ID is created lazily by the first saved group and stays stable until import/reset replaces the document. The live app always stores its navigation `mixId` as `null`. Profile-owned groups are unchanged; nothing moves between the device-local set and a profile implicitly.
 
 The example is a schema illustration, not a seeded rig or evidence that those sources/mixes exist. Defaults have no profiles, a null selection, automatic orientation and meters enabled. Navigation defaults belong to each newly created profile; null mix/group IDs mean no selection.
 
@@ -31,7 +38,7 @@ IDs are stable local strings (1–64 ASCII letters/digits/underscore/hyphen, sta
 
 Source references use namespace IDs `i`, `l`, `p`, `f` plus an index; AUX selection uses `a` plus an index. Stored references permit up to three decimal digits without leading zeros. These bounds prevent unbounded/arbitrary keys; they do **not** assert mixer capabilities, validate protocol paths or authorize writes. Future source discovery must keep unavailable references unresolved. Preserve group/member order exactly. Limits: 32 profiles, 64 groups/profile, 128 members/group. Orientation is `auto`, `portrait` or `landscape`; view is `groups`, `channels` or `eq`.
 
-Only these fields are accepted. Received names, channel levels, meter data, EQ values, link state, connection status, armed controls, gestures and queued writes are excluded. Unknown fields, non-plain objects, accessor properties, sparse/custom arrays and invalid values are rejected. Known unsupported version envelopes are recognized before version-1 field validation. Validation builds a new canonical object and all public read/subscription boundaries return independent clones.
+Only these fields are accepted. Received names, channel levels, meter data, EQ values, link state, connection status, armed controls, gestures and queued writes are excluded. Unknown fields, non-plain objects, accessor properties, sparse/custom arrays and invalid values are rejected. Known unsupported version envelopes are recognized before field validation; a version-1 envelope is validated against the version-1 field list (so it cannot carry `localDefinitions`) and then migrated. Validation builds a new canonical object and all public read/subscription boundaries return independent clones.
 
 ## API and persistence status
 
@@ -49,6 +56,10 @@ Open and transaction phases each have a 3-second deadline. Missing/denied/blocke
 Queued updates serialize within one shared app-document instance. Independent tabs/instances receive optimistic conflict protection: a readwrite transaction reads/validates the latest document, compares it with the last durable canonical baseline, and only then writes. Both ordinary edits and explicit replacements/imports use this guard. A stale instance falls back to observable memory/unsaved conflict state, without overwriting the other tab or automatically retrying. This prevents silent lost updates without promising collaborative merging, BroadcastChannel synchronization or cloud storage. User-confirmed conflict recovery belongs to S03.
 
 ## Migration and import boundary
+
+F04-S05 (2026-11-18): `validateSettings` accepts version 1 and version 2 and always returns canonical version 2. Version-1 → version-2 migration is pure — it adds `localDefinitions: null` and changes nothing else — and happens on every read/import. Reading never writes: a stored v1 record stays v1 until the next accepted user edit/import commits a v2 document through the usual atomic baseline guard (the guard compares migrated canonical forms). IndexedDB database version remains 1 because the store layout is unchanged. Unknown/newer versions (for example 3) remain `unsupported-version`, untouched and memory-only. Definition owners are addressed by `validateDefinitionOwner` / `definitionOwner(settings, { kind: 'profile' | 'local', id })`; an owner is an address into canonical settings, never a group payload or transport capability.
+
+Historical S01 note:
 
 No earlier MixMate settings-repository schema existed. The version-1 database creation and validated version-1 record read are the current migration path. No fictitious legacy v0 shape is accepted. Older/unknown/newer data versions and newer database versions are preserved in memory fallback; do not downgrade/delete them. The old localStorage address belongs to S02's explicit migration, independently of this schema.
 
@@ -95,3 +106,5 @@ New rig, profile selection and valid Save synchronously clear control context an
 Storage status remains visible in both the connection setup and group editor. Unavailable, aborted or conflicting saves keep accepted definitions temporary and exportable, with no silent overwrite/retry/clear. The UI explains that definitions belong to this browser, device and site address; moving between origins/ports or devices does not share storage. **Export settings** in the live connection setup and group editor downloads the current live repository, including accepted temporary definitions, through the shared bounded canonical serializer. Uncommitted editor drafts are excluded. Export reports a download request, never guaranteed file retention, and catches download failures without losing definitions. Settings / test is a separate document/repository: export temporary live definitions here before leaving, then use its import/recovery tools deliberately. The unknown physical tablet save error has no exact device/build/error evidence yet and is not claimed fixed by this UI work.
 
 When Save owns keyboard focus, setup moves it to the visible rig-name input before disabling Save; late completion never moves focus. Escape remains within the shared dialog owner while storage is pending.
+
+F04-S05 supersedes the unbound Edit Groups detour above: Edit Groups now opens directly and, with no saved rig bound, edits the device-local `localDefinitions` set. See [groups](iem-groups.md#f04-s05-device-local-owner-all-mixes-catalog-and-deletion--2026-11-18).

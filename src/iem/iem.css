@@ -2583,3 +2583,4 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-strip > span.mm-pan-button {display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-group > .mm-group-control-note {display:none}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan] {inset:auto auto 2px 3px;width:calc(100% - 58px);height:22px;min-height:22px;max-height:22px;line-height:18px;padding:1px 3px;font-size:10px}
+#mixmate-iem-concept .mm-danger{border-color:#b86a62;background:#4a2622;color:#f4c4bc}#mixmate-iem-concept .mm-group-delete-confirm{flex-wrap:wrap;margin-top:0}#mixmate-iem-concept .mm-group-delete-confirm>p{flex:1 1 100%;margin:0;overflow-wrap:anywhere}#mixmate-iem-concept .mm-group-delete-confirm[hidden],#mixmate-iem-concept .mm-group-editor-bar>button[hidden]{display:none}

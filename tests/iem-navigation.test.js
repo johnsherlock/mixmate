@@ -70,21 +70,63 @@ test('group projection preserves exact ordered IDs with unresolved placeholders,
   assert.equal(projectGroupNavigation({ ...base, selectedAux: null }, profile, null).view, 'overview');
 });
 
-test('F08-S03 manual same-IP connect cannot grant editor eligibility; explicit saved-rig selection restores it without connecting', async () => {
+test('F08-S03/F04-S05 manual same-IP connect never binds a saved rig; it edits device-local groups until explicit rig selection', async () => {
   const app = await fixture(); let enabled;
-  const ui = { exportSettings: field(''), name: field(''), cancel: field(''), message: field(''), status: field(''), show() {}, hide() {}, members() {}, choices() {}, busy() {}, bind() {}, destroy() {} };
+  const ui = { exportSettings: field(''), name: field(''), cancel: field(''), message: field(''), status: field(''), show(label) { this.label = label; }, hide() {}, members(catalog) { this.catalog = catalog; }, choices(groups) { this.groups = groups; }, busy() {}, bind() {}, destroy() {} };
   const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui, setEnabled: value => { enabled = value; } });
   try {
     assert.equal(enabled, true); assert.equal(app.controller.context().profileId, 'rig-a');
+    assert.deepEqual(app.controller.context().owner, { kind: 'profile', id: 'rig-a' });
     app.ui.address.emit('input'); // The string still equals both saved rig addresses.
-    assert.equal(app.controller.context().profileId, null); assert.equal(enabled, false);
+    assert.equal(app.controller.context().profileId, null); assert.deepEqual(app.controller.context().owner, { kind: 'local', id: null });
+    assert.equal(enabled, true); assert.match(app.ui.feedback.textContent, /not bound to a saved rig/);
     app.connect(); assert.equal(app.session.snapshot().phase, 'live');
-    assert.equal(editor.open(), false); assert.equal(enabled, false);
+    assert.equal(app.controller.context().profileId, null);
+    assert.equal(editor.open(), true); assert.deepEqual(ui.groups, [], 'saved-rig groups are not shown for a manual address');
+    assert.match(ui.label, /no saved rig/);
+    // All Mixes (no AUX selected): union of sources received on available AUXes.
+    assert.equal(app.controller.context().selectedAux, null);
+    assert.deepEqual(ui.catalog.map(source => source.id), ['i.0', 'i.2', 'l.0', 'p.1', 'f.1']);
+    assert.ok(ui.catalog.every(source => !source.unresolved));
+    assert.equal(ui.catalog[0].name, '<img src=x>');
+    editor.close();
     app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change');
     assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(enabled, true);
     assert.equal(app.session.snapshot().observations.size, 0); assert.equal(app.sockets.length, 1);
-    assert.equal(editor.open(), true);
+    assert.equal(editor.open(), true); assert.deepEqual(ui.groups.map(group => group.id), ['other']);
+    assert.deepEqual(app.repository.snapshot().settings, definitions());
   } finally { editor.destroy(); await app.close(); }
+});
+
+test('F04-S05 All Mixes union excludes matrix outputs and name-only sources; selecting an AUX narrows the catalog', async () => {
+  const app = await fixture();
+  try {
+    app.ui.address.emit('input');
+    app.connect(`${state}\nSETD^a.1.matrix^0\nSETD^i.7.aux.1.value^0.2\nSETD^a.2.matrix^1\nSETD^i.9.aux.2.value^0.1`);
+    const all = app.controller.context();
+    assert.equal(all.selectedAux, null); assert.deepEqual(all.sources, []);
+    assert.deepEqual(all.catalog.map(source => source.sourceId), ['i.0', 'i.2', 'i.7', 'l.0', 'p.1', 'f.1']);
+    assert.equal(app.controller.selectAux(1), true);
+    assert.deepEqual(app.controller.context().catalog.map(source => source.sourceId), ['i.7']);
+    app.ui.disconnect.emit('click');
+    assert.deepEqual(app.controller.context().catalog, []);
+  } finally { await app.close(); }
+});
+
+test('F04-S05 device-local groups render, navigate and persist view without an AUX identity or a saved rig', async () => {
+  const settings = definitions(); settings.selectedProfileId = null;
+  settings.localDefinitions = { id: 'local-set', groups: [{ id: 'mine', name: 'Mine', members: ['i.2', 'i.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
+  const app = await fixture({ settings });
+  try {
+    assert.deepEqual(app.controller.context().owner, { kind: 'local', id: 'local-set' });
+    app.connect(); app.controller.selectAux(0);
+    assert.deepEqual(app.view.last.groups, [{ id: 'mine', name: 'Mine' }]);
+    assert.equal(app.controller.toggleGroup('mine'), true); await app.controller.whenNavigationIdle();
+    assert.deepEqual(app.view.last.sources.slice(1).map(source => source.sourceId), ['i.2', 'i.0']);
+    assert.deepEqual(app.repository.snapshot().settings.localDefinitions.navigation, { mixId: null, view: 'groups', expandedGroupId: 'mine' });
+    assert.deepEqual(app.repository.snapshot().settings.profiles, definitions().profiles);
+    assert.equal(app.controller.toggleGroup('7_group-Z'), false, 'saved-rig groups are not addressable without that rig');
+  } finally { await app.close(); }
 });
 test('unsupported EQ/missing group preferences fall back without mutating saved definitions', () => {
   const groups = definitions().profiles[0].groups, preference = { view: 'eq', expandedGroupId: '7_group-Z' }, before = structuredClone(preference);

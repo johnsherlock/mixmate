@@ -347,7 +347,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       groupEditing = enabled;
       root.dataset.groupEditing = String(enabled);
       const button = root.querySelector('[data-action="edit-groups"]');
-      if (button) { button.disabled = false; button.title = enabled ? 'Edit local groups for the selected rig' : 'Choose or save a local rig to edit groups'; }
+      if (button) { button.disabled = false; button.title = enabled ? 'Edit groups kept on this device' : 'Local group settings are loading'; }
       $('.mm-local-tabs').hidden = false;
     },
     preferences(preferences) { root.dataset.preferredOrientation = preferences.orientation; root.dataset.showMeters = String(preferences.showMeters); layout.apply(); },
