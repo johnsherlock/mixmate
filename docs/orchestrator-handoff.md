@@ -1,42 +1,76 @@
-# Orchestrator handoff — UI batch complete, 2026-11-18
+# Orchestrator handoff — F06-S04 batch complete, 2026-11-18
 
-Read [AGENTS](../AGENTS.md), [lifecycle](orchestration.md), [backlog](backlog.md), the assigned story/feature and current contracts before new work. **F04-S03 → F04-S04 → F02-S04 is complete and merged. Stop this batch.** No further implementation is authorized by backlog priority. This reviewed closing delivery is identified by its containing PR/history, avoiding a self-referential commit hash. Last verified story baseline on main is **`68e61d7964ab42fb2a149752266aa1b1148bf355`**.
+Read [AGENTS](../AGENTS.md), [lifecycle](orchestration.md), [backlog](backlog.md), the assigned story/feature and current contracts before new work. **The explicitly authorized F06-S04-only batch is complete and merged. Stop this batch.** The batch began by finishing a user-reported group-editor fix left half-done by an earlier usage stop (F04-S05). No further implementation is authorized by backlog priority; **F07 is not started.** This reviewed closing delivery is identified by its containing PR/history, avoiding a self-referential commit hash. The last verified story baseline on main is **`5c6a3ca995c6b56c527823689d9bce3374610dcb`**.
+
+## Review gate substitution (user direction)
+
+Codex reviews were unavailable throughout this batch: its usage limit was reached, and PR #48's review attempt failed. The user explicitly directed root to replace `@codex review` with **independent fresh-context agent reviews**. Each story was merged only after such a reviewer affirmatively approved the exact final head, CI passed on that head, and every blocking finding was resolved. Review rounds are recorded on each PR and in [follow-ups](user-follow-up.md). A future orchestrator should go back to `@codex review` once it is available again, unless the user directs otherwise.
 
 ## Confirmed deliveries
 
-Root verified each GitHub merge only after affirmative exact-head Codex review, green CI and resolved review findings:
-
-| Story / PR | Merge commit / UTC time | Final review | Passing CI |
+| Story / PR | Merge commit / UTC time | Final approved head | Passing CI |
 | --- | --- | --- | --- |
-| [F04-S03 / #44](https://github.com/johnsherlock/mixmate/pull/44) | `c287a6cd5eb0ce51c998ca86e9552ae057f2e181` / 2026-11-18 13:06:22 | [37fab3a](https://github.com/johnsherlock/mixmate/pull/44#issuecomment-6979392068) | [44309764340](https://github.com/johnsherlock/mixmate/actions/runs/44309764340) |
-| [F04-S04 / #45](https://github.com/johnsherlock/mixmate/pull/45) | `09e0cc3110fdaef6b6227de0115c9307c44da815` / 2026-11-18 13:31:48 | [2c5e95c](https://github.com/johnsherlock/mixmate/pull/45#issuecomment-6980018608) | [44313993129](https://github.com/johnsherlock/mixmate/actions/runs/44313993129) |
-| [F02-S04 / #46](https://github.com/johnsherlock/mixmate/pull/46) | `68e61d7964ab42fb2a149752266aa1b1148bf355` / 2026-11-18 13:52:40 | [aaab73a](https://github.com/johnsherlock/mixmate/pull/46#issuecomment-6980556024) | [44317639921](https://github.com/johnsherlock/mixmate/actions/runs/44317639921) |
+| [F04-S05 / #48](https://github.com/johnsherlock/mixmate/pull/48) | `0a387d64050466b9c138c8b9b584a867a8e85bb9` / 2026-11-18 17:51:22 | `771bd1d` ([record](https://github.com/johnsherlock/mixmate/pull/48)) | [44363115256](https://github.com/johnsherlock/mixmate/actions/runs/44363115256) |
+| [F06-S04 / #49](https://github.com/johnsherlock/mixmate/pull/49) | `5c6a3ca995c6b56c527823689d9bce3374610dcb` / 2026-11-18 23:09:50 | `2aae758` ([record](https://github.com/johnsherlock/mixmate/pull/49)) | [44418133828](https://github.com/johnsherlock/mixmate/actions/runs/44418133828) |
 
-Each story used one sequential fresh-context Sol Medium agent; root owned independent browser acceptance and merge. The user resumed after an account-usage interruption; no chat/account reset is inferred. Authoritative rereads after compaction stayed consistent, and context remained reliable through completion; account-usage telemetry was unavailable. No implementation/handoff blocker remains in this batch. Remaining qualification and maintenance items below are deliberately parked, not waived.
+Implementation was delegated to one sequential fresh-context story agent per story; root owned review orchestration, browser and hardware acceptance, and merges. The batch was interrupted once by an account usage limit. On the user's "are we back?" root resumed the preserved branch, which was unchanged; this does not imply an account reset.
 
 ## Delivered behavior
 
-- [F04-S03](stories/F04-S03.md): five logical cards for five received reciprocal AUX pairs, combined actual names from either legacy side, stable navigation/nodes and separate raw side readbacks. Unknown/conflicting/unequal states remain honest. Linked input strips remain individually visible with tandem preview/request cap motion; release-only typed dispatch is unchanged.
-- [F04-S04](stories/F04-S04.md): prototype-aligned compact channel/pan surfaces, owned touch/keyboard Details with individual raw processing/level/pan/VU semantics, and visible actionable feedback. Requested/cancelled diagnostics survive opening Details and meter updates. Landscape overview is one row; channel capacity is even and adjacent verified pairs stay in one bank without changing saved membership order. Phone portrait stays three columns.
-- [F02-S04](stories/F02-S04.md): Edit Groups is reachable from live use. Unbound use opens explicit New rig/Save rig/select setup; saved profiles own groups by stable ID, including duplicate-IP profiles. Manual matching addresses never bind implicitly. Saving/selecting disconnects before changing identity and never connects automatically. Committed, temporary and conflict outcomes remain distinct. Export settings in setup and group editor downloads the current document's accepted definitions, including temporary changes, before navigation; uncommitted drafts are excluded.
+- **[F04-S05](stories/F04-S05.md): group editor usability.**
+  - In All Mixes, the editor offers the union of received sources across AUXes.
+  - Delete group uses an in-dialog confirmation and gives saved, temporary or conflict feedback.
+  - Edit Groups works without a saved rig. Settings schema v2 adds a device-local `localDefinitions` set; v1 migrates purely on read, backups are accepted in v1 or v2, and exports are v2.
+  - A bound saved rig keeps its own groups unchanged.
+  - Reviews fixed focus loss and the case where deleting the expanded group closed the editor without its outcome. Two P3s were accepted, the per-frame catalog cost and the first local save cancelling control intent; both are recorded in follow-ups.
+  - **Rollback note:** once a v2 document is committed, older builds read it as unsupported. They keep running on temporary settings and never overwrite it. A revert would need a v2 → v1 reader.
+- **[F06-S04](stories/F06-S04.md): approved AUX GEQ controls.**
+  - Writes go through the ADR-0008 peer owner (private typed writer plus receive-only companion), in the form `3:::SETD^a.<0..9>.eq.peak.<0..30>^<finite 0..1>`, and only through `createAuxControlSession`.
+  - Dispatch is **sparse**: up to 31/62 changed band paths, skipping bands within 1e-9 of the gesture-start coordinate. It is sequential and non-atomic, with revalidation and reentrant stop. There is no retry, rollback or replay.
+  - **Points** are a relative Δ on the editable basis: untouched bands keep their exact values, and an out-of-range result is rejected whole. **Draw** mode is exclusive of points. **Reset** needs an in-panel confirmation and sends only the selected GEQ bands that are not already at 0.5.
+  - Linked sides must be exactly equal; otherwise the pair is read-only and both raw sides are shown. Native band, bypass or processing changes cancel any obsolete gesture.
+  - A received-basis barrier prevents stale re-sends after an unechoed write.
+  - There are no shelf, filter, bypass or preset writes, and no measured-response claim.
 
-`mockups/iem.html` remains the immutable visual reference, not protocol evidence. No dependency, writer, hardware permission or EQ/recording/snapshot capability was added. Current level/group/eligible normalized pan remains the reviewed [peer runtime](iem-control-runtime.md) / [ADR-0008](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17): private typed writer plus receive-only companion, actual versus requested separation, no ACK/atomicity claim and no retry/replay/rollback. Qualified connected controls edit directly without Enable/Disable. [ADR-0004](adr/0004-aux-level-safety.md#current-user-direction-and-testing-permission--2026-11-17) preserves standing story-scoped live-test permission without repeated gesture/window requests; unrelated stories/new write classes or agent snapshot actions are not implied.
+`mockups/iem.html` is unchanged; it remains the visual reference, not protocol evidence.
 
 ## Verification and resources
 
-Final application: **0.5.0**, **18 precached assets**, worker **`8752cc378b8530ac`**. Local Node **26.13.1**, CI Node24. Final story checks: npm ci, **352/352 fake tests**, build and diff checks passed. Closing documentation checks also passed npm ci, all352 tests and build with the same worker;84 tracked Markdown files/522 relative targets resolve with zero missing files, without the unrelated untracked handoff. Diff checks pass. The closing final review/CI/merge receipt belongs to this containing delivery/history.
+- **Final application:** 0.5.0, 18 precached assets, worker `c7399c195aa4b408`. Local Node is 26.13.1; CI uses Node 24. **390/390 fake tests** pass.
+- **Browser acceptance:** root ran strict-fake browser acceptance in isolated headless Playwright Chromium 1252 at phone portrait 390×844 and landscape 844×390. Checked:
+  - release-only writes;
+  - relative points preserving a native −9 dB band exactly;
+  - zero-Δ no-op and reset confirmation;
+  - distinct L/R readback;
+  - landscape fit;
+  - no non-GEQ writes and no console errors.
+- **Live hardware matrix** ([story](stories/F06-S04.md)): firmware 3.0.7865-ui24, desk 192.168.0.60, pair SPARE/IEM `a.8`/`a.9`. The desk has no mono outputs.
+  - **First run, head `18b096f`:** the desk echoes only *changed* paths, rounded to 10 decimals, so the barrier stuck after every edit. This was fixed by sparse dispatch.
+  - **Post-fix run, head `3ecb23c`:** passed:
+    - sparse send and echo, plus an immediate second gesture;
+    - native ↔ MixMate in both directions, with MixMate building on the native value;
+    - a real interrupted dispatch, which went read-only with unequal sides, made no writes and recovered automatically after a native correction;
+    - a confirmed sparse reset.
 
-Root used isolated Chrome157 and strict fake mixer transports, plus actual isolated IndexedDB and actual local downloads. No UI-batch hardware connection or parameter change occurred. Story documents preserve exact build attribution and failures/fixes: initial geometry is not relabelled as later-build testing. F04 full geometry on `1b11f1c1bbdf387e` recovered range height to144px at844×390 and99px at844×300, kept three portrait columns, even landscape capacities and boundary-pair order; corrected `be3aa11cbdf404b1` passed the wired cancellation/requested/actual/VU2 regression. F02 `e89adbbd1c53eaae` passed Save-focus/Escape, identity/offline/group, actual two-tab conflict/durable-preservation and simulated storage-denied checks. Final `8752cc378b8530ac` passed current-entry/asset proof and actual temporary-rig/group downloads parsed with the canonical backup validator, preserving exact ordered membership. These are desktop/emulation/fake observations, not physical phone/tablet qualification.
+  All 155 MixMate writes were GEQ band paths.
+- **Final desk state:** the SPARE/IEM GEQ is flat (0.5) on both sides. Pre-test bands 14 and 20 were about ±0.02 dB. Nothing else changed, and no snapshot was saved, recalled or deleted.
+- **Resource cleanup:** MixMate was disconnected and its native pane tab closed; the owned 4174 preview was stopped and no listener remains; there are no owned Playwright processes. The user's personal browser was not used.
 
-All owned isolated browsers and fake transports are closed; the final export test recorded readyState3 for every socket and zero parameter writes. Both owned preview instances on4174 were stopped and absence of a4174 listener verified. The user's4175 server/personal tabs were not touched. No owned instrumentation remains. S04 historical hardware evidence and last applied values are in its [authoritative report](f09-s04-firmware-validation.md#final-current-matrix-and-readiness-decision), not assertions about the user's present desk state.
-
-Preserve unrelated untracked **`docs/iem-integration-handoff.md`**, SHA256 **`0ac783556d5660ec29e95652c1871628f70c84f45ebb9c4a479e409399dd5bac`**; never stage it. Prototype SHA256 remains **`d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`**. Closing changes are scoped documentation only; final branch/HEAD, remote-main availability, worktree, review threads and CI must be verified before reporting handoff complete.
+Preserve the unrelated untracked **`docs/iem-integration-handoff.md`**, SHA256 **`0ac783556d5660ec29e95652c1871628f70c84f45ebb9c4a479e409399dd5bac`**, and never stage it. The prototype SHA256 remains **`d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`**.
 
 ## Remaining work and next orchestration
 
-- [F08-S01](stories/F08-S01.md) still owns physical Android/iOS, both rigs, installation/current-assets/offline, sleep/recovery, touch and local-storage retention qualification. The unknown tablet group-save issue still lacks exact device/OS/browser/build/error evidence; desktop success does not establish its cause or fix. [Follow-ups](user-follow-up.md) owns that parked item.
-- The unchanged development dependency audit reports four high entries from one picomatch advisory; production-only audit reports zero. Separate dependency/exposure triage remains parked. No forced downgrade/fix or risk waiver was adopted.
-- [ADR-0007](adr/0007-owned-protocol-adapter.md) retains the owned adapter/helper-only boundary and unavailable full served-source provenance gap. S04's reviewed applicable foundation is satisfied, not universal firmware/GEQ qualification.
-- [F06-S04](stories/F06-S04.md) is the next backlog implementation candidate after this UI batch, **unstarted and outside this authorization**. It still needs separately reviewed GEQ integration, its31/62-path/current-owner/processing safeguards and bidirectional EQ evidence. Snapshot/recording stories remain unwired.
+- **Physical qualification:** [F08-S01](stories/F08-S01.md) still owns physical Android/iOS testing, both rigs, installation/offline, sleep/recovery, touch and storage retention. GEQ adds these items:
+  - mono outputs;
+  - SVG handle `touch-action` on phones;
+  - exponent-form values near −15 dB;
+  - which processing fields stream during a show;
+  - display centres versus actual DSP response.
+- **Parked:** the unknown tablet group-save issue (no device evidence yet) and the dependency audit (four development-chain high entries from one picomatch advisory; production audit reports zero).
+- **Non-blocking GEQ P3s (follow-ups):**
+  - rounded echoes after the first report `native-invalidated` rather than precision;
+  - a planned value equal to the desk value would get no receipt, which fails safe and needs a reconnect.
+- **User-raised future direction:** associate MixMate groups and layout with the desk's current snapshot via a verified stable snapshot identity. It is recorded only and depends on F07.
+- **Next backlog candidate:** [F07](features/F07.md) (snapshot contract, operations, recording, native access). It is **unstarted and outside this authorization**.
 
 A fresh orchestration run should verify this closing delivery on remote main, read AGENTS and this handoff, and obtain the next explicit batch. Stop here; no sidebar chat or automatic responsibility transfer is created.

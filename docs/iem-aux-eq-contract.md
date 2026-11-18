@@ -84,7 +84,7 @@ All 31 bands and bypass must be observed with valid receipt counters for each cu
 [ADR-0008](adr/0008-control-state-model.md) and its pure unwired model propose terminal all-returned `sent-unverified`, retained same-scope permission, separate requested command coordinates and complete post-invalidation recovery barriers. Relative groups retain an immutable finite actual anchor and cumulative common command delta, preserving requested offsets only, never proof of hardware balance. Exact raw precision remains conservative. These are design inputs for deliberately reviewed F09-S03 level/group/pan integration, **not changes to this active runtime contract**. Existing 2.5s fresh-path/disarm behavior and all guards remain active. GEQ stays unwired; later F06-S04 must separately reconcile ADR-0006 processing/bypass/full-profile requirements after applicable F09 readiness. No hardware permission or new wire command is granted.
 
 
-## F06-S04 runtime/UI integration — 2026-11-18 (in review)
+## F06-S04 runtime/UI integration — 2026-11-18 (merged)
 
 This section supersedes the "pure/unwired" statements above for the current branch; they remain historical receipts. Review/merge state is tracked by [F06-S04](stories/F06-S04.md). Everything here is source-backed design plus fake-transport tests; **no GEQ hardware behaviour has been observed**.
 
