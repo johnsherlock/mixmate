@@ -4,11 +4,19 @@ import { IDBFactory } from 'fake-indexeddb';
 import { SettingsRepository, SETTINGS_DB, emptySettings, validateSettings, SettingsValidationError, SettingsVersionError, settingsStatusText } from '../src/settings.js';
 
 function fixture() {
-  return { version: 1, selectedProfileId: 'rig-a', preferences: { orientation: 'portrait', showMeters: true }, profiles: [
+  return { version: 2, selectedProfileId: 'rig-a', localDefinitions: null, preferences: { orientation: 'portrait', showMeters: true }, profiles: [
     { id: 'rig-a', name: 'Rehearsal', address: '192.168.0.60', groups: [
       { id: 'guitars', name: 'Guitars', members: ['i.5', 'i.3', 'f.0', 'l.0', 'p.1'] },
     ], navigation: { mixId: 'a.0', view: 'groups', expandedGroupId: 'guitars' } },
   ] };
+}
+// The previous on-disk document shape: no localDefinitions field.
+function legacyFixture() {
+  const { localDefinitions, ...value } = fixture();
+  return { ...value, version: 1 };
+}
+function local(groups = [{ id: 'local-band', name: 'Band', members: ['i.1', 'i.0'] }]) {
+  return { id: 'device-local', groups, navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
 }
 function open(factory, version = 1, upgrade = db => db.createObjectStore('settings')) {
   return new Promise((resolve, reject) => {
@@ -140,8 +148,10 @@ test('whitelist rejects live state, unknown fields, invalid addresses, duplicate
   const arrayAccessor = fixture(); Object.defineProperty(arrayAccessor.profiles, '0', { get() { getterCalls++; return fixture().profiles[0]; } });
   assert.throws(() => validateSettings(arrayAccessor), SettingsValidationError);
   assert.equal(getterCalls, 0);
-  const injected = JSON.parse(JSON.stringify(fixture()).replace('"version":1', '"version":1,"__proto__":{"polluted":true}'));
-  assert.throws(() => validateSettings(injected), SettingsValidationError);
+  for (const value of [fixture(), legacyFixture()]) {
+    const injected = JSON.parse(JSON.stringify(value).replace(/"version":[12]/, match => `${match},"__proto__":{"polluted":true}`));
+    assert.throws(() => validateSettings(injected), SettingsValidationError);
+  }
   assert.equal({}.polluted, undefined);
 });
 
@@ -154,7 +164,7 @@ test('valid settings preserve user text as inert data and only private IPv4 prof
 });
 
 test('corrupt or unsupported stored schemas remain untouched; fallback changes stay memory-only', async () => {
-  for (const data of [{ version: 9, secretFutureState: true }, { ...fixture(), version: 2 }, { ...fixture(), version: 0 }, { ...fixture(), profiles: 'corrupt' }]) {
+  for (const data of [{ version: 9, secretFutureState: true }, { ...fixture(), version: 3 }, { ...fixture(), version: 0 }, { ...fixture(), profiles: 'corrupt' }]) {
     const factory = new IDBFactory(); await seed(factory, data);
     const repo = new SettingsRepository({ indexedDB: factory });
     try {
@@ -262,7 +272,7 @@ test('closing rejects further mutations and initialization; unsupported import v
   await repo.initialize(); await repo.close();
   await assert.rejects(repo.update(() => {}), /closed/);
   await assert.rejects(repo.initialize(), /closed/);
-  assert.throws(() => validateSettings({ ...emptySettings(), version: 2 }), SettingsVersionError);
+  assert.throws(() => validateSettings({ ...emptySettings(), version: 3 }), SettingsVersionError);
 });
 
 
@@ -357,4 +367,55 @@ test('simultaneous first-save repositories cannot both replace the same empty ba
     assert.equal(results.filter(result => result.status.state === 'saved').length, 1);
     assert.equal(results.filter(result => result.status.reason === 'conflict').length, 1);
   } finally { await a.close(); await b.close(); }
+});
+
+test('F04-S05 version-1 documents migrate purely to version 2 with no device-local set; reading never writes', async () => {
+  const legacy = legacyFixture(), before = structuredClone(legacy), migrated = validateSettings(legacy);
+  assert.deepEqual(legacy, before);
+  assert.deepEqual(migrated, fixture());
+  assert.equal(migrated.version, 2); assert.equal(migrated.localDefinitions, null);
+  assert.deepEqual(migrated.profiles[0].groups, legacy.profiles[0].groups);
+  // A version-1 document cannot smuggle version-2 fields past migration.
+  assert.throws(() => validateSettings({ ...legacyFixture(), localDefinitions: null }), SettingsValidationError);
+  assert.throws(() => validateSettings({ ...legacyFixture(), localDefinitions: local() }), SettingsValidationError);
+  const factory = new IDBFactory(); await seed(factory, legacyFixture());
+  const repo = new SettingsRepository({ indexedDB: factory });
+  try {
+    const result = await repo.initialize();
+    assert.equal(result.status.mode, 'persistent'); assert.equal(result.status.state, 'ready');
+    assert.deepEqual(result.settings, fixture());
+    assert.deepEqual(await stored(factory), legacyFixture(), 'initialization reads the v1 record without rewriting it');
+    await repo.update(settings => { settings.localDefinitions = local(); });
+    assert.equal(repo.snapshot().status.state, 'saved');
+    assert.deepEqual(await stored(factory), { ...fixture(), localDefinitions: local() });
+  } finally { await repo.close(); }
+});
+
+test('F04-S05 version-2 device-local definitions are strictly validated and newer versions stay untouched', async () => {
+  const valid = { ...fixture(), localDefinitions: local() };
+  assert.deepEqual(validateSettings(valid), valid);
+  const cases = [
+    value => { delete value.localDefinitions; },
+    value => { value.localDefinitions = []; },
+    value => { value.localDefinitions = { ...local(), extra: true }; },
+    value => { value.localDefinitions = { ...local(), id: 'bad id' }; },
+    value => { value.localDefinitions.groups[0].members.push('i.1'); },
+    value => { value.localDefinitions.groups[0].members.push('a.0'); },
+    value => { value.localDefinitions.groups.push(structuredClone(value.localDefinitions.groups[0])); },
+    value => { value.localDefinitions.groups[0].level = 0.5; },
+    value => { value.localDefinitions.navigation.expandedGroupId = 'missing'; },
+    value => { value.localDefinitions.navigation.view = 'meters'; },
+    value => { value.localDefinitions.groups = Array.from({ length: 65 }, (_, n) => ({ id: `g${n}`, name: `G${n}`, members: [] })); },
+  ];
+  for (const change of cases) { const value = structuredClone(valid); change(value); assert.throws(() => validateSettings(value), SettingsValidationError); }
+  for (const version of [3, 99]) {
+    const future = { ...valid, version }, factory = new IDBFactory(); await seed(factory, future);
+    const repo = new SettingsRepository({ indexedDB: factory });
+    try {
+      assert.equal((await repo.initialize()).status.reason, 'unsupported-version');
+      assert.throws(() => validateSettings(future), SettingsVersionError);
+      await repo.update(settings => { settings.localDefinitions = local(); });
+      assert.deepEqual(await stored(factory), future);
+    } finally { await repo.close(); }
+  }
 });

@@ -2,7 +2,7 @@ import { exportSettingsBackup } from '../settings-recovery.js';
 import { mixerURL } from '../mixer-address.js';
 import { validateSettings, settingsStatusText } from '../settings.js';
 import { restoreDialogFocus } from './dialog-owner.js';
-import { projectLiveState } from './live-provider.js';
+import { projectLiveState, projectReceivedSourceCatalog } from './live-provider.js';
 import { projectGroupNavigation, resolveGroupNavigation } from './group-navigation.js';
 
 export function createLiveConnectionUI(root, { levels = false, pan = false, dialogOwner } = {}) {
@@ -29,7 +29,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   const actions = make('div'); actions.className = 'mm-dialog-actions'; actions.append(newRig, saveRig, exportSettings);
   const feedback = make('p'); feedback.className = 'mm-caption'; feedback.setAttribute('role', 'status');
   settings.setAttribute('role', 'status');
-  const local = make('p', 'Rigs and groups stay in this browser on this device and site address. They are not mixer settings or shared with other devices. Select or save a rig to edit its groups, even offline. Saving does not connect.'); local.className = 'mm-caption';
+  const local = make('p', 'Rigs and groups stay in this browser on this device and site address. They are not mixer settings or shared with other devices. Without a saved rig, Edit Groups uses one group set kept on this device; a selected saved rig keeps its own groups. Both work offline. Saving does not connect.'); local.className = 'mm-caption';
   form.append(profileLabel, nameLabel, addressLabel, known, actions, feedback, settings, local, connect, note);
   $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';
   const closeButton = $('.mm-dialog-head button'); closeButton.disabled = false;
@@ -82,24 +82,38 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
 }
 
 export function mountLiveController({ session, repository, view, ui, document = globalThis.document, window = globalThis.window, createID = () => globalThis.crypto.randomUUID(), downloadBackup }) {
-  let touched = false, destroyed = false, profiles = [], selectedAux = null;
+  let touched = false, destroyed = false, profiles = [], localDefinitions = null, selectedAux = null;
   let setupIntent = 0, setupPending = Promise.resolve(), setupSaving = false;
   const feedback = message => { if (ui.feedback) ui.feedback.textContent = message; };
   const setupButtons = () => { if (ui.exportSettings) ui.exportSettings.disabled = !settingsReady; if (ui.newRig) ui.newRig.disabled = !settingsReady || profiles.length >= 32; if (ui.saveRig) ui.saveRig.disabled = !settingsReady || setupSaving; };
   const refreshPicker = () => { ui.profiles(profiles, boundProfileId || ''); setupButtons(); };
   let boundProfileId = null, contextRevision = 0, settingsReady = false, previousPhase = 'idle';
-  let projected = { selectedAux: null, sources: [] }, requestedNavigation = null, restoreCandidate = null;
+  let projected = { selectedAux: null, sources: [] }, requestedNavigation = null, restoreCandidate = null, receivedCatalog = [];
   let navIntent = 0, navPending = Promise.resolve(), navigationMessage = '', previousExpanded = null, previousControl = null;
   const profile = () => profiles.find(profile => profile.id === boundProfileId);
+  // Group definitions belong to an explicitly bound saved rig, otherwise to the
+  // single device-local set. A manual address never binds or infers a saved rig;
+  // the local set's stable ID is created lazily by its first saved group.
+  const owner = () => boundProfileId ? { kind: 'profile', id: boundProfileId } : settingsReady ? { kind: 'local', id: localDefinitions?.id ?? null } : null;
+  const definition = () => boundProfileId ? profile() : localDefinitions;
   const localNavigation = () => {
-    const value = resolveGroupNavigation(profile()?.groups || [], requestedNavigation);
-    return { mixId: selectedAux === null ? null : `a.${selectedAux}`, view: value.view, expandedGroupId: value.expandedGroupId };
+    const value = resolveGroupNavigation(definition()?.groups || [], requestedNavigation);
+    // Device-local definitions have no rig identity, so they never remember an AUX.
+    return { mixId: selectedAux === null || !boundProfileId ? null : `a.${selectedAux}`, view: value.view, expandedGroupId: value.expandedGroupId };
   };
   const contextListeners = new Set();
-  const context = () => ({ profileId: boundProfileId, revision: contextRevision, ready: settingsReady, selectedAux, expandedGroupId: selectedAux === null ? null : localNavigation().expandedGroupId,
-    sources: (projected.sources || []).map(source => ({ sourceId: source.sourceId, name: source.name })) });
+  const names = rows => rows.map(source => ({ sourceId: source.sourceId, name: source.name }));
+  const context = () => ({ profileId: boundProfileId, owner: owner(), ownerName: profile()?.name ?? null, revision: contextRevision, ready: settingsReady, selectedAux, expandedGroupId: selectedAux === null ? null : localNavigation().expandedGroupId,
+    sources: names(projected.sources || []),
+    // With no AUX selected (All Mixes), the editor may offer every source received on any available AUX.
+    catalog: selectedAux === null ? names(receivedCatalog) : names(projected.sources || []) });
   let groupsSignature = '';
-  const emitContext = () => { session.bindGroupProfile?.(boundProfileId); groupsSignature = JSON.stringify([boundProfileId, profile()?.groups]); for (const listener of contextListeners) listener(context()); };
+  const bindOwner = () => {
+    const value = owner();
+    if (session.bindGroupOwner) session.bindGroupOwner(value?.id ? value : null);
+    else session.bindGroupProfile?.(boundProfileId);
+  };
+  const emitContext = () => { bindOwner(); groupsSignature = JSON.stringify([owner(), definition()?.groups]); for (const listener of contextListeners) listener(context()); };
   const invalidateDraft = (detach = false) => { session.invalidateLevelContext?.(); contextRevision++; if (detach) boundProfileId = null; emitContext(); };
   const handlers = [];
   const listen = (target, type, callback) => { target.addEventListener(type, callback); handlers.push([target, type, callback]); };
@@ -116,7 +130,8 @@ export function mountLiveController({ session, repository, view, ui, document = 
     const base = projectLiveState(snapshot, selectedAux);
     if (selectedAux !== base.selectedAux) { contextRevision++; session.invalidateLevelContext?.(); if (snapshot.control) base.control = session.snapshot().control; }
     selectedAux = base.selectedAux; projected = base;
-    const model = projectGroupNavigation(base, profile(), requestedNavigation);
+    if (kind !== 'meters') receivedCatalog = selectedAux === null && isActive(snapshot.phase) ? projectReceivedSourceCatalog(snapshot) : [];
+    const model = projectGroupNavigation(base, definition(), requestedNavigation);
     if (previousExpanded !== model.expandedGroupId) contextRevision++;
     previousExpanded = model.expandedGroupId;
     if (model.notice || navigationMessage) model.status += ` · ${[model.notice, navigationMessage].filter(Boolean).join(' · ')}`;
@@ -132,13 +147,13 @@ export function mountLiveController({ session, repository, view, ui, document = 
   }
   const unsubscribe = session.subscribe(render);
   function invalidate(detach = false) { setupIntent++; touched = true; selectedAux = null; restoreCandidate = requestedNavigation = null; navIntent++; navigationMessage = ''; invalidateDraft(detach); session.disconnect(); }
-  listen(ui.address, 'input', () => { invalidate(true); ui.profile.value = ''; ui.address.setCustomValidity(''); feedback('Manual address — choose or save a local rig to edit groups.'); });
+  listen(ui.address, 'input', () => { invalidate(true); ui.profile.value = ''; ui.address.setCustomValidity(''); feedback('Manual address — not bound to a saved rig. Edit Groups uses the groups kept on this device.'); });
   listen(ui.profile, 'change', () => {
     invalidate(true);
     const rig = profiles.find(profile => profile.id === ui.profile.value);
     if (rig) { ui.address.value = rig.address; boundProfileId = rig.id; }
     if (ui.name) ui.name.value = rig?.name || '';
-    feedback(rig ? 'Local rig selected. Edit Groups is available offline. Connect is a separate action.' : 'Manual address — not bound to a saved rig.');
+    feedback(rig ? 'Local rig selected. Edit Groups is available offline. Connect is a separate action.' : 'Manual address — not bound to a saved rig. Edit Groups uses the groups kept on this device.');
     refreshPicker(); render(); emitContext();
     ui.address.setCustomValidity('');
   });
@@ -184,7 +199,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     try { pending = repository.update(guarded); } catch (error) { pending = Promise.reject(error); }
     setupPending = Promise.resolve(pending).then(result => {
       if (destroyed || setupIntent !== intent) return;
-      profiles = result.settings.profiles; boundProfileId = id; ui.address.value = address; ui.name.value = name;
+      profiles = result.settings.profiles; localDefinitions = result.settings.localDefinitions; boundProfileId = id; ui.address.value = address; ui.name.value = name;
       refreshPicker(); emitContext(); render();
       feedback(result.status.mode === 'persistent' && result.status.state === 'saved'
         ? 'Rig saved on this device. Edit Groups is ready; Connect remains a separate action.'
@@ -213,30 +228,35 @@ export function mountLiveController({ session, repository, view, ui, document = 
   const unsubscribeSettings = repository.subscribe?.(({ settings, status }) => {
     if (status) ui.settings.textContent = settingsStatusText(status);
     if (!settingsReady || destroyed) return;
-    profiles = settings.profiles; refreshPicker(); view.preferences(settings.preferences);
-    if (JSON.stringify([boundProfileId, profile()?.groups]) !== groupsSignature) session.invalidateLevelContext?.();
+    profiles = settings.profiles; localDefinitions = settings.localDefinitions; refreshPicker(); view.preferences(settings.preferences);
+    if (JSON.stringify([owner(), definition()?.groups]) !== groupsSignature) session.invalidateLevelContext?.();
     if (boundProfileId && (!profile() || profile().address !== ui.address.value.trim())) { invalidate(true); refreshPicker(); }
+    // A deliberately deleted group is not an unavailable saved preference.
+    if (requestedNavigation?.expandedGroupId && !definition()?.groups.some(group => group.id === requestedNavigation.expandedGroupId)) requestedNavigation = { ...requestedNavigation, expandedGroupId: null };
     render();
   }) || (() => {});
+  const sameOwner = token => token.profileId === boundProfileId && JSON.stringify(token.owner) === JSON.stringify(owner());
   function persistNavigation() {
-    if (!settingsReady || !profile() || typeof repository.update !== 'function') return;
-    const token = { intent: ++navIntent, profileId: boundProfileId, revision: contextRevision }, navigation = localNavigation();
+    const current = owner();
+    if (!settingsReady || !definition() || !current?.id || typeof repository.update !== 'function') return;
+    const token = { intent: ++navIntent, profileId: boundProfileId, owner: current, revision: contextRevision }, navigation = localNavigation();
     navigationMessage = 'Saving view on this device…';
     const change = settings => {
-      if (destroyed || token.intent !== navIntent || token.profileId !== boundProfileId || token.revision !== contextRevision) throw Error('View context changed; navigation was not applied.');
-      const rig = settings.profiles.find(profile => profile.id === token.profileId);
-      if (!rig) throw Error('Local rig is unavailable.');
+      if (destroyed || token.intent !== navIntent || !sameOwner(token) || token.revision !== contextRevision) throw Error('View context changed; navigation was not applied.');
+      const rig = token.owner.kind === 'profile' ? settings.profiles.find(profile => profile.id === token.owner.id)
+        : settings.localDefinitions?.id === token.owner.id ? settings.localDefinitions : null;
+      if (!rig) throw Error('Local group definitions are unavailable.');
       if (navigation.expandedGroupId && !rig.groups.some(group => group.id === navigation.expandedGroupId)) throw Error('Group changed before saving the view.');
       rig.navigation = structuredClone(navigation);
     };
     let pending;
     try { pending = repository.update(change); } catch (error) { pending = Promise.reject(error); }
     navPending = Promise.resolve(pending).then(result => {
-      if (destroyed || token.intent !== navIntent || token.profileId !== boundProfileId || token.revision !== contextRevision) return;
+      if (destroyed || token.intent !== navIntent || !sameOwner(token) || token.revision !== contextRevision) return;
       navigationMessage = result.status.mode === 'persistent' && result.status.state === 'saved' ? 'View saved on this device.' : 'View is temporary; not saved on this device.';
       render();
     }).catch(() => {
-      if (!destroyed && token.intent === navIntent && token.profileId === boundProfileId && token.revision === contextRevision) { navigationMessage = 'View is temporary; not saved on this device.'; render(); }
+      if (!destroyed && token.intent === navIntent && sameOwner(token) && token.revision === contextRevision) { navigationMessage = 'View is temporary; not saved on this device.'; render(); }
     });
   }
   function chooseNavigation(next) {
@@ -246,12 +266,12 @@ export function mountLiveController({ session, repository, view, ui, document = 
   const ready = repository.initialize().then(result => {
     if (destroyed) return;
     const { settings, status } = repository.snapshot?.() || result;
-    profiles = settings.profiles; settingsReady = true;
+    profiles = settings.profiles; localDefinitions = settings.localDefinitions; settingsReady = true;
     const rig = !touched && !isActive(session.snapshot().phase) ? profiles.find(profile => profile.id === settings.selectedProfileId) : null;
     ui.profiles(profiles, rig?.id || '');
     if (rig) { ui.address.value = rig.address; boundProfileId = rig.id; }
     if (ui.name && !touched) ui.name.value = rig?.name || '';
-    feedback(rig ? 'Local rig selected. Edit Groups is available offline. Connect is a separate action.' : 'Manual address — not bound to a saved rig.');
+    feedback(rig ? 'Local rig selected. Edit Groups is available offline. Connect is a separate action.' : 'Manual address — not bound to a saved rig. Edit Groups uses the groups kept on this device.');
     refreshPicker(); render(); emitContext();
     view.preferences(settings.preferences);
     ui.settings.textContent = settingsStatusText(status);
@@ -266,25 +286,31 @@ export function mountLiveController({ session, repository, view, ui, document = 
       const snapshot = session.snapshot(), candidate = projectLiveState(snapshot, index);
       if (candidate.selectedAux === null || selectedAux === candidate.selectedAux) return false;
       selectedAux = candidate.selectedAux;
-      const saved = profile()?.navigation, legacy = /^a\.([0-9])$/.exec(saved?.mixId || '');
+      if (owner()?.kind === 'local') {
+        // The device-local set has no AUX identity: restore its last view on any AUX.
+        const saved = definition()?.navigation;
+        chooseNavigation(saved ? { mixId: null, view: saved.view, expandedGroupId: saved.expandedGroupId } : null);
+        return true;
+      }
+      const saved = boundProfileId ? profile()?.navigation : null, legacy = /^a\.([0-9])$/.exec(saved?.mixId || '');
       const sameMix = legacy && projectLiveState(snapshot, Number(legacy[1])).selectedAux === selectedAux;
       chooseNavigation(sameMix ? structuredClone(saved) : null);
       return true;
     },
     toggleGroup(id) {
-      if (selectedAux === null || !profile()?.groups.some(group => group.id === id)) return false;
+      if (selectedAux === null || !definition()?.groups.some(group => group.id === id)) return false;
       const current = localNavigation();
       chooseNavigation({ view: 'groups', expandedGroupId: current.view === 'groups' && current.expandedGroupId === id ? null : id });
       return true;
     },
     allChannels() { if (selectedAux !== null && localNavigation().view !== 'channels') chooseNavigation({ view: 'channels', expandedGroupId: null }); },
-    overview() { selectedAux = null; chooseNavigation({ view: profile()?.groups.length ? 'groups' : 'channels', expandedGroupId: null }); },
+    overview() { selectedAux = null; chooseNavigation({ view: definition()?.groups.length ? 'groups' : 'channels', expandedGroupId: null }); },
     selectLevel(target) {
       if (target.kind === 'send' && target.auxIndex !== selectedAux) { session.disarmLevel?.(); return false; }
       return session.selectLevelTarget?.(target);
     },
     selectGroupLevel(groupId) {
-      if (selectedAux === null || !profile()?.groups.some(group => group.id === groupId)) { session.disarmLevel?.(); return false; }
+      if (selectedAux === null || !definition()?.groups.some(group => group.id === groupId)) { session.disarmLevel?.(); return false; }
       return session.selectGroupTarget?.(groupId, selectedAux);
     },
     toggleLevel() { if (session.snapshot().control?.armed) session.disarmLevel(); else session.armLevel?.(); },

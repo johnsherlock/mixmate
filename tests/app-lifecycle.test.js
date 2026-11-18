@@ -340,7 +340,7 @@ test('waiting and verified update notices never reload, activate a worker or int
 
 
 function rigFixture() {
-  return { version: 1, selectedProfileId: 'first-rig', preferences: { orientation: 'portrait', showMeters: false }, profiles: [
+  return { version: 2, selectedProfileId: 'first-rig', localDefinitions: null, preferences: { orientation: 'portrait', showMeters: false }, profiles: [
     { id: 'first-rig', name: 'Rehearsal', address: '192.168.0.60', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
     { id: 'second-rig', name: 'Venue', address: '192.168.1.60', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
   ] };
@@ -667,6 +667,29 @@ test('export/import roundtrip preserves ordered local definitions and confirms b
   assert.deepEqual(reopened.repository().snapshot().settings, replacement);
   assert.equal(reopened.element('address').value, '10.1.2.60');
   assert.equal(reopened.sockets.length, 0); await reopened.close();
+});
+
+test('F04-S05 version-1 backups import as version 2; exports carry device-local groups and roundtrip exactly', async () => {
+  const factory = new IDBFactory(); await seedRigs(factory);
+  const view = app({ indexedDB: factory }); await view.settingsReady();
+  const { localDefinitions, ...legacy } = { ...backupFixture(), version: 1 };
+  assert.equal(localDefinitions, null);
+  chooseBackup(view, JSON.stringify(legacy)); await view.recoveryIdle();
+  assert.equal(view.element('settings-preview').hidden, false);
+  assert.match(view.element('settings-preview-text').textContent, /2 rigs · 2 groups\nSelected rig: .*\nDevice-local groups: 0/);
+  view.element('confirm-settings').emit('click'); await view.recoveryIdle();
+  assert.deepEqual(view.repository().snapshot().settings, backupFixture());
+  assert.match(view.element('recovery-feedback').textContent, /imported and saved/);
+  const withLocal = backupFixture();
+  withLocal.localDefinitions = { id: 'device-set', groups: [{ id: 'local-band', name: 'Band', members: ['i.3', 'i.1'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: 'local-band' } };
+  chooseBackup(view, settingsBackupText(withLocal)); await view.recoveryIdle();
+  assert.match(view.element('settings-preview-text').textContent, /2 rigs · 3 groups[\s\S]*Device-local groups: 1/);
+  view.element('confirm-settings').emit('click'); await view.recoveryIdle();
+  view.element('export-settings').emit('click');
+  const exported = JSON.parse(view.downloads.at(-1));
+  assert.equal(exported.version, 2); assert.deepEqual(exported, withLocal);
+  assert.deepEqual(parseSettingsBackup(view.downloads.at(-1)), withLocal);
+  assert.equal(view.sockets.length, 0); await view.close();
 });
 
 test('cancelled import/reset previews leave local settings and a live fake mixer untouched', async () => {

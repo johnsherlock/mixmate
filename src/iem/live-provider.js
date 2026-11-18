@@ -146,3 +146,17 @@ export function projectLiveState(session, selectedAux = null) {
   });
   return result;
 }
+
+// Editor catalog only: the union of sources whose sends were received on any
+// currently browsable AUX output. It grants no control authority, and no name-
+// only, meter-only or matrix/unknown-mode output contributes a source.
+export function projectReceivedSourceCatalog(session) {
+  const base = projectLiveState(session, null), catalog = new Map();
+  for (const mix of base.mixes) {
+    if (!mix.browsable) continue;
+    for (const source of projectLiveState(session, mix.auxIndex).sources)
+      if (!catalog.has(source.sourceId)) catalog.set(source.sourceId, { sourceId: source.sourceId, name: source.name });
+  }
+  const families = ['i', 'l', 'p', 'f'];
+  return [...catalog.values()].sort((a, b) => families.indexOf(a.sourceId[0]) - families.indexOf(b.sourceId[0]) || Number(a.sourceId.slice(2)) - Number(b.sourceId.slice(2)));
+}
