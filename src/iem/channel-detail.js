@@ -29,7 +29,7 @@ export function mountChannelDetail({ root, dialogOwner, onOpen = () => {} }) {
       text.textContent = channelDetail(model); $('#mm-dialog-title').textContent = `${model.name} · Details`;
     },
     open(model) {
-      onOpen();
+      model = onOpen(model) || model;
       const token = dialogOwner.claim('channel-detail', reason => close(token, reason));
       if (!token) return;
       lease = token; activeId = model.id; focusBefore = doc.activeElement;

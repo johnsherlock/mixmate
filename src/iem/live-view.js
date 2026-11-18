@@ -228,7 +228,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         strip.state.textContent = chosen ? control.reason || control.status : model.stateText;
         strip.article.dataset.actionable = String(!eligible || chosen && (control?.pending || !control?.eligible));
-        detailModels.set(detailButton, { ...model, requestedDetail: strip.state.textContent });
+        const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
+        if (chosen && control?.requestedDiagnostic?.length) strip.requestedSignature = diagnostic;
+        const inactive = !chosen && control?.requestedDiagnostic?.length && strip.requestedSignature === diagnostic;
+        detailModels.set(detailButton, { ...model, requestedDetail: inactive ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')} · ${control.status}` : strip.state.textContent });
         continue;
       }
       (strip.panReadout || strip.pan).textContent = model.panText ?? 'Pan unavailable';
@@ -263,7 +266,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
       if (preview?.input !== strip.input) strip.input.value = isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested ? String(control.requestedValue) : known ? String(model.position) : '0';
       strip.article.dataset.actionable = String(strip.input.disabled || isSelected && (control?.pending || !control?.eligible));
-      detailModels.set(detailButton, { ...model, requestedDetail: `${strip.state.textContent}${isSelected ? ' · ' + control.status : ''}` });
+      const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
+      if ((isSelected || requested) && control?.requestedDiagnostic?.length) strip.requestedSignature = diagnostic;
+      const inactive = !isSelected && control?.requestedDiagnostic?.length && strip.requestedSignature === diagnostic;
+      detailModels.set(detailButton, { ...model, requestedDetail: inactive ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')} · ${control.status}` : `${strip.state.textContent}${isSelected ? ' · ' + control.status : ''}` });
       updateMeter(strip, model);
     }
   }
@@ -330,6 +336,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   root.addEventListener('click', click);
   return {
     render, renderMeters,
+    detailModel(id) {
+      for (const strip of [...sourceStrips.values(), ...pinnedStrips.values(), ...overviewStrips.values()]) {
+        const model = detailModels.get(strip.article.querySelector('.mm-detail-button'));
+        if (model?.id === id) return model;
+      }
+      return null;
+    },
     groupEditing(enabled) {
       groupEditing = enabled;
       root.dataset.groupEditing = String(enabled);
