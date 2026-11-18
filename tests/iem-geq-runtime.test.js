@@ -35,16 +35,27 @@ function fixture(options = {}, factory = createAuxControlSession) {
   for (const socket of sockets) { socket.readyState = 1; socket.onopen?.(); }
   const [writer, receiver] = sockets;
   (receiver ?? writer).receive(baseFrame(options));
-  return { session, sockets, writer, receiver, jobs,
-    writes: () => writer.sent.filter(message => message.startsWith('3:::SETD')),
+  // Fake desk modelled on observed 3.0.7865 behaviour: only CHANGED band values
+  // echo, rounded to 10 decimals, to the receive-only companion only.
+  const desk = new Map(baseFrame(options).slice(4).split('\n').map(line => /^SETD\^(a\.\d\.eq\.peak\.\d+)\^(.+)$/.exec(line)).filter(Boolean).map(m => [m[1], Number(m[2])]));
+  let echoed = 0;
+  const writes = () => writer.sent.filter(message => message.startsWith('3:::SETD'));
+  return { session, sockets, writer, receiver, jobs, desk, writes,
+    deskEcho() {
+      const all = writes(), lines = [];
+      for (const message of all.slice(echoed)) { const [, path, raw] = message.split('^'), value = Number(raw); if (desk.get(path) !== value) { desk.set(path, value); lines.push(`SETD^${path}^${Number(value.toFixed(10))}`); } }
+      echoed = all.length; if (lines.length) receiver.receive('3:::' + lines.join('\n')); return lines.length;
+    },
     advance(ms) { time += ms; for (const [id, job] of [...jobs]) if (job.at <= time) { jobs.delete(id); job.fn(); } } };
 }
 const control = app => app.session.snapshot().control;
+const bandOf = message => message.split('^')[1];
+const pathsOf = list => list.map(bandOf);
 function drawFrom(app, change) {
   const draw = control(app).eqCoordinate.map(auxEqPositionToDb); change(draw); return requestedDrawSamples(draw);
 }
 
-test('linked pair dispatches exactly 62 typed band peaks; mono 31; untouched drawn bands keep exact received coordinates', () => {
+test('sparse dispatch: only changed band peaks are written (both linked sides); full 62/31 order when every band changes', () => {
   const app = fixture();
   assert.equal(app.session.canEditEqTarget(0), true); assert.equal(app.session.canEditEqTarget(1), true);
   assert.equal(app.session.selectEqTarget(0), true);
@@ -53,17 +64,19 @@ test('linked pair dispatches exactly 62 typed band peaks; mono 31; untouched dra
   assert.equal(values.length, 31); assert.equal(values[5], auxEqDbToPosition(6)); assert.ok(values.every((value, band) => band === 5 || value === 0.5));
   assert.equal(app.writes().length, 0, 'preview never writes');
   assert.equal(app.session.commitEqGesture(token), true);
-  const writes = app.writes(); assert.equal(writes.length, 62);
-  assert.deepEqual(writes.map(message => message.split('^')[1]), [...Array(31).keys()].map(band => `a.0.eq.peak.${band}`).concat([...Array(31).keys()].map(band => `a.1.eq.peak.${band}`)));
-  assert.ok(writes.every(message => GEQ_WRITE.test(message))); assert.equal(writes[5], `3:::SETD^a.0.eq.peak.5^${auxEqDbToPosition(6)}`); assert.equal(writes[36], writes[5].replace('a.0.', 'a.1.'));
-  assert.deepEqual(app.receiver.sent.filter(message => message.startsWith('3:::SETD')), [], 'companion never writes');
+  assert.deepEqual(app.writes(), [`3:::SETD^a.0.eq.peak.5^${auxEqDbToPosition(6)}`, `3:::SETD^a.1.eq.peak.5^${auxEqDbToPosition(6)}`]);
+  assert.equal(control(app).authorized, 2); assert.deepEqual(app.receiver.sent.filter(message => message.startsWith('3:::SETD')), [], 'companion never writes');
+  assert.equal(app.deskEcho(), 2); assert.equal(app.session.canEditEqTarget(0), true);
+  const all = app.session.beginEqGesture(); app.session.previewEqGesture(all, drawFrom(app, draw => { draw.fill(3); })); app.session.commitEqGesture(all);
+  const writes = app.writes().slice(2); assert.equal(writes.length, 62);
+  assert.deepEqual(pathsOf(writes), [...Array(31).keys()].map(band => `a.0.eq.peak.${band}`).concat([...Array(31).keys()].map(band => `a.1.eq.peak.${band}`)));
+  assert.ok(writes.every(message => GEQ_WRITE.test(message))); app.deskEcho();
   // Mono output with non-uniform received values: exact raw coordinates survive.
   app.session.selectEqTarget(2); const mono = app.session.beginEqGesture();
   assert.notEqual((auxEqPositionToDb(MONO(7)) + 15) / 30, MONO(7), 'fixture exercises a dB round-trip difference');
   app.session.previewEqGesture(mono, drawFrom(app, draw => { draw[3] = -4; }));
   assert.equal(app.session.commitEqGesture(mono), true);
-  const monoWrites = app.writes().slice(62); assert.equal(monoWrites.length, 31);
-  assert.equal(monoWrites[7], `3:::SETD^a.2.eq.peak.7^${MONO(7)}`); assert.equal(monoWrites[3], `3:::SETD^a.2.eq.peak.3^${auxEqDbToPosition(-4)}`);
+  assert.deepEqual(app.writes().slice(64), [`3:::SETD^a.2.eq.peak.3^${auxEqDbToPosition(-4)}`], 'untouched mono bands (incl. round-trip-sensitive band 7) are never sent');
   assert.ok(app.writer.sent.every(message => ['3:::INIT', '3:::ALIVE', '2::'].includes(message) || GEQ_WRITE.test(message)));
   app.session.disconnect(); assert.equal(app.session.snapshot().eq.size, 0);
 });
@@ -114,7 +127,7 @@ test('unequal or incomplete profiles stay read-only; bypass is displayed and nev
   const view = projectEqReadback(bypassed.session.snapshot(), 0); assert.equal(view.bypassed, true); assert.match(eqSideText(view.sides[0]), /BYPASSED on desk/);
   bypassed.session.selectEqTarget(0); assert.equal(bypassed.session.resetEqBands(), false, 'already flat: no-op');
   const token = bypassed.session.beginEqGesture(); bypassed.session.previewEqGesture(token, drawFrom(bypassed, draw => { draw[0] = 2; })); bypassed.session.commitEqGesture(token);
-  assert.equal(bypassed.writes().length, 62); assert.ok(bypassed.writes().every(message => !/bypass|hpf|preset/.test(message)));
+  assert.deepEqual(pathsOf(bypassed.writes()), ['a.0.eq.peak.0', 'a.1.eq.peak.0']); assert.ok(bypassed.writes().every(message => !/bypass|hpf|preset/.test(message)));
   for (const item of [app, bypassed]) item.session.disconnect();
 });
 
@@ -139,11 +152,11 @@ test('native band, away-and-back, bypass and processing changes cancel obsolete 
   const quiet = fixture(); quiet.session.selectEqTarget(0); const gesture = quiet.session.beginEqGesture();
   quiet.session.previewEqGesture(gesture, drawFrom(quiet, draw => { draw[2] = 2; }));
   quiet.receiver.receive('3:::SETD^a.0.eq.hpf.freq^0.1\nSETD^a.5.eq.hpf.freq^0.9\nSETD^a.2.eq.peak.0^0.1');
-  assert.equal(quiet.session.commitEqGesture(gesture), true); assert.equal(quiet.writes().length, 62);
+  assert.equal(quiet.session.commitEqGesture(gesture), true); assert.deepEqual(pathsOf(quiet.writes()), ['a.0.eq.peak.2', 'a.1.eq.peak.2']);
   for (const item of [app, quiet]) item.session.disconnect();
 });
 
-test('reentrant receipts stop the remainder; full 62-path touched closure must be received again; throwing send disconnects', () => {
+test('reentrant receipts stop the remainder; the full dispatched (62-path) closure must be received again; throwing send disconnects', () => {
   for (const [reentrant, expected] of [['3:::SETD^a.1.eq.peak.20^0.5', 10], ['3:::SETD^a.0.eq.peak.4^0.5', 5], ['3:::SETD^a.1.eq.bypass^0', 7]]) {
     const app = fixture(); app.session.selectEqTarget(0); const token = app.session.beginEqGesture();
     app.session.previewEqGesture(token, drawFrom(app, draw => { draw.fill(3); }));
@@ -178,12 +191,14 @@ test('bounded observation diagnostics keep requested and received distinct; no c
   app.session.disconnect();
 });
 
-test('scoped reset writes only the selected output band peaks to .5 (31 mono / 62 linked)', () => {
+test('scoped sparse reset writes only selected-output band peaks not already .5', () => {
   const app = fixture(); app.session.selectEqTarget(2); assert.equal(app.session.resetEqBands(), true);
   assert.deepEqual(app.writes(), [...Array(31).keys()].map(band => `3:::SETD^a.2.eq.peak.${band}^0.5`));
   const linked = fixture(); linked.receiver.receive('3:::SETD^a.0.eq.peak.0^0.6\nSETD^a.1.eq.peak.0^0.6');
+  linked.desk.set('a.0.eq.peak.0', 0.6); linked.desk.set('a.1.eq.peak.0', 0.6);
   linked.session.selectEqTarget(1); assert.equal(linked.session.resetEqBands(), true);
-  assert.equal(linked.writes().length, 62); assert.ok(linked.writes().every(message => /^3:::SETD\^a\.[01]\.eq\.peak\.\d+\^0\.5$/.test(message)));
+  assert.deepEqual(linked.writes(), ['3:::SETD^a.0.eq.peak.0^0.5', '3:::SETD^a.1.eq.peak.0^0.5']);
+  assert.equal(linked.deskEcho(), 2); assert.equal(linked.session.canEditEqTarget(1), true); assert.equal(linked.session.resetEqBands(), false, 'already flat: no-op');
   for (const item of [app, linked]) item.session.disconnect();
 });
 
@@ -214,12 +229,13 @@ test('EQ view: explicit open, visible approximation/bypass status, mutually excl
   assert.equal(gain.disabled, false); assert.equal(ui.find('[data-eq-point="1"]').disabled, false);
   press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 });
   assert.equal(ui.writes().length, 0, 'moving previews only');
-  press(cap, 'pointerup', { clientY: 60 }); assert.equal(ui.writes().length, 62);
+  press(cap, 'pointerup', { clientY: 60 }); const n = ui.writes().length;
+  assert.ok(n > 0 && n < 62 && n % 2 === 0, `sparse: ${n}`); assert.deepEqual(pathsOf(ui.writes()).slice(n / 2).map(path => path.replace('a.1.', 'a.0.')), pathsOf(ui.writes()).slice(0, n / 2));
   assert.ok(ui.writes().every(message => GEQ_WRITE.test(message)));
   // Draw mode disables point controls/handles; switching mid-gesture cancels without writes.
   press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 30 });
   ui.find('[data-eq-mode="draw"]').emit('click');
-  assert.equal(ui.eq.mode, 'draw'); assert.equal(ui.writes().length, 62);
+  assert.equal(ui.eq.mode, 'draw'); assert.equal(ui.writes().length, n);
   assert.equal(gain.disabled, true); assert.equal(ui.find('[data-eq-point="0"]').disabled, true);
   assert.equal(ui.find('[data-eq-handle="0"]').attributes.visibility, 'hidden');
   assert.equal(ui.find('[data-eq-mode="draw"]').attributes['aria-pressed'], 'true'); assert.equal(ui.find('[data-eq-mode="points"]').attributes['aria-pressed'], 'false');
@@ -245,7 +261,7 @@ test('EQ view: unequal readback disables controls; context change closes; reset 
   assert.equal(ui.document.activeElement, reset); assert.equal(ui.writes().length, 0);
   reset.emit('click'); ui.find('[data-eq-reset-cancel]').emit('click'); assert.equal(confirm.hidden, true); assert.equal(ui.writes().length, 0);
   reset.emit('click'); ui.find('[data-eq-reset-confirm]').emit('click');
-  assert.equal(confirm.hidden, true); assert.equal(ui.writes().length, 62); assert.ok(ui.writes().every(message => message.endsWith('^0.5')));
+  assert.equal(confirm.hidden, true); assert.deepEqual(ui.writes(), ['3:::SETD^a.0.eq.peak.7^0.5', '3:::SETD^a.1.eq.peak.7^0.5']);
   ui.context.revision++; for (const fn of ui.contexts) fn(ui.context); assert.equal(ui.eq.section.hidden, true);
   ui.eq.destroy(); ui.session.disconnect();
 });
@@ -258,12 +274,12 @@ test('EQ graph: background touch in points mode never begins; handle drag and dr
   const handle = ui.find('[data-eq-handle="1"]');
   press(handle.children[1], 'pointerdown', { clientX: 90, clientY: 94 }); press(svg, 'pointermove', { clientX: 70, clientY: 60 });
   assert.equal(ui.writes().length, 0); assert.equal(ui.find('[data-eq-point="1"]').attributes['aria-pressed'], 'true');
-  press(svg, 'pointerup', { clientX: 70, clientY: 60 }); assert.equal(ui.writes().length, 62);
-  for (const message of ui.writes()) ui.receiver.receive(message);
+  press(svg, 'pointerup', { clientX: 70, clientY: 60 }); const n = ui.writes().length; assert.ok(n > 0 && n < 62);
+  ui.deskEcho(); assert.equal(ui.find('[data-eq-param="gain"]').disabled, false, 'rounded changed-only echoes clear the basis');
   ui.find('[data-eq-mode="draw"]').emit('click'); assert.equal(svg.dataset.draw, 'true');
   press(svg, 'pointerdown', { clientX: 30, clientY: 50 }); press(svg, 'pointermove', { clientX: 130, clientY: 50 });
-  assert.equal(ui.writes().length, 62, 'drawing previews only');
-  press(svg, 'pointerup', { clientX: 130, clientY: 50 }); assert.equal(ui.writes().length, 124);
+  assert.equal(ui.writes().length, n, 'drawing previews only');
+  press(svg, 'pointerup', { clientX: 130, clientY: 50 }); assert.ok(ui.writes().length > n);
   assert.ok(ui.writes().every(message => GEQ_WRITE.test(message)));
   ui.eq.destroy(); ui.session.disconnect();
 });
@@ -277,19 +293,16 @@ test('points are a relative Δ: bands outside influence keep exact raw values; z
   token = app.session.beginEqGesture();
   const points = [{ x: auxEqCentreX(1000), gainDb: 3, q: 1 }, { x: 0.233, gainDb: 0, q: 0.5 }, { x: 0.85, gainDb: 0, q: 0.5 }];
   app.session.previewEqGesture(token, requestedPointSamples(points, basis)); assert.equal(app.session.commitEqGesture(token), true);
-  const writes = app.writes(); assert.equal(writes.length, 31);
-  let untouched = 0;
-  writes.forEach((message, band) => {
-    const bump = auxEqPointGain(points, auxEqCentreX([20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000][band]));
-    if (Math.abs(bump) < AUX_EQ_POINT_NEGLIGIBLE_DB) { untouched++; assert.equal(message, `3:::SETD^a.2.eq.peak.${band}^${MONO(band)}`, `band ${band} kept exactly`); }
-  });
-  assert.ok(untouched >= 20); assert.equal(writes[17], `3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(auxEqPositionToDb(MONO(17)) + 3)}`, 'Δ applies on top of the received −value, not around 0 dB');
+  const writes = app.writes(), centres = [20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000];
+  const influenced = centres.map((f, band) => band).filter(band => Math.abs(auxEqPointGain(points, auxEqCentreX(centres[band]))) >= AUX_EQ_POINT_NEGLIGIBLE_DB);
+  assert.deepEqual(pathsOf(writes), influenced.map(band => `a.2.eq.peak.${band}`), 'only influenced bands are sent; all others keep exact raw values by not being written');
+  assert.ok(influenced.length <= 11); assert.ok(writes.includes(`3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(auxEqPositionToDb(MONO(17)) + 3)}`), 'Δ applies on top of the received −value, not around 0 dB');
   // A received +14 dB band plus +3 dB Δ leaves the range: rejected whole, never clipped.
   app.receiver.receive('3:::' + writes.map(message => message.slice(4)).join('\n'));
   app.receiver.receive(`3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(14)}`);
   token = app.session.beginEqGesture();
   assert.equal(app.session.previewEqGesture(token, requestedPointSamples(points, control(app).eqCoordinate.map(auxEqPositionToDb))), null);
-  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 31);
+  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, writes.length);
   app.session.disconnect();
 });
 
@@ -302,14 +315,15 @@ test('EQ view: points adjust relative to a native edit made while open, then ret
   ui.receiver.receive('3:::SETD^a.0.eq.peak.26^0.2\nSETD^a.1.eq.peak.26^0.2'); // native −9 dB at 3.15 kHz while open
   const gain = ui.find('[data-eq-param="gain"]'), cap = gain.parentElement.querySelector('.mm-fader-hit');
   press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); press(cap, 'pointerup', { clientY: 60 });
-  const first = ui.writes(); assert.equal(first.length, 62);
-  assert.equal(first[26], '3:::SETD^a.0.eq.peak.26^0.2', 'native −9 dB band outside the point influence is preserved exactly');
-  assert.notEqual(first[3], '3:::SETD^a.0.eq.peak.3^0.5');
+  const first = ui.writes(), at = (list, path) => list.find(message => bandOf(message) === path);
+  assert.ok(first.length > 0 && first.length < 62);
+  assert.equal(at(first, 'a.0.eq.peak.26'), undefined, 'native −9 dB band outside the point influence is never overwritten');
+  assert.ok(at(first, 'a.0.eq.peak.3'));
   assert.equal(gain.value, '0'); assert.match(gain.closest('.mm-eq-param').querySelector('output').textContent, /Δ 0\.0 dB/);
   for (const message of first) ui.receiver.receive(message);
   press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); press(cap, 'pointerup', { clientY: 60 });
-  const second = ui.writes().slice(62); assert.equal(second.length, 62);
-  const firstDb = auxEqPositionToDb(Number(first[3].split('^')[2])), secondDb = auxEqPositionToDb(Number(second[3].split('^')[2]));
+  const second = ui.writes().slice(first.length); assert.ok(second.length > 0);
+  const firstDb = auxEqPositionToDb(Number(at(first, 'a.0.eq.peak.3').split('^')[2])), secondDb = auxEqPositionToDb(Number(at(second, 'a.0.eq.peak.3').split('^')[2]));
   assert.ok(Math.abs((secondDb - firstDb) - (firstDb - 0)) < 1e-9, 'the second gesture adds one fresh Δ on top of the new basis, not the previous bump twice');
   ui.find('[data-eq-mode="draw"]').emit('click'); assert.equal(ui.find('.mm-live-eq-mode-note').textContent, EQ_MODE_NOTES.draw); assert.match(EQ_MODE_NOTES.draw, /last requested curve if the desk has not echoed/);
   ui.eq.destroy(); ui.session.disconnect();
@@ -351,19 +365,19 @@ test('after an unechoed GEQ write, losing the chain never re-arms from stale rec
   for (const [name, loseChain] of Object.entries(sequences)) {
     const app = fixture(); app.session.selectEqTarget(0);
     let token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 4.9; })); app.session.commitEqGesture(token);
-    const first = app.writes(); assert.equal(first.length, 62); app.advance(2500); assert.equal(control(app).outcome, 'sent-unverified');
+    const first = app.writes(); assert.deepEqual(pathsOf(first), ['a.0.eq.peak.3', 'a.1.eq.peak.3']); app.advance(2500); assert.equal(control(app).outcome, 'sent-unverified');
     loseChain(app);
     assert.equal(app.session.canEditEqTarget(0), false, name); assert.equal(app.session.beginEqGesture(), null, name);
     if (control(app).selected?.kind === 'geq') assert.match(control(app).reason, /Waiting for the desk to report the last EQ change/, name);
-    assert.equal(app.session.resetEqBands(), false); assert.equal(app.writes().length, 62, `${name}: no stale band resent`);
+    assert.equal(app.session.resetEqBands(), false); assert.equal(app.writes().length, 2, `${name}: no stale band resent`);
     // Level controls on the same output are unaffected.
     app.session.selectLevelTarget({ kind: 'master', auxIndex: 0 }); assert.ok(app.session.beginLevelGesture(), `${name}: level unaffected`); app.session.cancelLevelGesture();
     app.session.selectEqTarget(0);
-    app.receiver.receive('3:::' + first.slice(0, 31).map(message => message.slice(4)).join('\n')); assert.equal(app.session.canEditEqTarget(0), false, `${name}: partial echo keeps waiting`);
-    app.receiver.receive('3:::' + first.slice(31).map(message => message.slice(4)).join('\n')); assert.equal(app.session.canEditEqTarget(0), true, `${name}: echo clears without Enable`);
+    app.receiver.receive('3:::' + first.slice(0, 1).map(message => message.slice(4)).join('\n')); assert.equal(app.session.canEditEqTarget(0), false, `${name}: partial echo keeps waiting`);
+    app.receiver.receive('3:::' + first.slice(1).map(message => message.slice(4)).join('\n')); assert.equal(app.session.canEditEqTarget(0), true, `${name}: echo clears without Enable`);
     token = app.session.beginEqGesture(); assert.equal(control(app).eqCoordinate[3], auxEqDbToPosition(4.9));
     app.session.previewEqGesture(token, drawFrom(app, draw => { draw[10] = 1; })); app.session.commitEqGesture(token);
-    const second = app.writes().slice(62); assert.equal(second[3], first[3], `${name}: untouched band keeps the echoed +4.9 dB`);
+    assert.deepEqual(pathsOf(app.writes().slice(2)), ['a.0.eq.peak.10', 'a.1.eq.peak.10'], `${name}: untouched band 3 keeps the echoed +4.9 dB and is not resent`);
     app.session.disconnect();
   }
   // An explicit reconnect also refreshes the basis.
@@ -372,6 +386,25 @@ test('after an unechoed GEQ write, losing the chain never re-arms from stale rec
   app.session.closeEq(); app.session.selectEqTarget(0); assert.equal(app.session.canEditEqTarget(0), false);
   app.session.connect('192.168.0.60'); for (const socket of app.sockets.slice(2)) { socket.readyState = 1; socket.onopen?.(); } app.sockets[3].receive(baseFrame());
   assert.equal(app.session.canEditEqTarget(0), true); app.session.disconnect();
+});
+
+test('desk-like rounded changed-only echoes clear sparse dispatch barriers; next gesture editable without reconnect; diagnostics count N/N', () => {
+  const app = fixture(); app.session.selectEqTarget(0);
+  let token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[4] = 0.1; draw[9] = -0.1; })); app.session.commitEqGesture(token);
+  assert.deepEqual(pathsOf(app.writes()), ['a.0.eq.peak.4', 'a.0.eq.peak.9', 'a.1.eq.peak.4', 'a.1.eq.peak.9']);
+  assert.equal(control(app).authorized, 4); assert.equal(control(app).dispatched, 4);
+  assert.equal(app.deskEcho(), 4, 'desk echoes the four changed paths, rounded');
+  assert.equal(app.session.snapshot().eq.get('a.0.eq.peak.4'), Number(auxEqDbToPosition(0.1).toFixed(10)), 'rounded receipt is actual, distinct from the request');
+  assert.match(control(app).status, /returned 4\/4 authorized/); assert.doesNotMatch(control(app).status, /Waiting for complete/);
+  token = app.session.beginEqGesture(); app.session.cancelEqGesture(); app.session.closeEq(); app.session.selectEqTarget(0);
+  assert.equal(app.session.canEditEqTarget(0), true, 'no reconnect needed'); token = app.session.beginEqGesture(); assert.ok(token);
+  assert.equal(control(app).eqCoordinate[4], Number(auxEqDbToPosition(0.1).toFixed(10)));
+  const tiny = control(app).eqCoordinate.map(auxEqPositionToDb); tiny[12] += 1e-9;
+  app.session.previewEqGesture(token, requestedDrawSamples(tiny)); app.session.commitEqGesture(token);
+  assert.equal(app.writes().length, 4, 'a change that would not survive 10-decimal rounding is not sent'); assert.equal(control(app).outcome, 'no-op');
+  token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[20] = 2; })); app.session.commitEqGesture(token);
+  app.advance(2500); assert.equal(control(app).outcome, 'sent-unverified'); assert.equal(control(app).authorized, 2);
+  app.session.disconnect();
 });
 
 test('live entry wires GEQ only through the private control session; demo stays isolated; pure lease stays unwired', async () => {

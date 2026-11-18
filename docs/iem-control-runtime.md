@@ -14,7 +14,7 @@ Each ordinal revalidates private writer/receiver openness/generation, typed topo
 
 ## AUX GEQ — F06-S04 (in review)
 
-The control session also owns a `geq` scope for the selected output's 31 band peaks (62 for an equal verified stereo pair), using the same writer/companion, reducer, release-only commit, observation window, no-op, reentrant-stop and touched-closure rules. The public API takes only an output index plus a points/draw requested-curve intent or a scoped reset; the private scope supplies every path and the dispatch allowlist maps the `geq` kind to the strict band serializer only. Received bypass and unmodelled output processing never write and cancel obsolete EQ intent when they change. See the [EQ contract § F06-S04](iem-aux-eq-contract.md#f06-s04-runtimeui-integration--2026-11-18-in-review); GEQ hardware behaviour is unverified.
+The control session also owns a `geq` scope for the selected output's 31 band peaks (62 for an equal verified stereo pair); each commit dispatches only the bands that differ from the gesture-start coordinate (sparse, |Δ| ≥ 1e-9 position units), using the same writer/companion, reducer, release-only commit, observation window, no-op, reentrant-stop and touched-closure rules. The public API takes only an output index plus a points/draw requested-curve intent or a scoped reset; the private scope supplies every path and the dispatch allowlist maps the `geq` kind to the strict band serializer only. Received bypass and unmodelled output processing never write and cancel obsolete EQ intent when they change. See the [EQ contract § F06-S04](iem-aux-eq-contract.md#f06-s04-runtimeui-integration--2026-11-18-in-review); GEQ hardware behaviour is unverified.
 
 ## Historical S03 runtime
 

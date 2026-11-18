@@ -259,7 +259,8 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (!active) return;
     // A points gesture with every Δ at 0 sends nothing; say so instead of silence.
     if (mode === 'points' && points.every(point => point.gainDb === 0)) hint = ZERO_DELTA_HINT;
-    if (commit) session.commitEqGesture(active.token);
+    // Sparse dispatch: a release whose bands all match the basis sends nothing.
+    if (commit) { session.commitEqGesture(active.token); if (!hint && session.snapshot().control?.outcome === 'no-op') hint = 'No change sent: every band already matches the current editable basis.'; }
     else session.cancelEqGesture();
     neutralize(); previewValues = null; render();
   }
