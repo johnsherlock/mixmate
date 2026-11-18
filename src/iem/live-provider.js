@@ -50,6 +50,14 @@ function relationshipText(state, id) {
   return { mono: 'Received mono', unknown: 'Stereo-link state unknown', conflict: 'Stereo-link metadata conflict', 'intrinsic-stereo': 'Stereo FX source · library profile' }[link.status] || 'Stereo unavailable';
 }
 const flagText = (state, path, yes, no) => state.has(path) ? (state.get(path) ? yes : no) : 'Unknown';
+function sendProcessing(state, prefix) {
+  return { mute: state.get(`${prefix}.mute`), post: state.get(`${prefix}.post`), postproc: state.get(`${prefix}.postproc`),
+    stateText: `Send mute: ${flagText(state, `${prefix}.mute`, 'Muted', 'Unmuted')} · ${flagText(state, `${prefix}.post`, 'Post-fader', 'Pre-fader')} · ${flagText(state, `${prefix}.postproc`, 'Post-processing', 'Pre-processing')}` };
+}
+function commonProcessing(sides) {
+  const same = ['mute', 'post', 'postproc'].every(field => sides.every(side => typeof side[field] === 'boolean' && side[field] === sides[0][field]));
+  return same ? sides[0].stateText : sides.map(side => `Output ${side.auxIndex + 1}: ${side.stateText}`).join(' · ');
+}
 function projectMeter(session, id, source = false, allowed = true) {
   const label = source ? 'Source post-fader VU · NOT AUX send' : 'Output post-fader VU';
   const channelCount = id.startsWith('f.') ? 2 : 1;
@@ -118,11 +126,11 @@ export function projectLiveState(session, selectedAux = null) {
     const prefix = `${source.sourceId}.aux.${selectedAux}`;
     const sides = selected.outputMembers.map(outputId => {
       const auxIndex = Number(outputId.slice(2)), path = `${source.sourceId}.aux.${auxIndex}`;
-      return { auxIndex, ...level(state.get(`${path}.value`)),
+      return { auxIndex, ...level(state.get(`${path}.value`)), ...sendProcessing(state, path),
         panPosition: state.get(`${path}.pan`), panText: state.has(`${path}.pan`) ? `Pan ${state.get(`${path}.pan`).toFixed(3)} · normalized` : 'Pan not received' };
     });
     return {
-      levelPeerIds: stereoRelationship(state, source.sourceId).members || [source.sourceId],
+      sides, levelPeerIds: stereoRelationship(state, source.sourceId).members || [source.sourceId],
       id: `${source.sourceId}@${selectedAux}`, sourceId: source.sourceId, auxIndex: selectedAux, themeIndex: result.selectedMix.themeIndex,
       name: observedName(state, `${source.sourceId}.name`, sourceLabel(source.sourceId)),
       detail: `${sourceLabel(source.sourceId)} · AUX ${selectedAux + 1} SEND · ${relationshipText(state, source.sourceId)}`,
@@ -132,7 +140,7 @@ export function projectLiveState(session, selectedAux = null) {
         levelText: commonLevel(sides), actualLevelText: sideActuals(sides),
         panText: sides.every(side => typeof side.panPosition === 'number' && side.panPosition === sides[0].panPosition) ? sides[0].panText : sides.map(side => `${side.auxIndex + 1}: ${side.panText}`).join(' · ') } : {}),
       meter: projectMeter(session, source.sourceId, true),
-      stateText: `Send mute: ${flagText(state, `${prefix}.mute`, 'Muted', 'Unmuted')} · ${flagText(state, `${prefix}.post`, 'Post-fader', 'Pre-fader')} · ${flagText(state, `${prefix}.postproc`, 'Post-processing', 'Pre-processing')}`,
+      stateText: sides.length === 2 ? commonProcessing(sides) : sides[0].stateText,
     };
   });
   return result;

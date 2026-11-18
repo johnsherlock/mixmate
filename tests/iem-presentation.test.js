@@ -506,3 +506,21 @@ test('group master caps survive AUX canonicalization while identical group IDs o
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
   }
 });
+
+
+test('logical sends retain both raw processing sides and expose different or unknown mute/pre/post state', () => {
+  const observations = new Map(parseIemStateFrame('3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^a.0.mix^0.4\nSETD^a.1.mix^0.4\nSETD^i.0.stereoIndex^-1\nSETD^i.0.aux.0.value^0.4\nSETD^i.0.aux.1.value^0.4\nSETD^i.0.aux.0.mute^0\nSETD^i.0.aux.0.post^0\nSETD^i.0.aux.0.postproc^1\nSETD^i.0.aux.1.mute^1\nSETD^i.0.aux.1.post^1\nSETD^i.0.aux.1.postproc^0').map(({ path, value }) => [path, value]));
+  const project = aux => projectLiveState({ observations }, aux).sources[0];
+  for (const aux of [0, 1]) {
+    const source = project(aux);
+    assert.deepEqual(source.sides.map(side => [side.mute, side.post, side.postproc]), [[false, false, true], [true, true, false]]);
+    assert.match(source.stateText, /Output 1: Send mute: Unmuted · Pre-fader · Post-processing.*Output 2: Send mute: Muted · Post-fader · Pre-processing/);
+  }
+  observations.delete('i.0.aux.1.post');
+  assert.equal(project(0).sides[1].post, undefined);
+  assert.match(project(0).stateText, /Output 2: Send mute: Muted · Unknown · Pre-processing/);
+  observations.set('i.0.aux.1.mute', false); observations.set('i.0.aux.1.post', false); observations.set('i.0.aux.1.postproc', true);
+  assert.equal(project(1).stateText, 'Send mute: Unmuted · Pre-fader · Post-processing');
+  observations.delete('i.0.aux.0.post'); observations.delete('i.0.aux.1.post');
+  assert.match(project(0).stateText, /Output 1: .*Unknown.*Output 2: .*Unknown/);
+});
