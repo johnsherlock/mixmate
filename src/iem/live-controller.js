@@ -47,7 +47,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
     if (layer.hidden) return;
     if (event.key === 'Escape' && connectionVisible && (!dialogOwner || dialogOwner.owns(dialogLease))) { event.preventDefault(); event.stopImmediatePropagation?.(); close(); return; }
     if (event.key === 'Tab') {
-      const nodes = [...layer.querySelectorAll('button,input,select')].filter(node => !node.disabled), first = nodes[0], last = nodes.at(-1);
+      const nodes = [...layer.querySelectorAll('button,input,select,summary')].filter(node => !node.disabled && !node.closest('[hidden]') && (!node.closest('details') || node.tagName === 'SUMMARY' || node.closest('details').open)), first = nodes[0], last = nodes.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }

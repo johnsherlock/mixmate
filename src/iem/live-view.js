@@ -1,3 +1,4 @@
+import { landscapeColumns, channelSlots } from './channel-layout.js';
 import { installFaderGestures } from './gestures.js';
 import { observeIemLayout } from './layout.js';
 import { startLocalClock } from './clock.js';
@@ -7,7 +8,7 @@ import { outputColour, overviewColour } from './theme.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false;
@@ -35,7 +36,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const shortcuts = $('.mm-group-switches');
   const shortcutNodes = new Map(), levelTargets = new WeakMap();
 
-  let control = null, preview = null, selectedAux = null;
+  let control = null, preview = null, selectedAux = null, bankModels = [];
+  const detailModels = new WeakMap();
+  function bankLayout() {
+    const columns = landscapeColumns(bank.clientWidth || bank.getBoundingClientRect().width);
+    bank.style.setProperty('--mm-bank-columns', String(columns));
+    const slots = channelSlots(bankModels, columns);
+    [...bank.children].forEach((node, index) => { node.style.gridColumn = root.dataset.orientation === 'landscape' ? String(slots[index]) : ''; });
+  }
   const groupInputs = new WeakMap(), levelPeerIds = new WeakMap();
   const isCoordinate = model => {
     const target = control?.selected;
@@ -94,11 +102,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     },
     onCommit(input, token) { preview = null; onCommitLevel(token, Number(input.value)); },
     onCancel(input, token) { preview = null; onCancelLevel(token); },
-  }), layout = observeIemLayout(root, gestures.sync), stopClock = startLocalClock($('.mm-clock'));
+  }), layout = observeIemLayout(root, () => { bankLayout(); gestures.sync(); }), stopClock = startLocalClock($('.mm-clock'));
   function createStrip(kind) {
     const article = element('article', `mm-strip ${kind === 'source' ? 'mm-channel' : kind === 'group' ? 'mm-group' : 'mm-master'}`);
     const head = element('div', 'mm-strip-head'), name = element('button', 'mm-strip-name'), description = element('span', 'mm-strip-detail');
     name.type = 'button'; name.disabled = true; head.append(name, description);
+    const detail = element('button', 'mm-detail-button', 'Details'); detail.type = 'button'; detail.dataset.channelDetail = ''; detail.setAttribute('aria-haspopup', 'dialog');
+    article.append(detail);
     const output = element('output', 'mm-value'), space = element('div', 'mm-fader-space'), scale = element('span', 'mm-ruler', 'POSITION');
     if (kind === 'group') {
       const badge = element('span', 'mm-group-master-label', 'GROUP MASTER');
@@ -166,10 +176,18 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       fill.style.setProperty('--level', `${meter.status === 'fresh' ? (meter.values[index]?.position || 0) * 100 : 0}%`);
     });
   }
+  function publishDetails() {
+    onDetailUpdate([...sourceStrips.values(), ...pinnedStrips.values(), ...overviewStrips.values()].filter(strip => strip.article.parentElement && !strip.article.parentElement.hidden && !(strip.article.parentElement === bank && sends.hidden)).map(strip => detailModels.get(strip.article.querySelector('.mm-detail-button'))));
+  }
   function renderMeters(model) {
     for (const [strips, models] of [[overviewStrips, model.mixes], [sourceStrips, model.sources], [pinnedStrips, model.selectedMix ? [model.selectedMix] : []]]) {
-      for (const item of models || []) { const strip = strips.get(strips === sourceStrips ? item.sourceId || item.renderKey || item.id : item.id); if (strip) updateMeter(strip, item); }
+      for (const item of models || []) { const strip = strips.get(strips === sourceStrips ? item.sourceId || item.renderKey || item.id : item.id); if (strip) {
+        updateMeter(strip, item);
+        const button = strip.article.querySelector('.mm-detail-button');
+        detailModels.set(button, { ...item, requestedDetail: detailModels.get(button)?.requestedDetail });
+      } }
     }
+    publishDetails();
   }
   function reconcile(container, strips, models, kind) {
     const key = model => strips === sourceStrips ? model.sourceId || model.renderKey || model.id : model.id;
@@ -182,6 +200,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (!strip) { strip = createStrip(model.kind === 'group' ? 'group' : kind); strips.set(key(model), strip); container.append(strip.article); }
       if (container.children[index] !== strip.article) container.insertBefore(strip.article, container.children[index] || null);
       strip.article.dataset.id = model.id;
+      const detailButton = strip.article.querySelector('.mm-detail-button');
+      detailModels.set(detailButton, model); detailButton.setAttribute('aria-label', `Details for ${model.name}`);
       if (model.auxIndex !== undefined) strip.article.style.setProperty('--mm-strip-color', outputColour(model.themeIndex ?? model.auxIndex));
       strip.name.textContent = model.name; strip.description.textContent = model.detail;
       strip.output.textContent = model.kind === 'group' ? '—' : model.levelText ?? '—';
@@ -207,6 +227,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         strip.output.textContent = eligible ? deltaText(chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0) : 'Δ —';
         strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         strip.state.textContent = chosen ? control.reason || control.status : model.stateText;
+        strip.article.dataset.actionable = String(!eligible || chosen && (control?.pending || !control?.eligible));
+        detailModels.set(detailButton, { ...model, requestedDetail: strip.state.textContent });
         continue;
       }
       (strip.panReadout || strip.pan).textContent = model.panText ?? 'Pan unavailable';
@@ -240,6 +262,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.output.setAttribute('title', model.actualLevelText || model.levelText || 'No received level');
       strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
       if (preview?.input !== strip.input) strip.input.value = isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested ? String(control.requestedValue) : known ? String(model.position) : '0';
+      strip.article.dataset.actionable = String(strip.input.disabled || isSelected && (control?.pending || !control?.eligible));
+      detailModels.set(detailButton, { ...model, requestedDetail: `${strip.state.textContent}${isSelected ? ' · ' + control.status : ''}` });
       updateMeter(strip, model);
     }
   }
@@ -269,7 +293,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? control ? 'Expanded group · relative Δ controls' : 'Expanded group · level unavailable' : control ? 'Local group masters · relative Δ controls' : 'Local group masters · level unavailable' : control ? 'All observed AUX sources · select a level to edit' : 'All observed AUX sources · read-only' : 'Logical mixes · individual received sides';
     grid.style.setProperty('--mm-overview-count', String(Math.max(1, model.mixes.length)));
     reconcile(grid, overviewStrips, model.mixes, 'master');
-    reconcile(bank, sourceStrips, model.sources || [], 'source');
+    bankModels = model.sources || [];
+    reconcile(bank, sourceStrips, bankModels, 'source');
     reconcile(pinned, pinnedStrips, model.selectedMix && model.showAuxMaster !== false ? [model.selectedMix] : [], 'master');
     grid.hidden = selected; sends.hidden = !selected;
     sends.className = `mm-sends-layout${model.expandedGroupId ? ' mm-no-master' : ''}`;
@@ -278,12 +303,15 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     empty.hidden = selected || model.mixes.length > 0;
     sourceEmpty.hidden = !selected || (model.sources || []).length > 0;
     sourceEmpty.textContent = model.view === 'groups' ? 'No local groups yet. Edit Groups to create one.' : 'No source sends received for this AUX yet.';
+    publishDetails();
     renderShortcuts(model, selected);
+    bankLayout();
     gestures.prepare();
   }
   function click(event) {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
+    if (detailModels.has(button)) { gestures.cancel(); onOpenDetail(detailModels.get(button)); return; }
     if (button.dataset.openPan !== undefined) { gestures.cancel(); onOpenPan({ sourceId: button.dataset.openPan, auxIndex: Number(button.dataset.panAux) }); }
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
     if (control && levelTargets.has(button)) { gestures.cancel(); onSelectLevel(levelTargets.get(button)); }

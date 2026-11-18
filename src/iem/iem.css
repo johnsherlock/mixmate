@@ -2557,3 +2557,29 @@ body {
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
+
+/* F04-S04: prototype channel surfaces; full readbacks remain in owned Details. */
+#mixmate-iem-concept[data-mode="live"] .mm-live-meter-legend,
+#mixmate-iem-concept[data-mode="live"] .mm-strip-detail,
+#mixmate-iem-concept[data-mode="live"] .mm-live-meter-caption,
+#mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state {display:none}
+#mixmate-iem-concept[data-mode="live"] .mm-strip {position:relative;padding-bottom:24px}
+#mixmate-iem-concept[data-mode="live"] .mm-detail-button {position:absolute;bottom:2px;right:3px;min-height:22px;height:22px;padding:1px 4px;font-size:10px;z-index:2}
+#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-pan-button {position:absolute;inset:auto auto 2px 3px;width:calc(100% - 58px);min-height:22px;height:22px;max-height:22px;margin:0;padding:1px 3px;clip:auto;clip-path:none;line-height:18px}
+#mixmate-iem-concept[data-mode="live"] .mm-pan-readout {display:none}
+#mixmate-iem-concept[data-mode="live"] .mm-pan-short {display:inline}
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state {position:static;width:auto;height:auto;min-height:16px;max-height:36px;margin:0;clip:auto;clip-path:none;white-space:normal;overflow:auto;flex:0 0 auto}
+#mixmate-iem-concept[data-mode="live"] .mm-channel .mm-strip-head {padding:3px 5px}
+#mixmate-iem-concept[data-mode="live"][data-orientation="landscape"] .mm-strip-scroll {display:grid;grid-auto-flow:column;grid-template-rows:minmax(0,1fr);grid-auto-columns:calc((100% - (var(--mm-bank-columns, 6) - 1)*7px)/var(--mm-bank-columns, 6));gap:7px}
+#mixmate-iem-concept[data-mode="live"][data-orientation="landscape"] .mm-strip-scroll > .mm-strip {min-width:0;max-width:none}
+#mixmate-iem-concept .mm-channel-detail-text {white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.55;margin:0}
+#mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls {display:flex;flex-direction:column;gap:8px}
+#mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls > .mm-pan-value {font-size:24px;text-align:center;margin:0;line-height:1.2}
+#mixmate-iem-concept[data-mode="live"] .mm-pan-details {font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+#mixmate-iem-concept[data-mode="live"] .mm-pan-details summary {cursor:pointer;min-height:24px;padding:3px 0;color:var(--mm-mix-color)}
+#mixmate-iem-concept[data-mode="live"] .mm-pan-details .mm-caption {margin:6px 0}
+#mixmate-iem-concept[data-mode="live"] .mm-pan-details .mm-pan-readbacks {display:block;font-size:12px}
+#mixmate-iem-concept[data-mode="live"] .mm-pan-status {margin:0}
+#mixmate-iem-concept[data-mode="live"] .mm-strip > span.mm-pan-button {display:none}
+#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-group-control-note {display:none}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan] {inset:auto auto 2px 3px;width:calc(100% - 58px);height:22px;min-height:22px;max-height:22px;line-height:18px;padding:1px 3px;font-size:10px}

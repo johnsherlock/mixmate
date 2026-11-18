@@ -308,15 +308,21 @@ test('selected armed level preview preserves cap/input/received readout across r
     const node = document.createElement('div'); node.className = name; root.append(node);
   }
   Object.assign(globalThis, { document, window: new Node(document), matchMedia: () => ({ matches: true }), innerHeight: 844, ResizeObserver: class { observe() {} disconnect() {} } });
-  let view, commits = 0, selectedByGesture = null;
+  let view, commits = 0, selectedByGesture = null, detailSnapshot = [];
   try {
     const target = { kind: 'send', auxIndex: 0, sourceId: 'i.0' }, token = Object.freeze({});
-    view = mountReadOnlyView(root, { canEditLevel: () => true, onSelectLevel: target => { selectedByGesture = target; }, onBeginLevel: () => token, onCommitLevel: () => commits++ });
+    view = mountReadOnlyView(root, { onDetailUpdate: models => { detailSnapshot = models; }, canEditLevel: () => true, onSelectLevel: target => { selectedByGesture = target; }, onBeginLevel: () => token, onCommitLevel: () => commits++ });
     const master = { id: 'a.0', auxIndex: 0, name: 'Master', position: 0.4 };
     const source = { id: 'i.0@0', sourceId: 'i.0', auxIndex: 0, name: '<img> Input', position: 0.4, levelText: '-20.0 dB' };
     const model = { status: 'Live', mixes: [master], selectedMix: master, selectedAux: 0, sources: [source], control: { selected: target, eligible: true, armed: false, pending: false, status: 'Off' } };
     view.render(model); const bank = root.querySelector('.mm-strip-scroll'), article = bank.children[0], input = article.querySelector('input'), cap = article.querySelector('.mm-fader-hit'), wrap = input.parentElement;
     assert.equal(input.disabled, false); assert.equal(article.dataset.levelSelected, 'true'); assert.equal(root.querySelector('.mm-level-enable'), undefined);
+    model.control.requestedValue = .7; view.render(model);
+    const requestedDetail = detailSnapshot.find(item => item.sourceId === 'i.0').requestedDetail;
+    assert.match(requestedDetail, /Requested 0.7/);
+    view.renderMeters(model);
+    assert.equal(detailSnapshot.find(item => item.sourceId === 'i.0').requestedDetail, requestedDetail, 'meter-only receipts retain requested diagnostics in detail');
+    delete model.control.requestedValue;
     model.control.selected = null; model.control.armed = true; model.control.gestureActive = true; view.render(model); assert.equal(input.disabled, false);
     const targetNode = { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null };
     const pointer = y => ({ target: targetNode, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });

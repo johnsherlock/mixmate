@@ -31,7 +31,9 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     const button = make('button', '', String(value)); button.type = 'button'; button.setAttribute('aria-label', `Apply normalized pan position ${value}`); presets.append(button); return button;
   });
   const status = make('p', 'mm-pan-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  content.append(description, readbacks, labels, previewLabel, input, presets, status);
+  const details = make('details', 'mm-pan-details'), summary = make('summary', '', 'Details');
+  details.append(summary, description, readbacks);
+  content.append(labels, previewLabel, input, presets, status, details);
   let lease = null, target = null, binding = null, focusBefore, gestures = null, preview = false, destroyed = false, boundListeners = [];
   const rows = new Map();
   const owns = token => !destroyed && lease === token && dialogOwner.owns(token);
@@ -53,7 +55,7 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     if (control?.selected && control.selected.kind !== 'pan') { closeFor(lease); return; }
     const actual = projectPanReadback(snapshot, target);
     const receivedName = snapshot.observations.get(`${target.sourceId}.name`) || sourceLabel(target.sourceId);
-    $('#mm-dialog-title').textContent = `AUX ${target.auxIndex + 1} · ${receivedName} · NORMALIZED PAN`;
+    $('#mm-dialog-title').textContent = `AUX ${target.auxIndex + 1} · ${receivedName} · Pan`;
     const selected = control?.selected?.kind === 'pan' && control.selected.sourceId === target.sourceId && control.selected.auxIndex === target.auxIndex;
     content.dataset.panKnown = String(Boolean(actual.values[0]?.known));
     const enabled = selected && control.eligible && !control.dispatching;
@@ -70,8 +72,9 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     }
     if (!preview) {
       const received = actual.values[0]; input.value = selected && typeof control?.requestedValue === 'number' ? String(control.requestedValue) : received.known ? String(received.value) : '0';
-      previewLabel.textContent = selected && typeof control?.expectedPan === 'number' ? `Requested wire position: ${control.expectedPan}; application unverified` : control?.requestedDiagnostic?.length ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}` : 'Requested wire position: —';
+      previewLabel.textContent = selected && typeof control?.expectedPan === 'number' ? `Requested ${control.expectedPan}` : control?.requestedDiagnostic?.length ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}` : `Received ${actual.values[0]?.known ? actual.values[0].value : '—'}`;
     }
+    status.hidden = Boolean(enabled && !control?.pending && !actual.reason && !control?.authorized);
     status.textContent = control?.pending ? control.status : actual.reason || (selected ? control.status : control?.status || 'Pan adjustment unavailable.');
     gestures?.sync();
   }
@@ -88,15 +91,15 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     focusBefore = document.activeElement;
     dialog.classList.remove('mm-group-dialog'); dialog.classList.add('mm-pan-dialog');
     const name = current.sources.find(source => source.sourceId === target.sourceId)?.name || sourceLabel(target.sourceId);
-    $('#mm-dialog-title').textContent = `AUX ${target.auxIndex + 1} · ${name} · NORMALIZED PAN`;
-    body.replaceChildren(content); layer.hidden = false;
+    $('#mm-dialog-title').textContent = `AUX ${target.auxIndex + 1} · ${name} · Pan`;
+    details.open = false; body.replaceChildren(content); layer.hidden = false;
     session.selectPanTarget(target);
     if (!owns(next)) return false;
     const begin = () => owns(next) ? session.beginPanGesture() : null;
     const update = (token, value) => {
       if (!owns(next)) return null;
       const wire = session.previewPanGesture(token, value);
-      if (wire !== null) { preview = true; previewLabel.textContent = `Preview wire position: ${wire.toFixed(3)}`; }
+      if (wire !== null) { preview = true; previewLabel.textContent = `Preview ${wire.toFixed(3)}`; }
       return wire;
     };
     gestures = installFaderGestures(content, {
