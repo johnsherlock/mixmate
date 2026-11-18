@@ -2549,3 +2549,11 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel[data-pan-browse="true"] .mm-live-meter-status{padding-inline-end:37px}
 
 #mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls[data-pan-known="false"] .mm-fader-hit{visibility:hidden}
+
+/* Logical mixes stay in one landscape row, including unresolved individual outputs. */
+#mixmate-iem-concept[data-orientation="landscape"] .mm-strip-grid {
+  grid-template-columns: repeat(var(--mm-overview-count, 5), minmax(120px, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}

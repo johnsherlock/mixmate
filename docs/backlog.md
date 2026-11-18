@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The reviewed closing handoff ends this batch; no downstream implementation is authorized. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The subsequent explicit UI-alignment batch authorizes F04-S03 → F04-S04 → F02-S04 sequentially; F04-S03 is implemented and independently fake-browser accepted, pending review/CI. No next implementation starts before confirmed merge. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -9,7 +9,7 @@ Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mo
 | [F01](features/F01.md) | Offline distribution and compatibility | 7 | Merged implementation checkpoint; physical F08 qualification open |
 | [F02](features/F02.md) | Device-local settings | 4 | S01–S03 merged; new S04 planned |
 | [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
-| [F04](features/F04.md) | Groups and navigation | 4 | S01–S02 merged; new S03–S04 planned |
+| [F04](features/F04.md) | Groups and navigation | 4 | S01–S02 merged; S03 implemented/browser accepted/pending review; S04 unstarted |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; pure GEQ unwired; S04 unstarted |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |

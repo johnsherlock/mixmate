@@ -194,3 +194,25 @@ test('a reopened repository restores an expanded group only after explicit Conne
     assert.equal(reopened.view.last.sources[2].unresolved, true);
   } finally { await reopened.close(); await repository.close(); }
 });
+
+test('legacy either-side preferences restore one logical identity and migrate only on explicit navigation', async () => {
+  for (const oldSide of [0, 1]) {
+    const settings = definitions(); settings.profiles[0].navigation = { mixId: `a.${oldSide}`, view: 'groups', expandedGroupId: 'empty' };
+    const app = await fixture({ settings });
+    try {
+      let writes = 0; const update = app.repository.update.bind(app.repository); app.repository.update = change => { writes++; return update(change); };
+      const socket = app.connect(state + '\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETS^a.0.name^DARA’S\nSETS^a.1.name^MIX');
+      assert.equal(app.view.last.selectedAux, 0); assert.equal(app.view.last.selectedMix.id, 'a.0');
+      assert.equal(app.view.last.selectedMix.name, 'DARA’S MIX'); assert.equal(app.view.last.expandedGroupId, 'empty');
+      assert.equal(writes, 0); assert.equal(app.repository.snapshot().settings.profiles[0].navigation.mixId, `a.${oldSide}`);
+      assert.equal(app.controller.selectAux(1), false);
+      socket.receive('3:::SETD^a.0.stereoIndex^-1\nSETD^a.1.stereoIndex^-1');
+      assert.equal(app.view.last.selectedAux, 0); assert.equal(writes, 0);
+      socket.receive('3:::SETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1');
+      assert.equal(app.view.last.selectedMix.id, 'a.0'); assert.equal(writes, 0);
+      app.controller.allChannels(); await app.controller.whenNavigationIdle();
+      assert.equal(writes, 1); assert.equal(app.repository.snapshot().settings.profiles[0].navigation.mixId, 'a.0');
+      assert.equal(app.repository.snapshot().settings.profiles[1].navigation.mixId, null);
+    } finally { await app.close(); }
+  }
+});

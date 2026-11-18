@@ -36,7 +36,20 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const shortcutNodes = new Map(), levelTargets = new WeakMap();
 
   let control = null, preview = null, selectedAux = null;
-  const groupInputs = new WeakMap();
+  const groupInputs = new WeakMap(), levelPeerIds = new WeakMap();
+  const isCoordinate = model => {
+    const target = control?.selected;
+    return target?.kind === 'send' && target.auxIndex === model.auxIndex && model.levelPeerIds?.includes(target.sourceId)
+      || target?.kind === 'master' && !model.sourceId && model.outputMembers?.includes(`a.${target.auxIndex}`);
+  };
+  function mirrorPreview(input, value) {
+    const ids = levelPeerIds.get(input);
+    if (!ids || !Number.isFinite(value)) return;
+    for (const strip of sourceStrips.values()) {
+      const target = levelTargets.get(strip.input);
+      if (target?.kind === 'send' && ids.includes(target.sourceId) && target.auxIndex === selectedAux && !strip.input.disabled) strip.input.value = String(value);
+    }
+  }
   const deltaText = value => `Δ ${value > 0 ? '+' : ''}${value.toFixed(2)} dB`;
   const selectedTarget = target => control?.selected && JSON.stringify(target) === JSON.stringify(control.selected);
   function renderShortcuts(model, selected) {
@@ -75,6 +88,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       const next = onPreviewLevel(token, value);
       const group = groupInputs.get(input);
       if (group && typeof next === 'number') { group.note.textContent = 'Gesture Δ · release to apply'; group.output.textContent = deltaText(next); group.output.setAttribute('title', `Relative delta ${next} dB; whole-group limit applied.`); }
+      if (preview?.input === input) preview.value = next;
+      mirrorPreview(input, next);
       return next;
     },
     onCommit(input, token) { preview = null; onCommitLevel(token, Number(input.value)); },
@@ -135,10 +150,12 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     const meter = model.meter || { status: 'missing', channelCount: 1, label: 'Meter', values: [], provenance: '' };
     // State frames may arrive alongside every VU packet. Existing fresh meter
     // fills/text publish only at the session cadence; missing/stale clears once.
-    if (strip.meterRevision === meter.revision && (meter.status === 'fresh' || strip.meterState === meter.status)) return;
+    const shape = JSON.stringify([meter.channelCount, meter.label]);
+    if (strip.meterShape === shape && strip.meterRevision === meter.revision && (meter.status === 'fresh' || strip.meterState === meter.status)) return;
+    strip.meterShape = shape;
     strip.meterRevision = meter.revision; strip.meterState = meter.status;
     strip.meter.dataset.state = meter.status;
-    strip.meterLabel.textContent = model.sourceId ? `Source VU${meter.channelCount === 2 ? ' L/R' : ''}` : 'Output VU';
+    strip.meterLabel.textContent = model.sourceId ? `Source VU${meter.channelCount === 2 ? ' L/R' : ''}` : model.sides?.length === 2 ? `Output VU ${model.sides.map(side => side.auxIndex + 1).join('/')}` : 'Output VU';
     const numbers = meter.values.map(value => value.floor ? '−80 dB floor' : `${value.db.toFixed(1)} dB`);
     const numericText = meter.values.length === 2 ? meter.values.map(value => value.floor ? '−80 floor' : value.db.toFixed(1)).join('/') + ' dB' : numbers[0];
     strip.meterStatus.textContent = meter.status === 'fresh' ? numericText : meter.status === 'stale' ? 'Stale' : 'Unavailable';
@@ -151,15 +168,18 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   }
   function renderMeters(model) {
     for (const [strips, models] of [[overviewStrips, model.mixes], [sourceStrips, model.sources], [pinnedStrips, model.selectedMix ? [model.selectedMix] : []]]) {
-      for (const item of models || []) { const strip = strips.get(item.id); if (strip) updateMeter(strip, item); }
+      for (const item of models || []) { const strip = strips.get(strips === sourceStrips ? item.sourceId || item.renderKey || item.id : item.id); if (strip) updateMeter(strip, item); }
     }
   }
   function reconcile(container, strips, models, kind) {
-    const ids = new Set(models.map(model => model.id));
-    for (const [id, strip] of strips) if (!ids.has(id)) { strip.article.remove(); strips.delete(id); }
+    const key = model => strips === sourceStrips ? model.sourceId || model.renderKey || model.id : model.id;
+    const ids = new Set(models.map(key));
+    for (const [id, strip] of strips) if (!ids.has(id)) { strip.article.remove();
+      // At most ten overview outputs: retain detached keyed nodes across pair/unpair.
+      if (strips !== overviewStrips || !models.length) strips.delete(id); }
     for (const [index, model] of models.entries()) {
-      let strip = strips.get(model.id);
-      if (!strip) { strip = createStrip(model.kind === 'group' ? 'group' : kind); strips.set(model.id, strip); container.append(strip.article); }
+      let strip = strips.get(key(model));
+      if (!strip) { strip = createStrip(model.kind === 'group' ? 'group' : kind); strips.set(key(model), strip); container.append(strip.article); }
       if (container.children[index] !== strip.article) container.insertBefore(strip.article, container.children[index] || null);
       strip.article.dataset.id = model.id;
       if (model.auxIndex !== undefined) strip.article.style.setProperty('--mm-strip-color', outputColour(model.themeIndex ?? model.auxIndex));
@@ -197,6 +217,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       const levelTarget = model.sourceId && model.auxIndex !== undefined ? { kind: 'send', auxIndex: model.auxIndex, sourceId: model.sourceId }
         : model.auxIndex !== undefined ? { kind: 'master', auxIndex: model.auxIndex } : null;
       if (levelTarget) { levelTargets.set(strip.name, levelTarget); levelTargets.set(strip.input, levelTarget); }
+      levelPeerIds.set(strip.input, model.levelPeerIds);
       const isSelected = levelTarget && selectedTarget(levelTarget);
       strip.article.dataset.levelSelected = String(Boolean(isSelected));
       strip.name.setAttribute('aria-pressed', String(Boolean(isSelected)));
@@ -206,7 +227,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       const known = typeof model.position === 'number' && Number.isFinite(model.position) && model.position >= 0 && model.position <= 1;
       strip.article.dataset.unknown = String(!known);
       strip.input.disabled = !(control && levelTarget && (canEditLevel ? canEditLevel(levelTarget) : isSelected && control.eligible) && !control.dispatching);
-      if (isSelected && typeof control?.requestedValue === 'number') {
+      const requested = (isSelected || isCoordinate(model) && control?.eligible) && typeof control?.requestedValue === 'number';
+      if (requested) {
         strip.state.textContent = `Last received ${model.levelText ?? '—'} · Requested ${control.requestedValue}`;
         strip.state.setAttribute('title', strip.state.textContent);
       }
@@ -214,9 +236,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         strip.state.textContent = `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}`;
         strip.state.setAttribute('title', strip.state.textContent);
       }
-      strip.output.setAttribute('aria-label', `${model.name} last received level`);
+      strip.output.setAttribute('aria-label', `${model.name} last received level${model.actualLevelText ? ': ' + model.actualLevelText : ''}`);
+      strip.output.setAttribute('title', model.actualLevelText || model.levelText || 'No received level');
       strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
-      if (preview?.input !== strip.input) strip.input.value = isSelected && typeof control?.requestedValue === 'number' ? String(control.requestedValue) : known ? String(model.position) : '0';
+      if (preview?.input !== strip.input) strip.input.value = isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested ? String(control.requestedValue) : known ? String(model.position) : '0';
       updateMeter(strip, model);
     }
   }
@@ -243,7 +266,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     auxSelected = selected;
     $('.mm-local-tabs').hidden = !selected && !groupEditing;
     if ($('.mm-title')) $('.mm-title').textContent = model.selectedMix?.name ?? '';
-    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? control ? 'Expanded group · relative Δ controls' : 'Expanded group · level unavailable' : control ? 'Local group masters · relative Δ controls' : 'Local group masters · level unavailable' : control ? 'All observed AUX sources · select a level to edit' : 'All observed AUX sources · read-only' : 'Individual received outputs';
+    if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? control ? 'Expanded group · relative Δ controls' : 'Expanded group · level unavailable' : control ? 'Local group masters · relative Δ controls' : 'Local group masters · level unavailable' : control ? 'All observed AUX sources · select a level to edit' : 'All observed AUX sources · read-only' : 'Logical mixes · individual received sides';
+    grid.style.setProperty('--mm-overview-count', String(Math.max(1, model.mixes.length)));
     reconcile(grid, overviewStrips, model.mixes, 'master');
     reconcile(bank, sourceStrips, model.sources || [], 'source');
     reconcile(pinned, pinnedStrips, model.selectedMix && model.showAuxMaster !== false ? [model.selectedMix] : [], 'master');

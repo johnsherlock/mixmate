@@ -10,7 +10,7 @@ export function resolveGroupNavigation(groups, requested) {
   return { view, expandedGroupId: group?.id || null, notice };
 }
 function master(group, profileId, aux, controls) {
-  return { id: `group:${profileId}:${group.id}@${aux}`, kind: 'group', groupId: group.id, name: group.name,
+  return { id: `group:${profileId}:${group.id}@${aux}`, renderKey: `group:${profileId}:${group.id}`, kind: 'group', groupId: group.id, name: group.name,
     detail: `${group.members.length} member${group.members.length === 1 ? '' : 's'} · ${controls ? 'relative Δ · no group VU' : 'relative level unavailable'}`,
     levelText: 'Unavailable', stateText: controls ? 'Drag or use keys · fresh received basis · Δ 0 per gesture' : 'Group level unavailable · read-only', panText: '', browsable: false };
 }
