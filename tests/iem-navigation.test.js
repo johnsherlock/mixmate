@@ -315,3 +315,22 @@ test('live rig save abort after request success stays temporary and cannot claim
     assert.equal(reopened.snapshot().settings.profiles.length, 2); assert.equal(app.sockets.length, 0);
   } finally { await reopened?.close(); await app.close(); }
 });
+
+
+test('rig Save moves its focused button to the visible name before disabling, without late focus theft', async () => {
+  const app = await fixture(); const update = app.repository.update.bind(app.repository); let release;
+  app.repository.update = change => update(change).then(result => new Promise(resolve => { release = () => resolve(result); }));
+  try {
+    app.ui.newRig.emit('click'); app.ui.name.value = 'Keyboard rig';
+    app.document.activeElement = app.ui.saveRig;
+    app.ui.name.focus = () => { assert.equal(app.ui.saveRig.disabled, false); app.document.activeElement = app.ui.name; };
+    app.ui.saveRig.emit('click');
+    assert.equal(app.document.activeElement, app.ui.name); assert.equal(app.ui.saveRig.disabled, true);
+    while (!release) await new Promise(resolve => setImmediate(resolve));
+    // A subsequent explicit action owns focus, including another dialog/context.
+    const nextFocus = {}; app.document.activeElement = nextFocus;
+    app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change');
+    release(); await app.controller.whenSetupIdle();
+    assert.equal(app.document.activeElement, nextFocus); assert.equal(app.controller.context().profileId, 'rig-b');
+  } finally { await app.close(); }
+});

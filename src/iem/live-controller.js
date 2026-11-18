@@ -165,6 +165,9 @@ export function mountLiveController({ session, repository, view, ui, document = 
     catch (error) { feedback(`Rig not saved. ${error.message}`); return; }
     // Disconnect before accepting a new identity or queuing any persistence.
     invalidate(true); const intent = setupIntent;
+    // Keep keyboard events inside the owned dialog when its focused Save is disabled.
+    // Move focus only synchronously from this button; late completion never refocuses.
+    if (document.activeElement === ui.saveRig) ui.name.focus?.();
     setupSaving = true; setupButtons(); feedback('Saving local rig…');
     const guarded = settings => {
       if (destroyed || setupIntent !== intent) throw Error('Rig context changed; save was not applied.');
