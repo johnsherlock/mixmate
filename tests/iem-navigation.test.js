@@ -138,6 +138,38 @@ test('F04-S05 device-local saved view is restored on AUX selection without a mix
     assert.deepEqual(app.repository.snapshot().settings.localDefinitions.navigation, { mixId: null, view: 'groups', expandedGroupId: 'mine' });
   } finally { await app.close(); }
 });
+const editorUI = () => ({ exportSettings: field(''), name: field(''), cancel: field(''), message: field(''), status: field(''), show() { this.visible = true; }, hide() { this.visible = false; }, members() {}, choices() {}, busy() {}, bind(h) { this.actions = h; }, destroy() {}, saved(m) { this.savedMessage = m; }, deletable() {}, confirmDelete() {}, scope() {} });
+for (const memory of [false, true]) test(`F04-S05 deleting the expanded group reports its ${memory ? 'temporary' : 'saved'} outcome instead of silently closing`, async () => {
+  const app = await fixture({ memory }), ui = editorUI();
+  const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui });
+  try {
+    app.connect(); app.controller.selectAux(0); app.controller.toggleGroup('7_group-Z'); await app.controller.whenNavigationIdle();
+    assert.equal(app.controller.context().expandedGroupId, '7_group-Z');
+    assert.equal(editor.open(), true); assert.equal(editor.snapshot().id, '7_group-Z');
+    ui.actions.requestDelete(); await ui.actions.confirmDelete();
+    assert.deepEqual(app.repository.snapshot().settings.profiles[0].groups.map(group => group.id), ['empty']);
+    assert.equal(app.controller.context().expandedGroupId, null);
+    if (memory) {
+      assert.equal(ui.visible, true, 'temporary delete stays open with its warning');
+      assert.match(ui.message.textContent, /deletion is temporary.*Export settings/);
+    } else {
+      assert.equal(ui.visible, false);
+      assert.match(ui.savedMessage, /^Group deleted\./);
+    }
+  } finally { editor.destroy(); await app.close(); }
+});
+test('F04-S05 a real context change during a pending delete still closes the editor', async () => {
+  const app = await fixture(), ui = editorUI();
+  const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui });
+  try {
+    app.connect(); app.controller.selectAux(0); app.controller.toggleGroup('7_group-Z'); await app.controller.whenNavigationIdle();
+    editor.open(); ui.actions.requestDelete();
+    const pending = ui.actions.confirmDelete();
+    app.ui.disconnect.emit('click');
+    await pending;
+    assert.equal(ui.visible, false); assert.equal(ui.savedMessage, undefined);
+  } finally { editor.destroy(); await app.close(); }
+});
 test('unsupported EQ/missing group preferences fall back without mutating saved definitions', () => {
   const groups = definitions().profiles[0].groups, preference = { view: 'eq', expandedGroupId: '7_group-Z' }, before = structuredClone(preference);
   assert.equal(resolveGroupNavigation(groups, preference).view, 'groups'); assert.match(resolveGroupNavigation(groups, preference).notice, /EQ.*unavailable/);

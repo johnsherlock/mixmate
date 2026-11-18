@@ -24,7 +24,9 @@ export function mountGroupEditor({
     saving = false,
     operation = 0,
     lastMembers = null,
-    confirmingDelete = false;
+    confirmingDelete = false,
+    // Set only while this editor's own delete of the expanded group is pending.
+    deleteCollapse = null;
   // Contexts without an explicit owner predate device-local definitions and can
   // only address a bound saved rig.
   const owner = () =>
@@ -311,6 +313,12 @@ export function mountGroupEditor({
     const original = clone(baseline),
       token = capture();
     setConfirmingDelete(false);
+    // Deleting the expanded group collapses navigation, which advances the
+    // controller revision once; that self-caused change must not close the
+    // editor before its saved/temporary outcome is shown.
+    deleteCollapse = context.expandedGroupId === original.id
+      ? { token, groupId: original.id, selectedAux: context.selectedAux }
+      : null;
     const change = (settings) => {
       guard(token);
       const rig = target(settings, token, false);
@@ -331,6 +339,8 @@ export function mountGroupEditor({
     saving = true;
     ui.cancel.textContent = "Close";
     ui.busy(true);
+    // Busy disables the focused confirm control; Cancel stays enabled.
+    ui.cancel.focus?.();
     ui.message.textContent = "Deleting local group…";
     pending = repository
       .update(change)
@@ -359,9 +369,11 @@ export function mountGroupEditor({
         if (!destroyed && operation === token.operation) {
           saving = false;
           ui.busy(false);
-          // Temporary or failed deletes leave the dialog open; keep focus in it.
-          ui.focusEditor?.();
+          // Temporary or failed deletes leave the dialog open; keep focus in it
+          // on the name field rather than another group's Delete button.
+          ui.name.focus?.();
         }
+        deleteCollapse = null;
       });
     return pending;
   }
@@ -371,8 +383,22 @@ export function mountGroupEditor({
     setEnabled(available());
     if (draft && (!available() || !validBinding())) close();
   });
+  // Accept exactly the single revision step caused by this editor's own
+  // pending delete collapsing the expanded group; anything else still closes.
+  function rebaseOwnCollapse(previous, next) {
+    const pendingDelete = deleteCollapse;
+    if (!pendingDelete || !saving || !binding || pendingDelete.token.operation !== operation) return;
+    if (previous.expandedGroupId !== pendingDelete.groupId || next.expandedGroupId !== null) return;
+    if (next.selectedAux !== pendingDelete.selectedAux || next.revision !== binding.revision + 1) return;
+    if (JSON.stringify(next.owner) !== JSON.stringify(previous.owner) || next.profileId !== previous.profileId) return;
+    binding.revision = next.revision;
+    pendingDelete.token.revision = next.revision;
+    deleteCollapse = null;
+  }
   const unsubscribeContext = controller.subscribeContext((next) => {
+    const previous = context;
     context = next;
+    rebaseOwnCollapse(previous, next);
     setEnabled(available());
     if (draft && (!available() || !validBinding())) close();
     else paintMembers();
