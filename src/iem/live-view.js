@@ -294,7 +294,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     root.dataset.auxView = String(selected);
     root.style.setProperty('--mm-mix-color', model.selectedMix ? outputColour(model.selectedMix.themeIndex ?? model.selectedMix.auxIndex) : overviewColour);
     auxSelected = selected;
-    $('.mm-local-tabs').hidden = !selected && !groupEditing;
+    $('.mm-local-tabs').hidden = false;
     if ($('.mm-title')) $('.mm-title').textContent = model.selectedMix?.name ?? '';
     if ($('.mm-page-state')) $('.mm-page-state').textContent = selected ? model.view === 'groups' ? model.expandedGroupId ? control ? 'Expanded group · relative Δ controls' : 'Expanded group · level unavailable' : control ? 'Local group masters · relative Δ controls' : 'Local group masters · level unavailable' : control ? 'All observed AUX sources · select a level to edit' : 'All observed AUX sources · read-only' : 'Logical mixes · individual received sides';
     grid.style.setProperty('--mm-overview-count', String(Math.max(1, model.mixes.length)));
@@ -347,8 +347,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       groupEditing = enabled;
       root.dataset.groupEditing = String(enabled);
       const button = root.querySelector('[data-action="edit-groups"]');
-      if (button) button.disabled = !enabled;
-      $('.mm-local-tabs').hidden = !auxSelected && !enabled;
+      if (button) { button.disabled = false; button.title = enabled ? 'Edit local groups for the selected rig' : 'Choose or save a local rig to edit groups'; }
+      $('.mm-local-tabs').hidden = false;
     },
     preferences(preferences) { root.dataset.preferredOrientation = preferences.orientation; root.dataset.showMeters = String(preferences.showMeters); layout.apply(); },
     clear() { gestures.cancel(); render({ status: 'Not connected — no received mixer state', mixes: [] }); },

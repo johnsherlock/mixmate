@@ -1,3 +1,5 @@
+import { mixerURL } from '../mixer-address.js';
+import { validateSettings, settingsStatusText } from '../settings.js';
 import { restoreDialogFocus } from './dialog-owner.js';
 import { projectLiveState } from './live-provider.js';
 import { projectGroupNavigation, resolveGroupNavigation } from './group-navigation.js';
@@ -18,7 +20,15 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   profileLabel.append(profile); addressLabel.append(address); connect.type = 'submit';
   const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? pan ? 'Known compatible levels and normalized pan are editable after connecting. Drag or use keys; release applies a change.' : 'Known compatible levels are editable after connecting. Drag or use keys; release applies a change.' : 'Only received state is shown. No mixer parameter writes.');
   settings.className = note.className = 'mm-caption'; note.setAttribute('role', 'status');
-  form.append(profileLabel, addressLabel, known, settings, connect, note);
+  const name = make('input'), nameLabel = make('label', 'Local rig name');
+  name.maxLength = 80; name.autocomplete = 'off'; nameLabel.append(name);
+  const newRig = make('button', 'New rig'), saveRig = make('button', 'Save rig');
+  newRig.type = saveRig.type = 'button'; newRig.disabled = saveRig.disabled = true;
+  const actions = make('div'); actions.className = 'mm-dialog-actions'; actions.append(newRig, saveRig);
+  const feedback = make('p'); feedback.className = 'mm-caption'; feedback.setAttribute('role', 'status');
+  settings.setAttribute('role', 'status');
+  const local = make('p', 'Rigs and groups stay in this browser on this device and site address. They are not mixer settings or shared with other devices. Select or save a rig to edit its groups, even offline. Saving does not connect.'); local.className = 'mm-caption';
+  form.append(profileLabel, nameLabel, addressLabel, known, actions, feedback, settings, local, connect, note);
   $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';
   const closeButton = $('.mm-dialog-head button'); closeButton.disabled = false;
   const openButtons = [open, $('.mm-brand'), $('.mm-desk')];
@@ -57,7 +67,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   const onCloseClick = event => { if (connectionVisible && (!dialogOwner || dialogOwner.owns(dialogLease))) { event.stopImmediatePropagation?.(); close(); } };
   closeButton.addEventListener('click', onCloseClick);
   return {
-    form, profile, address, connect, disconnect, settings, note, close, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
+    form, profile, address, name, newRig, saveRig, feedback, connect, disconnect, settings, note, close, show, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
     navigation: [...root.querySelectorAll('.mm-entry-links a')],
     profiles(profiles, selectedId = '') {
       const option = make('option', 'Manual address — not a saved rig'); option.value = '';
@@ -69,8 +79,12 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   };
 }
 
-export function mountLiveController({ session, repository, view, ui, document = globalThis.document, window = globalThis.window }) {
+export function mountLiveController({ session, repository, view, ui, document = globalThis.document, window = globalThis.window, createID = () => globalThis.crypto.randomUUID() }) {
   let touched = false, destroyed = false, profiles = [], selectedAux = null;
+  let setupIntent = 0, setupPending = Promise.resolve(), setupSaving = false;
+  const feedback = message => { if (ui.feedback) ui.feedback.textContent = message; };
+  const setupButtons = () => { if (ui.newRig) ui.newRig.disabled = !settingsReady || profiles.length >= 32; if (ui.saveRig) ui.saveRig.disabled = !settingsReady || setupSaving; };
+  const refreshPicker = () => { ui.profiles(profiles, boundProfileId || ''); setupButtons(); };
   let boundProfileId = null, contextRevision = 0, settingsReady = false, previousPhase = 'idle';
   let projected = { selectedAux: null, sources: [] }, requestedNavigation = null, restoreCandidate = null;
   let navIntent = 0, navPending = Promise.resolve(), navigationMessage = '', previousExpanded = null, previousControl = null;
@@ -115,19 +129,63 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (kind !== 'meters') emitContext();
   }
   const unsubscribe = session.subscribe(render);
-  function invalidate(detach = false) { touched = true; selectedAux = null; restoreCandidate = requestedNavigation = null; navIntent++; navigationMessage = ''; invalidateDraft(detach); session.disconnect(); }
-  listen(ui.address, 'input', () => { invalidate(true); ui.profile.value = ''; ui.address.setCustomValidity(''); });
+  function invalidate(detach = false) { setupIntent++; touched = true; selectedAux = null; restoreCandidate = requestedNavigation = null; navIntent++; navigationMessage = ''; invalidateDraft(detach); session.disconnect(); }
+  listen(ui.address, 'input', () => { invalidate(true); ui.profile.value = ''; ui.address.setCustomValidity(''); feedback('Manual address — choose or save a local rig to edit groups.'); });
   listen(ui.profile, 'change', () => {
     invalidate(true);
     const rig = profiles.find(profile => profile.id === ui.profile.value);
     if (rig) { ui.address.value = rig.address; boundProfileId = rig.id; }
-    emitContext();
+    if (ui.name) ui.name.value = rig?.name || '';
+    feedback(rig ? 'Local rig selected. Edit Groups is available offline. Connect is a separate action.' : 'Manual address — not bound to a saved rig.');
+    refreshPicker(); render(); emitContext();
     ui.address.setCustomValidity('');
+  });
+  if (ui.name) listen(ui.name, 'input', () => { touched = true; setupIntent++; feedback('Rig name draft. Save rig to apply locally.'); });
+  if (ui.newRig) listen(ui.newRig, 'click', () => {
+    if (!settingsReady || profiles.length >= 32) return;
+    invalidate(true); ui.name.value = ''; refreshPicker(); render();
+    feedback('New local rig draft. Enter a name and address, then Save rig.'); ui.name.focus?.();
+  });
+  if (ui.saveRig) listen(ui.saveRig, 'click', () => {
+    if (!settingsReady || setupSaving) return;
+    const id = boundProfileId || createID(), address = ui.address.value.trim(), name = ui.name.value.trim();
+    const original = profile() && { id: profile().id, name: profile().name, address: profile().address };
+    const change = settings => {
+      const existing = settings.profiles.find(rig => rig.id === id);
+      if (original) {
+        if (!existing || existing.name !== original.name || existing.address !== original.address) throw Error('This rig changed. Select it again before saving.');
+        existing.name = name; existing.address = address;
+      } else {
+        if (existing) throw Error('This rig identity already exists. Start a new rig.');
+        settings.profiles.push({ id, name, address, groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } });
+      }
+      settings.selectedProfileId = id;
+    };
+    try { mixerURL(address); const candidate = structuredClone(repository.snapshot().settings); change(candidate); validateSettings(candidate); }
+    catch (error) { feedback(`Rig not saved. ${error.message}`); return; }
+    // Disconnect before accepting a new identity or queuing any persistence.
+    invalidate(true); const intent = setupIntent;
+    setupSaving = true; setupButtons(); feedback('Saving local rig…');
+    const guarded = settings => {
+      if (destroyed || setupIntent !== intent) throw Error('Rig context changed; save was not applied.');
+      change(settings);
+    };
+    let pending;
+    try { pending = repository.update(guarded); } catch (error) { pending = Promise.reject(error); }
+    setupPending = Promise.resolve(pending).then(result => {
+      if (destroyed || setupIntent !== intent) return;
+      profiles = result.settings.profiles; boundProfileId = id; ui.address.value = address; ui.name.value = name;
+      refreshPicker(); emitContext(); render();
+      feedback(result.status.mode === 'persistent' && result.status.state === 'saved'
+        ? 'Rig saved on this device. Edit Groups is ready; Connect remains a separate action.'
+        : 'Rig is temporary in this app. Export settings through Settings / test before closing; reopen after checking storage to try again.');
+    }).catch(error => { if (!destroyed && setupIntent === intent) feedback(`Rig not saved. ${error.message}`); })
+      .finally(() => { setupSaving = false; if (!destroyed) setupButtons(); });
   });
   listen(ui.form, 'submit', event => {
     event.preventDefault();
     if (destroyed || document.hidden || isActive(session.snapshot().phase)) return;
-    touched = true; selectedAux = null; requestedNavigation = null; restoreCandidate = null; navIntent++; navigationMessage = '';
+    setupIntent++; touched = true; selectedAux = null; requestedNavigation = null; restoreCandidate = null; navIntent++; navigationMessage = '';
     const bound = profiles.find(profile => profile.id === boundProfileId);
     invalidateDraft(!bound || bound.address !== ui.address.value.trim());
     if (boundProfileId) restoreCandidate = structuredClone(bound.navigation);
@@ -142,11 +200,12 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (!event.ctrlKey && !event.metaKey && !event.shiftKey && (event.button === undefined || event.button === 0)) invalidate();
   });
   ui.profiles([]);
-  const unsubscribeSettings = repository.subscribe?.(({ settings }) => {
+  const unsubscribeSettings = repository.subscribe?.(({ settings, status }) => {
+    if (status) ui.settings.textContent = settingsStatusText(status);
     if (!settingsReady || destroyed) return;
-    profiles = settings.profiles;
+    profiles = settings.profiles; refreshPicker(); view.preferences(settings.preferences);
     if (JSON.stringify([boundProfileId, profile()?.groups]) !== groupsSignature) session.invalidateLevelContext?.();
-    if (boundProfileId && !profile()) { boundProfileId = null; navIntent++; restoreCandidate = requestedNavigation = null; invalidateDraft(); }
+    if (boundProfileId && (!profile() || profile().address !== ui.address.value.trim())) { invalidate(true); refreshPicker(); }
     render();
   }) || (() => {});
   function persistNavigation() {
@@ -181,12 +240,15 @@ export function mountLiveController({ session, repository, view, ui, document = 
     const rig = !touched && !isActive(session.snapshot().phase) ? profiles.find(profile => profile.id === settings.selectedProfileId) : null;
     ui.profiles(profiles, rig?.id || '');
     if (rig) { ui.address.value = rig.address; boundProfileId = rig.id; }
-    emitContext();
+    if (ui.name && !touched) ui.name.value = rig?.name || '';
+    feedback(rig ? 'Local rig selected. Edit Groups is available offline. Connect is a separate action.' : 'Manual address — not bound to a saved rig.');
+    refreshPicker(); render(); emitContext();
     view.preferences(settings.preferences);
-    ui.settings.textContent = status.mode === 'persistent' ? 'Saved local rigs. Use Settings / test to edit rigs, preferences or backups.' : 'Local rigs are temporary/unavailable. Manual Connect still works.';
+    ui.settings.textContent = settingsStatusText(status);
   }).catch(() => { if (!destroyed) ui.settings.textContent = 'Could not load local rigs. Manual Connect still works.'; });
   return {
     ready,
+    whenSetupIdle: () => setupPending,
     context,
     subscribeContext(listener) { contextListeners.add(listener); listener(context()); return () => contextListeners.delete(listener); },
     selectAux(index) {

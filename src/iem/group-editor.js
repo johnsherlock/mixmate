@@ -190,7 +190,7 @@ export function mountGroupEditor({
         ui.message.textContent =
           result.status.mode === "persistent" && result.status.state === "saved"
             ? settingsStatusText(result.status)
-            : "Group definition is temporary; it was not saved on this device.";
+            : "Group definition is temporary; it was not saved on this device. Export settings through Settings / test before closing. Check the storage message below; reopen after resolving storage or another-window edits.";
         if (
           result.status.mode === "persistent" &&
           result.status.state === "saved"

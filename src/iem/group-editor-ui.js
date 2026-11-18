@@ -55,7 +55,7 @@ export function createGroupEditorUI(root, connectionUI) {
   };
   const openButton = $('[data-action="edit-groups"]');
   listen(openButton, "click", () => {
-    if (!openButton.disabled) handlers?.open();
+    if (!openButton.disabled && handlers?.open() === false) connectionUI.show?.();
   });
   listen(cancel, "click", () => handlers?.close());
   listen(closeButton, "click", (event) => {

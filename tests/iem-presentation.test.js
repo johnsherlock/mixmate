@@ -129,7 +129,7 @@ test('read-only keyed strips render strings as text and preserve nodes through u
     assert.equal(root.querySelector('.mm-local-tabs').hidden, false);
     view.groupEditing(false);
     assert.equal(root.dataset.groupEditing, 'false');
-    assert.equal(root.querySelector('.mm-local-tabs').hidden, true);
+    assert.equal(root.querySelector('.mm-local-tabs').hidden, false); // Setup remains reachable while unbound.
     const a = { id: 'a.0', name: '<img src=x onerror=alert(1)>', detail: 'Received text', levelText: 'Received', position: 0.7 }, b = { id: 'a.1', name: 'Other', detail: 'Partial' };
     view.render({ status: 'Received partial state', mixes: [a, b] });
     const grid = root.querySelector('.mm-strip-grid'), first = grid.children[0], input = first.querySelector('input'), cap = first.querySelector('.mm-fader-hit');
