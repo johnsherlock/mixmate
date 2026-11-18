@@ -9,7 +9,7 @@ Current plan: 2026-11-18. Nine features contain **38 stories**. The accepted `mo
 | [F01](features/F01.md) | Offline distribution and compatibility | 7 | Merged implementation checkpoint; physical F08 qualification open |
 | [F02](features/F02.md) | Device-local settings | 4 | S01–S04 merged; physical F08 qualification open |
 | [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
-| [F04](features/F04.md) | Groups and navigation | 5 | S01–S04 merged; S05 in review |
+| [F04](features/F04.md) | Groups and navigation | 5 | S01–S05 merged |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S03 merged; S04 GEQ runtime/UI in review (fake-tested; hardware unverified) |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
