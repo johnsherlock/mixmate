@@ -84,11 +84,14 @@ test('raw rounding never receives tolerance authority; pan normalization is prev
 
 test('same-value preauthorization receipts cannot confirm and reentrant receipts stop all remaining ordinals', () => {
   const a = fixture('geq'); a.step('arm'); const values = Array(31).fill(0.6); values[0] = 0.5; a.gesture(values);
+  // Sparse GEQ: the unchanged band 0 is not planned (F06-S04 live evidence).
+  assert.equal(a.state.operation.expected.length, 30); assert.equal(a.state.operation.expected[0].path, 'a.0.eq.peak.1');
   // Same received value before authorization advances receipt but not a match.
-  a.receive('a.0.eq.peak.0', 0.5); a.dispatch();
+  a.receive('a.0.eq.peak.1', 0.5); a.dispatch();
   assert.equal(a.state.operation.expected[0].cutpoint, 2); assert.equal(a.state.status, 'pending');
-  for (let b = 1; b < 31; b++) a.receive(`a.0.eq.peak.${b}`, 0.6);
-  assert.equal(a.state.status, 'pending'); a.receive('a.0.eq.peak.0', 0.5); assert.equal(a.state.status, 'observed-match');
+  for (let b = 2; b < 31; b++) a.receive(`a.0.eq.peak.${b}`, 0.6);
+  assert.equal(a.state.status, 'pending'); a.receive('a.0.eq.peak.1', 0.6); assert.equal(a.state.status, 'observed-match');
+  assert.equal(a.state.chain.requested.length, 31); assert.equal(a.state.chain.requested[0].value, 0.5);
   const b = fixture('level', true); b.step('arm'); const id = b.gesture(0.8); b.step('authorize', { id, ordinal: 0 });
   b.receive('a.0.mix', 0.8); assert.equal(b.state.status, 'reentrant-invalidated');
   b.step('returned', { id, ordinal: 0 }); assert.equal(b.state.operation.returned, 1);
@@ -202,7 +205,7 @@ test('group deduplication uses canonical member closures and never averages uneq
 
 test('31/62-path GEQ projection scales complete matching and partial failure without enabling writes', () => {
   for (const linked of [false, true]) {
-    const a = fixture('geq', linked); a.step('arm'); const values = Array.from({ length: 31 }, (_, i) => 0.2 + i / 100);
+    const a = fixture('geq', linked); a.step('arm'); const values = Array.from({ length: 31 }, (_, i) => 0.2 + i / 200);
     a.gesture(values); values.fill(1); a.dispatch(); const expected = a.state.operation.expected;
     assert.equal(expected.length, linked ? 62 : 31); assert.equal(expected[0].value, 0.2);
     expected.forEach((x, i) => { a.receive(x.path, x.value); assert.equal(a.state.status, i === expected.length - 1 ? 'observed-match' : 'pending'); });

@@ -183,3 +183,10 @@ test('F09 no-echo repeated pan uses explicit requested coordinate, no-op suppres
   socket.receive('3:::SETD^i.0.aux.1.pan^0.7\nSETD^i.0.aux.0.pan^0.7');
   assert.equal(app.session.armPan(), true); assert.equal(writes(socket).length, 4);
 });
+
+test('pan dispatch stops on a reentrant unchanged receipt for the unattempted linked output (F06-S04 broadened rule)', () => {
+  const app = fixture(), socket = app.connect(); const token = app.begin(); app.session.previewPanGesture(token, 0.7);
+  socket.hook = () => { socket.hook = null; socket.receive('3:::SETD^i.0.aux.1.pan^0.4'); };
+  assert.equal(app.session.commitPanGesture(token), false); assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.7']);
+  assert.match(app.session.snapshot().control.status, /interrupted/i);
+});

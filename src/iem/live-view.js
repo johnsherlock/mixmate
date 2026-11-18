@@ -8,7 +8,7 @@ import { outputColour, overviewColour } from './theme.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false;
@@ -82,6 +82,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     shortcuts.hidden = !selected;
   }
   const gestures = installFaderGestures(content, {
+    // Accepted prototype shortcut: a double tap on a master cap opens that AUX's
+    // GEQ view. It never writes; the tapped cap's own gesture was cancelled.
+    onMasterEQ(_, input) { const target = levelTargets.get(input); if (onOpenEq && target?.kind === 'master') onOpenEq(target.auxIndex); },
     onBegin(input) {
       const target = levelTargets.get(input);
       if (target && !selectedTarget(target)) {
@@ -277,9 +280,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     control = model.control || null; selectedAux = model.selectedAux;
     root.dataset.levelControls = String(Boolean(control));
     if (!control?.gestureActive && preview) { preview = null; gestures.cancel(); }
-    const targetLabel = control?.selected ? `${control.selected.kind === 'group' ? `Group ${control.groupName || control.selected.groupId}` : control.selected.kind === 'master' ? 'Master' : sourceLabel(control.selected.sourceId)} → AUX ${control.selected.auxIndex + 1}` : 'no selected level';
+    const targetLabel = control?.selected ? `${control.selected.kind === 'group' ? `Group ${control.groupName || control.selected.groupId}` : control.selected.kind === 'master' ? 'Master' : control.selected.kind === 'geq' ? 'GEQ' : sourceLabel(control.selected.sourceId)} → AUX ${control.selected.auxIndex + 1}` : 'no selected level';
 
-    $('.mm-mode-label').textContent = control ? `LIVE IEM · ${control.operation === 'pan' ? 'PAN' : control.panCapable && !control.selected ? 'CONTROLS' : 'LEVELS'} ${control.dispatching ? 'SENDING' : control.eligible || !control.selected && model.connectionPhase === 'live' ? 'READY' : 'WAITING'}` : 'READ-ONLY IEM';
+    $('.mm-mode-label').textContent = control ? `LIVE IEM · ${control.operation === 'pan' ? 'PAN' : control.operation === 'geq' ? 'EQ' : control.panCapable && !control.selected ? 'CONTROLS' : 'LEVELS'} ${control.dispatching ? 'SENDING' : control.eligible || !control.selected && model.connectionPhase === 'live' ? 'READY' : 'WAITING'}` : 'READ-ONLY IEM';
     $('.mm-dirty').textContent = control ? control.status : 'Read-only · no parameter writes';
     $('.mm-dirty').setAttribute('title', control?.status || 'Read-only');
     const terminal = ['error', 'closed', 'timeout', 'blocked', 'unsupported', 'invalid'].includes(model.connectionPhase);

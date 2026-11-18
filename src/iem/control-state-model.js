@@ -7,6 +7,11 @@ import { resolveAuxEqTargets, eqArray, eqDataFields } from './aux-eq-protocol.js
 import { resolveRelativeGroup, relativeGroupChange } from './relative-groups.js';
 
 export const OBSERVATION_WINDOW_MS = 2500;
+// F06-S04 sparse GEQ dispatch: an outgoing band request within this many
+// position units of the gesture-start coordinate is unchanged and not sent.
+// Observed 3.0.7865 firmware rounds GEQ echoes to 10 decimals and echoes only
+// changed values. This applies to requests only; received values stay exact.
+export const GEQ_UNCHANGED_EPSILON = 1e-9;
 const scopes = new WeakSet();
 const requireScope = scope => { if (!scopes.has(scope)) throw Error('Use a validated typed pure scope.'); };
 const uint = x => Number.isSafeInteger(x) && x >= 0;
@@ -90,7 +95,9 @@ function barrier(s) {
     const member = s.barriers.find(x => x.path === path && x.generation === b.generation);
     return member && unit(row(s, path)?.value) && row(s, path).receipt > member.floor;
   }));
-  const closure = new Set(s.scope.members.map(x => x.path));
+  // Sparse GEQ operations touch only their dispatched (planned) band paths.
+  const touched = s.scope.kind === 'geq' && s.operation?.expected ? s.operation.expected : s.scope.members;
+  const closure = new Set(touched.map(x => x.path));
   let expanded;
   do {
     expanded = false;
@@ -101,7 +108,7 @@ function barrier(s) {
   if (closure.size > 1024) throw Error('Bounded recovery closure exhausted.');
   const paths = [...closure];
   for (const b of s.barriers) if (b.generation === s.generation && closure.has(b.path)) b.closure = paths;
-  for (const member of s.scope.members) {
+  for (const member of touched) {
     const old = s.barriers.find(x => x.path === member.path);
     if (old) { old.floor = old.generation === s.generation ? Math.max(old.floor, s.lastReceipt) : s.lastReceipt; old.generation = s.generation; old.closure = paths; }
     else {
@@ -138,7 +145,12 @@ function stop(s, status) {
 function eligible(s) {
   if (!s.scopeCurrent || s.scope.members.some(x => !unit(row(s, x.path)?.value))) return false;
   if (s.scope.closures.some(paths => paths.some(path => row(s, path).value !== row(s, paths[0]).value))) return false;
-  if (s.peer && s.scope.kind === 'group' && s.basis.some(b => b.members.some(m => s.scope.members.some(x => x.path === m.path)) && b.members.some(m => (row(s, m.path)?.receipt ?? 0) <= m.floor))) return false;
+  const unresolvedBasis = () => s.basis.some(b => b.members.some(m => s.scope.members.some(x => x.path === m.path)) && b.members.some(m => (row(s, m.path)?.receipt ?? 0) <= m.floor));
+  if (s.peer && s.scope.kind === 'group' && unresolvedBasis()) return false;
+  // GEQ (F06-S04): a retained chain continues from its requested coordinate, but
+  // re-arming from received state needs every prior local write's touched path to
+  // have a newer receipt after its cutpoint; otherwise stale bands would be resent.
+  if (s.peer && s.scope.kind === 'geq' && !s.chain && unresolvedBasis()) return false;
   return !s.barriers.some(b => b.generation === s.generation && b.closure.some(path => s.scope.members.some(x => x.path === path)) && (!unit(row(s, b.path)?.value) || row(s, b.path).receipt <= b.floor));
 }
 function establish(s) {
@@ -202,7 +214,9 @@ function settleOutcome(s, event, now, allowProgress) {
     if (allowProgress && op === s.operation && owns(s, op) && op.status === 'dispatching' && op.returned === op.expected.length) {
       op.status = 'pending'; op.completed = now; s.status = 'pending';
       rememberBasis(s, op);
-      s.chain = { ...s.chain, delta: op.delta, requested: op.expected.map(({ path, target, value }) => ({ path, target, value })), touched: true };
+      const sent = new Map(op.expected.map(({ path, target, value }) => [path, { path, target, value }]));
+      // Sparse GEQ: merge dispatched bands into the full retained coordinate.
+      s.chain = { ...s.chain, delta: op.delta, requested: s.scope.kind === 'geq' ? s.chain.requested.map(x => sent.get(x.path) ?? x) : [...sent.values()], touched: true };
       complete(s);
     }
   }
@@ -260,9 +274,11 @@ export function transitionControl(state, input) {
       const { token } = fields(['token']);
       if (token !== s.gesture?.token || !s.gesture.preview || !s.armed || !eligible(s)) throw Error('Owned cached preview required.');
       const preview = s.gesture.preview; s.gesture = null;
-      if (preview.expected.every((x, i) => x.value === s.chain.requested[i].value)) { s.status = 'no-op'; break; }
+      // GEQ dispatches only bands that differ from the gesture-start coordinate.
+      const planned = s.scope.kind === 'geq' ? preview.expected.filter((x, i) => Math.abs(x.value - s.chain.requested[i].value) >= GEQ_UNCHANGED_EPSILON) : preview.expected;
+      if (!planned.length || preview.expected.every((x, i) => x.value === s.chain.requested[i].value)) { s.status = 'no-op'; break; }
       retire(s);
-      s.operation = { id: s.nextId++, generation: s.generation, revision: s.revision, scope: s.scope, status: 'dispatching', expected: preview.expected.map(x => ({ ...x, cutpoint: null, matched: false })),
+      s.operation = { id: s.nextId++, generation: s.generation, revision: s.revision, scope: s.scope, status: 'dispatching', expected: planned.map(x => ({ ...x, cutpoint: null, matched: false })),
         delta: preview.delta, started: now, authorized: 0, returned: 0, flight: null, unknownDelivery: false, completed: null };
       s.status = 'dispatching'; break;
     }

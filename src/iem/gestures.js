@@ -156,7 +156,7 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onP
     ) {
       lastTap = null;
       if (active.cap && active.input.dataset.master !== undefined) {
-        onMasterEQ(+active.input.dataset.master);
+        onMasterEQ(+active.input.dataset.master, active.input);
         return;
       }
       if (!active.cap) {

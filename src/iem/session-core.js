@@ -6,11 +6,18 @@ import { createControlScope, createPeerControlState, transitionControl, OBSERVAT
 import { auxPanPath, encodeAuxPanCommand } from './aux-pan-protocol.js';
 import { validateSettings, validateDefinitionOwner, definitionOwner } from '../settings.js';
 import { auxLevelPath, encodeAuxLevelCommand } from './aux-level-protocol.js';
+import { AUX_EQ_DISPLAY_CENTRES, auxEqPath, auxEqPositionToDb, encodeAuxEqCommand, eqArray, eqDataFields, parseAuxEqStateFrame, parseAuxProcessingFrame } from './aux-eq-protocol.js';
+import { mapRequestedAuxEqCurve } from './aux-eq-curve.js';
 
 // Private ownership: no socket, generic sender or queue escapes. The literal
 // read-only factory cannot acquire the typed level capability through options.
+// `auxControl` is fixed by the literal createAuxControlSession factory only; it
+// adds the typed pan and AUX GEQ band forms, never caller-selected wire paths.
+const PROCESSING_CAPACITY = 4096;
+const kindOf = target => ['group', 'pan', 'geq'].includes(target?.kind) ? target.kind : 'level';
+const apiKind = target => target?.kind === 'pan' ? 'pan' : target?.kind === 'geq' ? 'geq' : 'level';
 function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, timers = globalThis, timeoutMs = 15000, idleMs = 30000, meterTtlMs = 2000, meterCadenceMs = 100,
-  now = () => globalThis.performance?.now() ?? Date.now(), wallNow = () => Date.now(), clockGraceMs = 1000, settingsRepository } = {}, panEnabled = false) {
+  now = () => globalThis.performance?.now() ?? Date.now(), wallNow = () => Date.now(), clockGraceMs = 1000, settingsRepository } = {}, auxControl = false) {
   const provider = createLiveProvider(), listeners = new Set();
   let socket = null, receiver = null, generation = 0, deadline, keepalive, idle, receiverDeadline, receiverIdle, meterExpiry, meterFlush;
   let meters = new Map(), meterStamp = null, meterRevision = 0, inspectCurrent = () => {};
@@ -23,7 +30,8 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     return invalidClock(age) || Math.max(age.mono, age.wall) >= meterTtlMs ? 'stale' : 'fresh';
   }
   let phase = 'idle', detail = 'Not connected — no received mixer state';
-  const observed = new Map(), receipts = new Map();
+  const observed = new Map(), receipts = new Map(), eqObserved = new Map(), processingRaw = new Map();
+  let dispatchWatch = null;
   let sequence = 0, revision = 0, selected = null, confirmation, model = null;
   let controlStatus = 'Select a received control to edit.', groupOwner = null, selectedGroupSignature = null;
   // Only this owner constructs scopes and reducer events from its socket journal.
@@ -47,10 +55,11 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   };
   function scope(target = selected) {
     if (!target) throw Error('Select an observed master or source send.');
-    const kind = target.kind === 'group' ? 'group' : target.kind === 'pan' ? 'pan' : 'level';
+    const kind = kindOf(target);
+    if (kind === 'geq' && !auxControl) throw Error('AUX GEQ is unavailable in this session.');
     const group = kind === 'group' ? readGroup(target.groupId) : null;
     return createControlScope({ kind, received: observed, receipts,
-      target: kind === 'pan' ? { sourceId: target.sourceId, auxIndex: target.auxIndex } : kind === 'group' ? { auxIndex: target.auxIndex } : target,
+      target: kind === 'pan' ? { sourceId: target.sourceId, auxIndex: target.auxIndex } : kind === 'group' || kind === 'geq' ? { auxIndex: target.auxIndex } : target,
       group: group ? { id: group.id, members: [...group.members] } : null });
   }
   function installScope() {
@@ -65,6 +74,17 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     timers.clearTimeout(confirmation); controlStatus = message;
   }
   function inspectConfirmation() { if (model) step({ type: 'tick' }); }
+  // Current owned GEQ outputs, from the private model scope only.
+  const eqOutputs = () => selected?.kind === 'geq' && model?.generation === generation && model.scope.kind === 'geq' ? [...new Set(model.scope.members.map(x => x.target.auxIndex))] : [];
+  const eqValues = rows => rows.slice(0, AUX_EQ_DISPLAY_CENTRES.length).map(x => x.value);
+  // Groups always, and GEQ whenever it would re-arm from received state (no
+  // retained same-scope chain), wait for every overlapping prior local write's
+  // paths to be received after their preauthorization cutpoints.
+  function basisBlocks(kind, members, identity) {
+    if (model?.generation !== generation || !['group', 'geq'].includes(kind)) return false;
+    if (kind === 'geq' && model.armed && model.chain && model.scopeCurrent && model.scope.kind === 'geq' && model.scope.identity === identity) return false;
+    return model.basis.some(b => b.members.some(m => members.some(x => x.path === m.path)) && b.members.some(m => (receipts.get(m.path) ?? 0) <= m.floor));
+  }
   function syncGroupSelection() {
     if (selected?.kind !== 'group') return;
     try { if (JSON.stringify([groupOwner, readGroup(selected.groupId)]) === selectedGroupSignature) return; }
@@ -101,32 +121,50 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       try {
         const currentScope = scope(); if (selected.kind === 'group') groupName = readGroup(selected.groupId).name;
         const blocked = model?.generation === generation && model.barriers.some(b => b.generation === generation && b.closure.some(path => currentScope.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor);
-        const basisBlocked = selected.kind === 'group' && model?.generation === generation && model.basis.some(b => b.members.some(m => currentScope.members.some(x => x.path === m.path)) && b.members.some(m => (receipts.get(m.path) ?? 0) <= m.floor));
+        const basisBlocked = basisBlocks(kindOf(selected), currentScope.members, currentScope.identity);
         eligible = socket?.readyState === 1 && receiver?.readyState === 1 && !blocked && !basisBlocked;
-        reason = blocked ? 'Waiting for complete post-interruption received state.' : basisBlocked ? 'Waiting for complete received group basis.' : eligible ? '' : 'Both owned connections must be open.';
+        reason = blocked ? 'Waiting for complete post-interruption received state.' : basisBlocked ? selected.kind === 'geq' ? 'Waiting for the desk to report the last EQ change before editing from received bands; reconnect to refresh.' : 'Waiting for complete received group basis.' : eligible ? '' : 'Both owned connections must be open.';
       } catch (error) { reason = error.message; }
     }
     const owned = model?.generation === generation, op = activeOperation(), chain = owned ? model.chain : null, preview = owned ? model.gesture?.preview : null;
-    return { ...(panEnabled ? { panCapable: true, operation: selected?.kind === 'pan' ? 'pan' : 'level', previewPan: preview?.expected[0]?.value, expectedPan: selected?.kind === 'pan' ? chain?.requested[0]?.value ?? null : null } : {}),
+    const eqSelected = selected?.kind === 'geq' && owned && model.scope.kind === 'geq';
+    return { ...(auxControl ? { panCapable: true, eqCapable: true, operation: apiKind(selected), previewPan: selected?.kind === 'geq' ? undefined : preview?.expected[0]?.value, expectedPan: selected?.kind === 'pan' ? chain?.requested[0]?.value ?? null : null } : {}),
+      ...(selected?.kind === 'geq' ? { eqRequested: eqSelected && preview ? eqValues(preview.expected) : eqSelected && chain?.touched ? eqValues(chain.requested) : null, eqCoordinate: eqSelected && chain ? eqValues(chain.requested) : null } : {}),
       ...(groupName ? { groupName } : {}), selected: selected ? { ...selected } : null, eligible, reason,
       armed: Boolean(owned && model.armed), gestureActive: Boolean(owned && model.gesture), pending: Boolean(owned && ['pending', 'dispatching'].includes(op?.status)), dispatching: Boolean(owned && op?.status === 'dispatching'),
       requestedDiagnostic: op?.expected.map(({ path, value }) => ({ path, value })) ?? [], status: statusText(eligible), outcome: owned ? model.status : 'idle', previewDelta: preview?.gestureDelta ?? 0, lastDelta: chain?.delta ?? op?.delta ?? null,
-      requestedValue: chain && selected?.kind !== 'group' ? preview?.expected[0]?.value ?? chain.requested[0]?.value : null,
+      requestedValue: chain && !['group', 'geq'].includes(selected?.kind) ? preview?.expected[0]?.value ?? chain.requested[0]?.value : null,
       dispatched: op?.returned ?? 0, authorized: op?.authorized ?? 0, unknownDelivery: op?.unknownDelivery ?? false };
   }
   function journal(frame) {
     if (!controlEnabled) return;
     inspectConfirmation();
     let controlsChanged = false;
-    for (const { path, value, field } of parseIemStateFrame(frame)) {
+    const updates = parseIemStateFrame(frame);
+    // Separate bounded GEQ parser: 31 bands plus read-only bypass per output.
+    if (auxControl) for (const update of parseAuxEqStateFrame(frame)) updates.push({ path: update.path, value: update.value, auxIndex: update.auxIndex, field: update.field === 'bypass' ? 'eqBypass' : 'eqBand' });
+    for (const { path, value, field, auxIndex } of updates) {
       const actual = !observed.has(path) || observed.get(path) !== value;
       observed.set(path, value); receipts.set(path, ++sequence);
+      if (dispatchWatch?.paths.has(path)) dispatchWatch.hit = true;
+      if (field === 'eqBand' || field === 'eqBypass') { eqObserved.set(path, value); controlsChanged = true; }
+      if (actual && field === 'eqBypass' && eqOutputs().includes(auxIndex)) cancelControl('Received GEQ bypass changed; obsolete EQ adjustment cancelled.', 'processing');
       if (actual && ['model', 'matrix', 'stereoIndex'].includes(field)) cancelControl('Received topology changed; obsolete adjustment cancelled.', 'topology');
       if (actual && ['mute', 'post', 'postproc'].includes(field) && model?.generation === generation && model.scope.members.some(({ target }) =>
         path.startsWith(`a.${target.auxIndex}.`) || target.sourceId && (path === `${target.sourceId}.mute` || path.startsWith(`${target.sourceId}.aux.${target.auxIndex}.`)))) {
         cancelControl('Received processing context changed; obsolete adjustment cancelled.', 'processing');
       }
-      if (model?.generation === generation && (field === 'level' || field === 'pan')) { step({ type: 'receive', generation, path, value, receipt: sequence }); controlsChanged = true; }
+      if (model?.generation === generation && (field === 'level' || field === 'pan' || field === 'eqBand')) { step({ type: 'receive', generation, path, value, receipt: sequence }); controlsChanged = true; }
+    }
+    // Unmodelled selected-output processing (filters, dynamics, presets, unknown
+    // fields) is opaque: any new or changed raw value cancels obsolete GEQ intent.
+    if (auxControl) for (const { path, auxIndex, raw } of parseAuxProcessingFrame(frame)) {
+      const changed = raw === null || processingRaw.get(path) !== raw;
+      if (raw !== null && (processingRaw.has(path) || processingRaw.size < PROCESSING_CAPACITY)) processingRaw.set(path, raw);
+      if (eqOutputs().includes(auxIndex)) {
+        if (dispatchWatch) dispatchWatch.hit = true;
+        if (changed) cancelControl('Received output processing changed; obsolete EQ adjustment cancelled.', 'processing');
+      }
     }
     return controlsChanged;
   }
@@ -136,13 +174,36 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     const current = scope();
     if (current.identity !== model.scope.identity || JSON.stringify(current.members.map(x => [x.path, x.target])) !== JSON.stringify(model.scope.members.map(x => [x.path, x.target]))) throw Error('Current typed closure changed.');
   }
+  // Deliberate narrow typed allowlist: the private scope kind chooses exactly one
+  // existing serializer; each validates its own strict path/type/range. GEQ is
+  // only band peaks of the resolved selected output closure, full precision.
+  function serialize(op, ordinal) {
+    const item = op.expected[ordinal], command = { ...item.target, value: item.value }, kind = op.scope.kind;
+    if (kind !== kindOf(selected)) throw Error('Typed closure kind changed.');
+    if (kind === 'geq') {
+      if (!auxControl || auxEqPath(item.target) !== item.path) throw Error('Unqualified GEQ form.');
+      return encodeAuxEqCommand(command);
+    }
+    if (kind === 'pan') { if (!auxControl) throw Error('Unqualified pan form.'); return encodeAuxPanCommand(command); }
+    return encodeAuxLevelCommand(command);
+  }
   function dispatch() {
-    const op = model.operation, current = socket, currentReceiver = receiver, ownerGeneration = generation;
+    const op = model.operation;
     if (op?.status !== 'dispatching') { emit('controls'); return false; }
+    // Any synchronous reentrant receipt for the closure (including an exact or
+    // unchanged value, bypass or processing) stops the remaining ordinals.
+    const outputs = [...new Set(op.scope.members.map(x => x.target.auxIndex))];
+    dispatchWatch = { paths: new Set([...op.expected.map(x => x.path), ...(op.scope.kind === 'geq' ? outputs.map(index => `a.${index}.eq.bypass`) : [])]), hit: false };
+    try { return dispatchOrdinals(op); } finally { dispatchWatch = null; }
+  }
+  function dispatchOrdinals(op) {
+    const current = socket, currentReceiver = receiver, ownerGeneration = generation;
     for (let ordinal = 0; ordinal < op.expected.length; ordinal++) {
       try {
         revalidate();
         if (socket !== current || generation !== ownerGeneration || model.operation?.id !== op.id) throw Error('Dispatch interrupted.');
+        if (dispatchWatch.hit) throw Error('Reentrant receipt.');
+        const message = serialize(op, ordinal);
         step({ type: 'authorize', id: op.id, ordinal });
         const authorized = model.operation;
         if (socket !== current || receiver !== currentReceiver || currentReceiver?.readyState !== 1 || current.readyState !== 1 || globalThis.document?.hidden === true || generation !== ownerGeneration ||
@@ -150,19 +211,18 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
             model.scope !== op.scope || authorized?.id !== op.id || authorized.status !== 'dispatching' ||
             authorized.flight !== ordinal || authorized.authorized !== ordinal + 1 || authorized.returned !== ordinal) throw Error('Exact owned authorization was revoked.');
         // No callback or await between owned authorization and exact typed send.
-        const command = { ...op.expected[ordinal].target, value: op.expected[ordinal].value };
-        const message = selected.kind === 'pan' ? encodeAuxPanCommand(command) : encodeAuxLevelCommand(command);
         try { current.send(message); }
         catch {
           step({ type: 'threw', id: op.id, ordinal });
-          if (socket === current && generation === ownerGeneration && model.operation?.id === op.id) stop('error', 'Adjustment interrupted; some levels or pan positions may have changed. Reconnect explicitly.');
+          if (socket === current && generation === ownerGeneration && model.operation?.id === op.id) stop('error', op.scope.kind === 'geq' ? 'Adjustment interrupted; some EQ bands may have changed. Reconnect explicitly.' : 'Adjustment interrupted; some levels or pan positions may have changed. Reconnect explicitly.');
           return false;
         }
         // Settle the exact outstanding ID even after a synchronous replacement.
         step({ type: 'returned', id: op.id, ordinal });
         if (socket !== current || generation !== ownerGeneration || model.operation?.id !== op.id || !model.armed || !['dispatching', 'pending', 'observed-match'].includes(model.operation.status)) { emit('controls'); return false; }
-      } catch {
-        if (socket === current && generation === ownerGeneration && model.operation?.id === op.id && model.armed) cancelControl('Dispatch interrupted; some values may have changed.');
+        if (dispatchWatch.hit && ordinal + 1 < op.expected.length) throw Error('Reentrant receipt.');
+      } catch (error) {
+        if (socket === current && generation === ownerGeneration && model.operation?.id === op.id && model.armed) cancelControl(error.message === 'Reentrant receipt.' ? 'Received state during dispatch interrupted the adjustment; obsolete adjustment cancelled.' : 'Dispatch interrupted; some values may have changed.');
         emit('controls'); return false;
       }
     }
@@ -178,31 +238,56 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   // Compatibility arm aliases select no additional product permission. Only a
   // deliberate begin creates an opaque gesture; incoming receipts never send.
   function arm(pan) {
-    return Boolean(canAct() && selected && (selected.kind === 'pan') === pan && controlSnapshot().eligible);
+    return Boolean(canAct() && selected && (selected.kind === 'pan') === pan && selected.kind !== 'geq' && controlSnapshot().eligible);
   }
-  function begin(pan) {
-    if (!canAct() || !selected || (selected.kind === 'pan') !== pan || model?.gesture || activeOperation()?.status === 'dispatching') return null;
+  function begin(kind) {
+    if (!canAct() || !selected || apiKind(selected) !== kind || model?.gesture || activeOperation()?.status === 'dispatching') return null;
     try {
       if (!controlSnapshot().eligible) return null;
       if (selected.kind === 'group' || !model?.armed || !model.scopeCurrent || model.generation !== generation) {
         installScope(); step({ type: 'arm' });
       }
       revalidate(); step({ type: 'begin' }); const token = model.gesture.token;
-      controlStatus = 'Preview requested coordinate; release to apply. Last received values remain distinct.';
+      controlStatus = kind === 'geq' ? 'Preview requested GEQ curve; release to apply all bands. Received band values remain distinct.' : 'Preview requested coordinate; release to apply. Last received values remain distinct.';
       emit('controls'); return model.gesture?.token === token && model.armed ? token : null;
     } catch (error) { cancelControl(error.message); emit('controls'); return null; }
   }
-  function preview(token, value, pan) {
-    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || (selected?.kind === 'pan') !== pan) return null;
-    try { revalidate(); step({ type: 'preview', token, value }); return selected.kind === 'group' ? model.gesture.preview.gestureDelta : model.gesture.preview.expected[0].value; }
-    catch (error) { cancelControl(error.message); emit('controls'); return null; }
+  function preview(token, value, kind) {
+    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || apiKind(selected) !== kind) return null;
+    try {
+      revalidate(); step({ type: 'preview', token, value });
+      return selected.kind === 'group' ? model.gesture.preview.gestureDelta : kind === 'geq' ? eqValues(model.gesture.preview.expected) : model.gesture.preview.expected[0].value;
+    } catch (error) { cancelControl(error.message); emit('controls'); return null; }
   }
-  function commit(token, value, pan) {
-    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || (selected?.kind === 'pan') !== pan) return false;
-    if (typeof value !== 'number' && !pan && selected.kind !== 'group') return false;
+  // Runtime GEQ authority accepts a requested-curve intent (points/draw samples),
+  // never caller paths or raw band arrays. It is copied once, then mapped to the
+  // 31 display centres; the private scope supplies every target path.
+  function previewEq(token, intent) {
+    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || selected?.kind !== 'geq' || model.scope.kind !== 'geq') return null;
+    let request, values;
+    try {
+      const fields = eqDataFields(intent, ['mode', 'samples']);
+      request = { mode: fields.mode, samples: eqArray(fields.samples, 2, 257).map(sample => Object.freeze(eqDataFields(sample, ['frequencyHz', 'gainDb']))) };
+      values = [...mapRequestedAuxEqCurve(request).values];
+    } catch {
+      controlStatus = 'Requested curve rejected (outside ±15 dB or invalid); not clipped. The last valid preview is kept; release applies only that.';
+      emit('controls'); return null;
+    }
+    // A drawn or relative-point band identical to the session-provided coordinate
+    // keeps that exact coordinate instead of a dB round trip, so unedited bands
+    // stay unchanged and an all-zero adjustment is a no-op.
+    if (request.samples.length === AUX_EQ_DISPLAY_CENTRES.length && request.samples.every((sample, index) => sample.frequencyHz === AUX_EQ_DISPLAY_CENTRES[index])) {
+      const seed = eqValues(model.chain.requested);
+      request.samples.forEach((sample, index) => { if (sample.gainDb === auxEqPositionToDb(seed[index])) values[index] = seed[index]; });
+    }
+    return preview(token, values, 'geq');
+  }
+  function commit(token, value, kind) {
+    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || apiKind(selected) !== kind) return false;
+    if (typeof value !== 'number' && kind === 'level' && selected.kind !== 'group') return false;
     try {
       revalidate();
-      if (!pan && selected.kind !== 'group') { if (preview(token, value, false) === null) return false; }
+      if (kind === 'level' && selected.kind !== 'group') { if (preview(token, value, 'level') === null) return false; }
       if (!model.gesture?.preview) return false;
       step({ type: 'commit', token }); return dispatch();
     } catch (error) { cancelControl(error.message); emit('controls'); return false; }
@@ -215,11 +300,15 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       if (descriptors.kind.value === 'group') {
         if (Reflect.ownKeys(descriptors).sort().join(',') !== 'auxIndex,groupId,kind' || Object.values(descriptors).some(d => !Object.hasOwn(d, 'value')) || typeof descriptors.groupId.value !== 'string') return false;
         target = { kind: 'group', groupId: descriptors.groupId.value, auxIndex: descriptors.auxIndex.value };
+      } else if (descriptors.kind.value === 'geq') {
+        if (!auxControl || Reflect.ownKeys(descriptors).sort().join(',') !== 'auxIndex,kind' || !Object.hasOwn(descriptors.auxIndex, 'value')) return false;
+        auxEqPath({ auxIndex: descriptors.auxIndex.value, bandIndex: 0 });
+        target = { kind: 'geq', auxIndex: descriptors.auxIndex.value };
       } else auxLevelPath(target);
       const candidate = scope(target);
       if (model?.generation !== generation) return true;
       if (model.barriers.some(b => b.generation === generation && b.closure.some(path => candidate.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor)) return false;
-      if (target.kind === 'group' && model.basis.some(b => b.members.some(m => candidate.members.some(x => x.path === m.path)) && b.members.some(m => (receipts.get(m.path) ?? 0) <= m.floor))) return false;
+      if (basisBlocks(target.kind === 'group' ? 'group' : target.kind === 'geq' ? 'geq' : 'level', candidate.members, candidate.identity)) return false;
       return activeOperation()?.status !== 'dispatching';
     } catch { return false; }
   }
@@ -241,10 +330,10 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     armLevel: () => arm(false),
     disarmLevel() { cancelControl(); emit('controls'); },
     invalidateLevelContext() { cancelControl(); selected = null; },
-    beginLevelGesture: () => begin(false),
-    previewLevelGesture: (token, value) => preview(token, value, false),
-    cancelLevelGesture() { if (model?.gesture && selected?.kind !== 'pan') { cancelControl('Adjustment cancelled; use a new gesture.'); emit('controls'); } },
-    commitLevelGesture: (token, value) => commit(token, value, false),
+    beginLevelGesture: () => begin('level'),
+    previewLevelGesture: (token, value) => preview(token, value, 'level'),
+    cancelLevelGesture() { if (model?.gesture && apiKind(selected) === 'level') { cancelControl('Adjustment cancelled; use a new gesture.'); emit('controls'); } },
+    commitLevelGesture: (token, value) => commit(token, value, 'level'),
   };
   const panAPI = {
     selectPanTarget(target) {
@@ -255,20 +344,42 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     armPan: () => arm(true),
     disarmPan() { if (selected?.kind === 'pan') { cancelControl('Pan adjustment cancelled; use a new gesture.'); emit('controls'); } },
     closePan() { if (selected?.kind === 'pan') { cancelControl(); selected = null; emit('controls'); } },
-    beginPanGesture: () => begin(true),
-    previewPanGesture: (token, value) => preview(token, value, true),
-    commitPanGesture: token => commit(token, undefined, true),
+    beginPanGesture: () => begin('pan'),
+    previewPanGesture: (token, value) => preview(token, value, 'pan'),
+    commitPanGesture: token => commit(token, undefined, 'pan'),
     cancelPanGesture() { if (selected?.kind === 'pan' && model?.gesture) { cancelControl('Pan adjustment cancelled; use a new gesture.'); emit('controls'); } },
+  };
+  // AUX GEQ: only the selected output's 31 band peaks (62 for a verified equal
+  // stereo pair). No bypass/filter/shelf/AFS/preset/main/input EQ capability.
+  const eqAPI = {
+    canEditEqTarget: auxIndex => canEditTarget({ kind: 'geq', auxIndex }),
+    selectEqTarget(auxIndex) {
+      let descriptor = null;
+      try { auxEqPath({ auxIndex, bandIndex: 0 }); descriptor = Object.freeze({ kind: 'geq', auxIndex }); } catch { /* Narrow output index only. */ }
+      return select(descriptor, 'AUX GEQ selected; drag a point or slider, or draw. Release applies every band of the selected output(s).');
+    },
+    closeEq() { if (selected?.kind === 'geq') { cancelControl(); selected = null; emit('controls'); } },
+    beginEqGesture: () => begin('geq'),
+    previewEqGesture: (token, intent) => previewEq(token, intent),
+    commitEqGesture: token => commit(token, undefined, 'geq'),
+    cancelEqGesture() { if (selected?.kind === 'geq' && model?.gesture) { cancelControl('EQ adjustment cancelled; use a new gesture.'); emit('controls'); } },
+    // Scoped explicit reset: selected GEQ band peaks to .5 only, never native
+    // resetGraphEQ (which also changes bypass, presets and filters).
+    resetEqBands() {
+      const token = begin('geq');
+      if (!token || preview(token, Array(AUX_EQ_DISPLAY_CENTRES.length).fill(0.5), 'geq') === null) return false;
+      return commit(token, undefined, 'geq');
+    },
   };
   const snapshot = () => {
     if (socket) inspectCurrent(); // A read after sleep cannot resurrect old state before timers run.
-    return { phase, detail, observations: provider.snapshot(), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}) };
+    return { phase, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}) };
   };
   const emit = (kind = 'state') => { for (const listener of listeners) listener(snapshot(), kind); };
   const clearTimers = () => { timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
   function stop(next = 'disconnected', message = 'Disconnected — received state cleared') {
     ++generation;
-    cancelControl('Received state cleared; connect explicitly.', 'disconnect'); selected = null; observed.clear(); receipts.clear(); sequence = 0;
+    cancelControl('Received state cleared; connect explicitly.', 'disconnect'); selected = null; observed.clear(); receipts.clear(); eqObserved.clear(); processingRaw.clear(); sequence = 0;
     clearTimers();
     const old = socket, oldReceiver = receiver;
     socket = receiver = null;
@@ -416,7 +527,8 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   }
   return Object.freeze({
     ...(controlEnabled ? controlAPI : {}),
-    ...(panEnabled ? panAPI : {}),
+    ...(auxControl ? panAPI : {}),
+    ...(auxControl ? eqAPI : {}),
     connect,
     disconnect: () => stop(),
     snapshot,

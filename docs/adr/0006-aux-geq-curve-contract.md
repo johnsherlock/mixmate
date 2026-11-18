@@ -1,7 +1,7 @@
 # ADR-0006: Qualified AUX GEQ requested-curve contract
 
 Date: 2026-11-11
-Status: Accepted; pure implementation merged in [PR #29](https://github.com/johnsherlock/mixmate/pull/29) at `af4f230`. Runtime integration remains planned.
+Status: Accepted; pure implementation merged in [PR #29](https://github.com/johnsherlock/mixmate/pull/29) at `af4f230`. Runtime integration implemented in F06-S04 (in review) through the ADR-0008 peer owner; see [contract § F06-S04](../iem-aux-eq-contract.md#f06-s04-runtimeui-integration--2026-11-18-in-review). Hardware behaviour remains unverified.
 
 ## Context
 
