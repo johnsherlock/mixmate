@@ -190,7 +190,7 @@ export function mountGroupEditor({
         ui.message.textContent =
           result.status.mode === "persistent" && result.status.state === "saved"
             ? settingsStatusText(result.status)
-            : "Group definition is temporary; it was not saved on this device.";
+            : "Group definition is temporary; it was not saved on this device. Choose Export settings here before closing or leaving this page. Check the storage message below; reopen after resolving storage or another-window edits.";
         if (
           result.status.mode === "persistent" &&
           result.status.state === "saved"
@@ -230,7 +230,7 @@ export function mountGroupEditor({
     if (draft && !validBinding()) close();
     else paintMembers();
   });
-  ui.bind({ open, close, selectGroup, toggle, clear, save });
+  ui.bind({ open, close, selectGroup, toggle, clear, save, exportSettings() { ui.message.textContent = controller.exportSettings(); } });
   return {
     open,
     close,

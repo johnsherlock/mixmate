@@ -36,7 +36,8 @@ export function createGroupEditorUI(root, connectionUI) {
     cancel = make("button", "", "Cancel"),
     save = make("button", "mm-primary", "Save group");
   cancel.type = save.type = "button";
-  actions.append(message, cancel, save);
+  const exportSettings = make('button', '', 'Export settings'); exportSettings.type = 'button';
+  actions.append(message, exportSettings, cancel, save);
   content.append(rigLabel, bar, members, status, actions);
   const name = make("input", "mm-group-title-name");
   name.maxLength = 80;
@@ -55,7 +56,7 @@ export function createGroupEditorUI(root, connectionUI) {
   };
   const openButton = $('[data-action="edit-groups"]');
   listen(openButton, "click", () => {
-    if (!openButton.disabled) handlers?.open();
+    if (!openButton.disabled && handlers?.open() === false) connectionUI.show?.();
   });
   listen(cancel, "click", () => handlers?.close());
   listen(closeButton, "click", (event) => {
@@ -63,6 +64,7 @@ export function createGroupEditorUI(root, connectionUI) {
   });
   listen(clear, "click", () => handlers?.clear());
   listen(save, "click", () => handlers?.save());
+  listen(exportSettings, "click", () => handlers?.exportSettings());
   listen(root, "keydown", (event) => {
     if (active && (!connectionUI.dialogOwner || connectionUI.dialogOwner.owns(dialogLease)) && event.key === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation?.();

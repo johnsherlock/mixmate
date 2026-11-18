@@ -137,3 +137,16 @@ test('closing an armed pan dialog disables every owned action before focus callb
     assert.equal(app.engine.snapshot().control.armed, false); assert.equal(app.writes().length, 0);
   } finally { app.close(); }
 });
+
+
+test('unbound Edit Groups opens shared live rig setup through the dialog owner', () => {
+  const app = fixture();
+  try {
+    app.groups.bind({ open: () => false, close: () => app.groups.hide() });
+    const button = app.root.querySelector('[data-action="edit-groups"]'); button.disabled = false; button.emit('click');
+    assert.equal(app.owner.active().kind, 'connection');
+    assert.equal(app.root.querySelector('.mm-layer').hidden, false);
+    assert.ok(app.connection.form.querySelector('input[maxlength]') || app.connection.name);
+    assert.equal(app.writes().length, 0);
+  } finally { app.close(); }
+});
