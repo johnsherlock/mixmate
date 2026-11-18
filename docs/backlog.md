@@ -1,13 +1,13 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-17. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The subsequent explicit UI-alignment batch authorizes F04-S03 → F04-S04 → F02-S04 sequentially; F04-S03 is confirmed merged in PR #44; F04-S04 is confirmed merged in PR #45; final authorized F02-S04 is implemented/browser accepted, pending final review/CI. No next implementation starts before confirmed merge. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-18. Nine features contain **37 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The subsequent explicit UI-alignment batch authorizes F04-S03 → F04-S04 → F02-S04 sequentially; F04-S03 is confirmed merged in PR #44; F04-S04 is confirmed merged in PR #45; final F02-S04 is confirmed merged in PR #46. The authorized UI batch is complete and stops with its reviewed closing handoff; no next implementation is authorized. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
 | Feature | Outcome | Stories | Current status |
 | --- | --- | --- | --- |
 | [F01](features/F01.md) | Offline distribution and compatibility | 7 | Merged implementation checkpoint; physical F08 qualification open |
-| [F02](features/F02.md) | Device-local settings | 4 | S01–S03 merged; S04 implemented/browser accepted/review pending |
+| [F02](features/F02.md) | Device-local settings | 4 | S01–S04 merged; physical F08 qualification open |
 | [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
 | [F04](features/F04.md) | Groups and navigation | 4 | S01–S04 merged |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
@@ -46,7 +46,7 @@ The [S04 evidence](f09-s04-firmware-validation.md#final-current-matrix-and-readi
 
 ## Verified delivery checkpoints
 
-Last verified story baseline: `2b3972df9b3d2e0e10c891d4dcc5a819b1e7fa1e` on main; closing handoff delivery is identified by its containing reviewed PR/history. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16/17:
+Last verified story baseline: `68e61d7964ab42fb2a149752266aa1b1148bf355` on main; closing handoff delivery is identified by its containing reviewed PR/history. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16–18:
 
 | PR | Delivery | Merge commit |
 | --- | --- | --- |
@@ -62,6 +62,10 @@ Last verified story baseline: `2b3972df9b3d2e0e10c891d4dcc5a819b1e7fa1e` on main
 | [#40](https://github.com/johnsherlock/mixmate/pull/40) | F09-S03 private runtime integration | `446664578d5470378730d6acdbe5aa77488a72fb` |
 | [#41](https://github.com/johnsherlock/mixmate/pull/41) | Reviewed S03 closing handoff | `865e0085ac45eeee1ced8c6ff1e8b2762943f2b4` |
 | [#42](https://github.com/johnsherlock/mixmate/pull/42) | F09-S04 peer runtime and targeted firmware validation | `2b3972df9b3d2e0e10c891d4dcc5a819b1e7fa1e` |
+| [#43](https://github.com/johnsherlock/mixmate/pull/43) | Reviewed S04 closing handoff | `6c303de2ddecd8bec1b0d3ccbc1c01c6482d3219` |
+| [#44](https://github.com/johnsherlock/mixmate/pull/44) | F04-S03 logical stereo mixes | `c287a6cd5eb0ce51c998ca86e9552ae057f2e181` |
+| [#45](https://github.com/johnsherlock/mixmate/pull/45) | F04-S04 compact accessible channels | `09e0cc3110fdaef6b6227de0115c9307c44da815` |
+| [#46](https://github.com/johnsherlock/mixmate/pull/46) | F02-S04 live rig setup and current-document backup | `68e61d7964ab42fb2a149752266aa1b1148bf355` |
 
 Earlier implementation receipts remain in individual stories and Git history (F01–F05; F06-S01/S02). Historical pending/stop wording in evidence reports describes those checkpoints, not current PR state. F08-S03 is not fully validated and no physical support pass follows from these merges.
 
