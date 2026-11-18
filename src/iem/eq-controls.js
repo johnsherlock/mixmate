@@ -113,7 +113,8 @@ export function mountEqControls({ root, session, controller, window = globalThis
   let open = false, auxIndex = null, binding = null, destroyed = false, mode = 'points', selectedPoint = 0, points = flatPoints();
   // Points are a relative Δ for one gesture; between gestures they rest at 0 dB.
   const neutralize = () => { points = points.map(point => ({ ...point, gainDb: 0 })); };
-  let gesture = null, drag = null, previewValues = null, snapshot = null, editable = false, focusBefore = null;
+  let gesture = null, drag = null, previewValues = null, snapshot = null, editable = false, focusBefore = null, hint = '';
+  const ZERO_DELTA_HINT = 'No change sent: adjust GAIN Δ (or drag a point up/down) to change the curve; frequency and width only shape the next adjustment.';
   const owned = control => control?.selected?.kind === 'geq' && control.selected.auxIndex === auxIndex;
   // Display-only basis for handles/shape: the gesture basis, else the session
   // coordinate, else complete equal received bands. Never sent by itself.
@@ -216,7 +217,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
     if (!editable && !confirmRow.hidden) hideConfirm(false);
     confirmText.textContent = `Reset all ${BANDS} GEQ bands of Output ${readback.sides.map(side => side.auxIndex + 1).join(' and ')} to 0 dB? Bypass, filters and other processing are untouched.`;
-    status.textContent = owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Release applies.' : unavailableReason(readback);
+    status.textContent = editable && hint ? hint : owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Release applies.' : unavailableReason(readback);
     modeNote.textContent = EQ_MODE_NOTES[mode]; detailNotes.textContent = `${EQ_MODE_NOTES[mode]} ${legendText}`;
     const sides = new Set(readback.sides.map(side => side.auxIndex));
     for (const [key, row] of readbackNodes) if (!sides.has(key)) { row.remove(); readbackNodes.delete(key); }
@@ -241,7 +242,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (!coordinate) { session.cancelEqGesture(); render(); return null; }
     // Freeze this gesture's basis: the session coordinate at gesture start.
     const basis = Object.freeze(coordinate.map(auxEqPositionToDb));
-    neutralize();
+    neutralize(); hint = '';
     gesture = { token, input, basis, draw: [...basis], lastDraw: null };
     previewValues = null;
     return token;
@@ -256,6 +257,8 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function finish(commit) {
     const active = gesture; gesture = null; drag = null;
     if (!active) return;
+    // A points gesture with every Δ at 0 sends nothing; say so instead of silence.
+    if (mode === 'points' && points.every(point => point.gainDb === 0)) hint = ZERO_DELTA_HINT;
     if (commit) session.commitEqGesture(active.token);
     else session.cancelEqGesture();
     neutralize(); previewValues = null; render();

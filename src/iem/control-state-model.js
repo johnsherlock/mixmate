@@ -138,7 +138,12 @@ function stop(s, status) {
 function eligible(s) {
   if (!s.scopeCurrent || s.scope.members.some(x => !unit(row(s, x.path)?.value))) return false;
   if (s.scope.closures.some(paths => paths.some(path => row(s, path).value !== row(s, paths[0]).value))) return false;
-  if (s.peer && s.scope.kind === 'group' && s.basis.some(b => b.members.some(m => s.scope.members.some(x => x.path === m.path)) && b.members.some(m => (row(s, m.path)?.receipt ?? 0) <= m.floor))) return false;
+  const unresolvedBasis = () => s.basis.some(b => b.members.some(m => s.scope.members.some(x => x.path === m.path)) && b.members.some(m => (row(s, m.path)?.receipt ?? 0) <= m.floor));
+  if (s.peer && s.scope.kind === 'group' && unresolvedBasis()) return false;
+  // GEQ (F06-S04): a retained chain continues from its requested coordinate, but
+  // re-arming from received state needs every prior local write's touched path to
+  // have a newer receipt after its cutpoint; otherwise stale bands would be resent.
+  if (s.peer && s.scope.kind === 'geq' && !s.chain && unresolvedBasis()) return false;
   return !s.barriers.some(b => b.generation === s.generation && b.closure.some(path => s.scope.members.some(x => x.path === path)) && (!unit(row(s, b.path)?.value) || row(s, b.path).receipt <= b.floor));
 }
 function establish(s) {

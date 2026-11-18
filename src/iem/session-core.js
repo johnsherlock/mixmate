@@ -77,6 +77,14 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   // Current owned GEQ outputs, from the private model scope only.
   const eqOutputs = () => selected?.kind === 'geq' && model?.generation === generation && model.scope.kind === 'geq' ? [...new Set(model.scope.members.map(x => x.target.auxIndex))] : [];
   const eqValues = rows => rows.slice(0, AUX_EQ_DISPLAY_CENTRES.length).map(x => x.value);
+  // Groups always, and GEQ whenever it would re-arm from received state (no
+  // retained same-scope chain), wait for every overlapping prior local write's
+  // paths to be received after their preauthorization cutpoints.
+  function basisBlocks(kind, members, identity) {
+    if (model?.generation !== generation || !['group', 'geq'].includes(kind)) return false;
+    if (kind === 'geq' && model.armed && model.chain && model.scopeCurrent && model.scope.kind === 'geq' && model.scope.identity === identity) return false;
+    return model.basis.some(b => b.members.some(m => members.some(x => x.path === m.path)) && b.members.some(m => (receipts.get(m.path) ?? 0) <= m.floor));
+  }
   function syncGroupSelection() {
     if (selected?.kind !== 'group') return;
     try { if (JSON.stringify([groupOwner, readGroup(selected.groupId)]) === selectedGroupSignature) return; }
@@ -113,9 +121,9 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       try {
         const currentScope = scope(); if (selected.kind === 'group') groupName = readGroup(selected.groupId).name;
         const blocked = model?.generation === generation && model.barriers.some(b => b.generation === generation && b.closure.some(path => currentScope.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor);
-        const basisBlocked = selected.kind === 'group' && model?.generation === generation && model.basis.some(b => b.members.some(m => currentScope.members.some(x => x.path === m.path)) && b.members.some(m => (receipts.get(m.path) ?? 0) <= m.floor));
+        const basisBlocked = basisBlocks(kindOf(selected), currentScope.members, currentScope.identity);
         eligible = socket?.readyState === 1 && receiver?.readyState === 1 && !blocked && !basisBlocked;
-        reason = blocked ? 'Waiting for complete post-interruption received state.' : basisBlocked ? 'Waiting for complete received group basis.' : eligible ? '' : 'Both owned connections must be open.';
+        reason = blocked ? 'Waiting for complete post-interruption received state.' : basisBlocked ? selected.kind === 'geq' ? 'Waiting for the desk to report the last EQ change before editing from received bands; reconnect to refresh.' : 'Waiting for complete received group basis.' : eligible ? '' : 'Both owned connections must be open.';
       } catch (error) { reason = error.message; }
     }
     const owned = model?.generation === generation, op = activeOperation(), chain = owned ? model.chain : null, preview = owned ? model.gesture?.preview : null;
@@ -300,7 +308,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       const candidate = scope(target);
       if (model?.generation !== generation) return true;
       if (model.barriers.some(b => b.generation === generation && b.closure.some(path => candidate.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor)) return false;
-      if (target.kind === 'group' && model.basis.some(b => b.members.some(m => candidate.members.some(x => x.path === m.path)) && b.members.some(m => (receipts.get(m.path) ?? 0) <= m.floor))) return false;
+      if (basisBlocks(target.kind === 'group' ? 'group' : target.kind === 'geq' ? 'geq' : 'level', candidate.members, candidate.identity)) return false;
       return activeOperation()?.status !== 'dispatching';
     } catch { return false; }
   }

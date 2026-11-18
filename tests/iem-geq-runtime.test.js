@@ -223,7 +223,10 @@ test('EQ view: explicit open, visible approximation/bypass status, mutually excl
   assert.equal(gain.disabled, true); assert.equal(ui.find('[data-eq-point="0"]').disabled, true);
   assert.equal(ui.find('[data-eq-handle="0"]').attributes.visibility, 'hidden');
   assert.equal(ui.find('[data-eq-mode="draw"]').attributes['aria-pressed'], 'true'); assert.equal(ui.find('[data-eq-mode="points"]').attributes['aria-pressed'], 'false');
-  ui.find('[data-eq-mode="points"]').emit('click'); assert.equal(gain.disabled, false); assert.equal(ui.find('[data-eq-handle="0"]').attributes.visibility, 'visible');
+  ui.find('[data-eq-mode="points"]').emit('click'); assert.equal(ui.find('[data-eq-handle="0"]').attributes.visibility, 'visible');
+  // The first release was never echoed and the chain was cancelled: no re-arm from stale received bands.
+  assert.equal(gain.disabled, true); assert.match(ui.find('.mm-live-eq-status').textContent, /Waiting for the desk to report the last EQ change/);
+  ui.receiver.receive('3:::' + ui.writes().map(message => message.slice(4)).join('\n')); assert.equal(gain.disabled, false, 'matching echo clears the barrier automatically');
   ui.eq.close(); assert.equal(ui.eq.section.hidden, true); assert.equal(ui.root.dataset.eqOpen, 'false'); assert.equal(ui.session.snapshot().control.selected, null);
   ui.eq.destroy(); ui.session.disconnect();
 });
@@ -282,6 +285,7 @@ test('points are a relative Δ: bands outside influence keep exact raw values; z
   });
   assert.ok(untouched >= 20); assert.equal(writes[17], `3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(auxEqPositionToDb(MONO(17)) + 3)}`, 'Δ applies on top of the received −value, not around 0 dB');
   // A received +14 dB band plus +3 dB Δ leaves the range: rejected whole, never clipped.
+  app.receiver.receive('3:::' + writes.map(message => message.slice(4)).join('\n'));
   app.receiver.receive(`3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(14)}`);
   token = app.session.beginEqGesture();
   assert.equal(app.session.previewEqGesture(token, requestedPointSamples(points, control(app).eqCoordinate.map(auxEqPositionToDb))), null);
@@ -292,6 +296,9 @@ test('points are a relative Δ: bands outside influence keep exact raw values; z
 test('EQ view: points adjust relative to a native edit made while open, then return to 0 dB Δ; notes describe the editable basis', () => {
   const ui = uiFixture(); ui.eq.open(0);
   assert.match(ui.find('.mm-live-eq-mode-note').textContent, /relative Δ adjustment on top of the current editable basis/);
+  const freq = ui.find('[data-eq-param="freq"]'), freqCap = freq.parentElement.querySelector('.mm-fader-hit');
+  press(freqCap, 'pointerdown'); press(freqCap, 'pointermove', { clientY: 140 }); press(freqCap, 'pointerup', { clientY: 140 });
+  assert.equal(ui.writes().length, 0); assert.match(ui.find('.mm-live-eq-status').textContent, /No change sent: adjust GAIN Δ/);
   ui.receiver.receive('3:::SETD^a.0.eq.peak.26^0.2\nSETD^a.1.eq.peak.26^0.2'); // native −9 dB at 3.15 kHz while open
   const gain = ui.find('[data-eq-param="gain"]'), cap = gain.parentElement.querySelector('.mm-fader-hit');
   press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); press(cap, 'pointerup', { clientY: 60 });
@@ -332,6 +339,39 @@ test('processing receipts on the selected output during GEQ dispatch stop the re
   app.writer.hook = () => { if (app.writes().length === 8) { app.writer.hook = null; app.receiver.receive('3:::SETD^a.0.eq.hpf.freq^0.1'); } };
   assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 8, 'even an unchanged processing value');
   app.session.disconnect();
+});
+
+test('after an unechoed GEQ write, losing the chain never re-arms from stale received bands; a later matching echo clears it', () => {
+  const sequences = {
+    'no-move cancel': app => { const token = app.session.beginEqGesture(); assert.ok(token, 'retained chain continues from requested'); assert.equal(control(app).eqCoordinate[3], auxEqDbToPosition(4.9)); app.session.cancelEqGesture(); },
+    'close and reopen': app => { app.session.closeEq(); app.session.selectEqTarget(0); },
+    'mode/context cancel': app => { app.session.invalidateLevelContext(); app.session.selectEqTarget(0); },
+    'native edit on another band': app => { app.receiver.receive('3:::SETD^a.0.eq.peak.20^0.55\nSETD^a.1.eq.peak.20^0.55'); },
+  };
+  for (const [name, loseChain] of Object.entries(sequences)) {
+    const app = fixture(); app.session.selectEqTarget(0);
+    let token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 4.9; })); app.session.commitEqGesture(token);
+    const first = app.writes(); assert.equal(first.length, 62); app.advance(2500); assert.equal(control(app).outcome, 'sent-unverified');
+    loseChain(app);
+    assert.equal(app.session.canEditEqTarget(0), false, name); assert.equal(app.session.beginEqGesture(), null, name);
+    if (control(app).selected?.kind === 'geq') assert.match(control(app).reason, /Waiting for the desk to report the last EQ change/, name);
+    assert.equal(app.session.resetEqBands(), false); assert.equal(app.writes().length, 62, `${name}: no stale band resent`);
+    // Level controls on the same output are unaffected.
+    app.session.selectLevelTarget({ kind: 'master', auxIndex: 0 }); assert.ok(app.session.beginLevelGesture(), `${name}: level unaffected`); app.session.cancelLevelGesture();
+    app.session.selectEqTarget(0);
+    app.receiver.receive('3:::' + first.slice(0, 31).map(message => message.slice(4)).join('\n')); assert.equal(app.session.canEditEqTarget(0), false, `${name}: partial echo keeps waiting`);
+    app.receiver.receive('3:::' + first.slice(31).map(message => message.slice(4)).join('\n')); assert.equal(app.session.canEditEqTarget(0), true, `${name}: echo clears without Enable`);
+    token = app.session.beginEqGesture(); assert.equal(control(app).eqCoordinate[3], auxEqDbToPosition(4.9));
+    app.session.previewEqGesture(token, drawFrom(app, draw => { draw[10] = 1; })); app.session.commitEqGesture(token);
+    const second = app.writes().slice(62); assert.equal(second[3], first[3], `${name}: untouched band keeps the echoed +4.9 dB`);
+    app.session.disconnect();
+  }
+  // An explicit reconnect also refreshes the basis.
+  const app = fixture(); app.session.selectEqTarget(0); const token = app.session.beginEqGesture();
+  app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 4.9; })); app.session.commitEqGesture(token); app.session.cancelEqGesture();
+  app.session.closeEq(); app.session.selectEqTarget(0); assert.equal(app.session.canEditEqTarget(0), false);
+  app.session.connect('192.168.0.60'); for (const socket of app.sockets.slice(2)) { socket.readyState = 1; socket.onopen?.(); } app.sockets[3].receive(baseFrame());
+  assert.equal(app.session.canEditEqTarget(0), true); app.session.disconnect();
 });
 
 test('live entry wires GEQ only through the private control session; demo stays isolated; pure lease stays unwired', async () => {
