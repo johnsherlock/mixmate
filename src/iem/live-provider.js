@@ -97,6 +97,7 @@ export function projectLiveState(session, selectedAux = null) {
       name: observedName(state, `${id}.name`, `Output ${index + 1}`),
       detail: `${aux ? 'AUX' : mode.received ? 'MATRIX — outside IEM' : 'Output mode unknown'} ${index + 1} · ${relationshipText(state, id)}`,
       ...aux ? level(state.get(`${id}.mix`)) : {},
+      panPosition: state.get(`${id}.pan`),
       panText: state.has(`${id}.pan`) ? `Pan ${state.get(`${id}.pan`).toFixed(3)} · normalized` : 'Pan not received',
       meter: projectMeter(session, id, false, aux),
       stateText: `Output mute: ${flagText(state, `${id}.mute`, 'Muted', 'Unmuted')}`,
