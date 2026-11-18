@@ -168,11 +168,11 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   }
   function renderMeters(model) {
     for (const [strips, models] of [[overviewStrips, model.mixes], [sourceStrips, model.sources], [pinnedStrips, model.selectedMix ? [model.selectedMix] : []]]) {
-      for (const item of models || []) { const strip = strips.get(strips === sourceStrips ? item.sourceId || item.id : item.id); if (strip) updateMeter(strip, item); }
+      for (const item of models || []) { const strip = strips.get(strips === sourceStrips ? item.sourceId || item.renderKey || item.id : item.id); if (strip) updateMeter(strip, item); }
     }
   }
   function reconcile(container, strips, models, kind) {
-    const key = model => strips === sourceStrips ? model.sourceId || model.id : model.id;
+    const key = model => strips === sourceStrips ? model.sourceId || model.renderKey || model.id : model.id;
     const ids = new Set(models.map(key));
     for (const [id, strip] of strips) if (!ids.has(id)) { strip.article.remove();
       // At most ten overview outputs: retain detached keyed nodes across pair/unpair.

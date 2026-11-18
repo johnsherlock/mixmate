@@ -475,3 +475,34 @@ test('equal pair actuals share one display while right-only sends and raw unequa
   assert.match(project().sources[0].levelText, /Unequal/);
   assert.match(project().sources[0].actualLevelText, /raw 0.6000000001/);
 });
+
+
+test('group master caps survive AUX canonicalization while identical group IDs on another profile use different nodes', () => {
+  const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
+  const document = documentFixture(), root = new Node(document);
+  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app']) { const node = document.createElement('div'); node.className = name; root.append(node); }
+  Object.assign(globalThis, { document, window: new Node(document), matchMedia: () => ({ matches: false }), innerHeight: 390, ResizeObserver: class { observe() {} disconnect() {} } });
+  const observations = new Map(parseIemStateFrame('3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a.0.stereoIndex^-1\nSETD^a.1.stereoIndex^-1\nSETD^a.0.mix^0.4\nSETD^a.1.mix^0.4').map(({ path, value }) => [path, value]));
+  const profile = { id: 'rig-a', groups: [{ id: 'band', name: 'Band', members: [] }] };
+  const control = { selected: null, eligible: true, armed: true, gestureActive: false, status: 'Ready' };
+  const model = rig => projectGroupNavigation(projectLiveState({ observations, control }, 1), rig, { view: 'groups', expandedGroupId: 'band' });
+  let view, commits = 0;
+  try {
+    view = mountReadOnlyView(root, { canEditLevel: () => true, onCommitLevel: () => { commits++; } });
+    view.render(model(profile));
+    const bank = root.querySelector('.mm-strip-scroll'), group = bank.children[0], input = group.querySelector('input'), cap = group.querySelector('.mm-fader-hit');
+    assert.equal(group.dataset.id, 'group:rig-a:band@1');
+    bank.scrollLeft = 42;
+    observations.set('a.0.stereoIndex', 0); observations.set('a.1.stereoIndex', 1); view.render(model(profile));
+    assert.equal(bank.children[0], group); assert.equal(group.querySelector('input'), input); assert.equal(group.querySelector('.mm-fader-hit'), cap);
+    assert.equal(group.dataset.id, 'group:rig-a:band@0'); assert.equal(bank.scrollLeft, 42);
+    observations.set('a.0.stereoIndex', -1); observations.set('a.1.stereoIndex', -1); view.render(model(profile));
+    assert.equal(bank.children[0], group); assert.equal(group.dataset.id, 'group:rig-a:band@1');
+    view.render(model({ ...profile, id: 'rig-b' }));
+    assert.notEqual(bank.children[0], group); assert.notEqual(bank.children[0].querySelector('input'), input);
+    assert.equal(bank.children[0].dataset.id, 'group:rig-b:band@1'); assert.equal(commits, 0);
+  } finally {
+    view?.destroy();
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+  }
+});
