@@ -138,7 +138,8 @@ test('F04-S05 device-local saved view is restored on AUX selection without a mix
     assert.deepEqual(app.repository.snapshot().settings.localDefinitions.navigation, { mixId: null, view: 'groups', expandedGroupId: 'mine' });
   } finally { await app.close(); }
 });
-const editorUI = () => ({ exportSettings: field(''), name: field(''), cancel: field(''), message: field(''), status: field(''), show() { this.visible = true; }, hide() { this.visible = false; }, members() {}, choices() {}, busy() {}, bind(h) { this.actions = h; }, destroy() {}, saved(m) { this.savedMessage = m; }, deletable() {}, confirmDelete() {}, scope() {} });
+const focusable = (name, log) => Object.assign(field(''), { focus() { log.push(name); } });
+const editorUI = (log = []) => ({ focusLog: log, exportSettings: field(''), name: focusable('name', log), cancel: focusable('cancel', log), message: field(''), status: field(''), show() { this.visible = true; }, hide() { this.visible = false; }, members() {}, choices() {}, busy() {}, bind(h) { this.actions = h; }, destroy() {}, saved(m) { this.savedMessage = m; }, deletable() {}, confirmDelete() {}, scope() {} });
 for (const memory of [false, true]) test(`F04-S05 deleting the expanded group reports its ${memory ? 'temporary' : 'saved'} outcome instead of silently closing`, async () => {
   const app = await fixture({ memory }), ui = editorUI();
   const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui });
@@ -149,9 +150,11 @@ for (const memory of [false, true]) test(`F04-S05 deleting the expanded group re
     ui.actions.requestDelete(); await ui.actions.confirmDelete();
     assert.deepEqual(app.repository.snapshot().settings.profiles[0].groups.map(group => group.id), ['empty']);
     assert.equal(app.controller.context().expandedGroupId, null);
+    assert.doesNotMatch(app.view.last.status, /unavailable/, 'a deliberate delete is not reported as a missing saved group');
     if (memory) {
       assert.equal(ui.visible, true, 'temporary delete stays open with its warning');
       assert.match(ui.message.textContent, /deletion is temporary.*Export settings/);
+      assert.equal(ui.focusLog.at(-1), 'name', 'temporary delete returns focus to the name field');
     } else {
       assert.equal(ui.visible, false);
       assert.match(ui.savedMessage, /^Group deleted\./);

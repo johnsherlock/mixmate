@@ -231,6 +231,8 @@ export function mountLiveController({ session, repository, view, ui, document = 
     profiles = settings.profiles; localDefinitions = settings.localDefinitions; refreshPicker(); view.preferences(settings.preferences);
     if (JSON.stringify([owner(), definition()?.groups]) !== groupsSignature) session.invalidateLevelContext?.();
     if (boundProfileId && (!profile() || profile().address !== ui.address.value.trim())) { invalidate(true); refreshPicker(); }
+    // A deliberately deleted group is not an unavailable saved preference.
+    if (requestedNavigation?.expandedGroupId && !definition()?.groups.some(group => group.id === requestedNavigation.expandedGroupId)) requestedNavigation = { ...requestedNavigation, expandedGroupId: null };
     render();
   }) || (() => {});
   const sameOwner = token => token.profileId === boundProfileId && JSON.stringify(token.owner) === JSON.stringify(owner());

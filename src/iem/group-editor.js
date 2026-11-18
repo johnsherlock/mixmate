@@ -313,12 +313,6 @@ export function mountGroupEditor({
     const original = clone(baseline),
       token = capture();
     setConfirmingDelete(false);
-    // Deleting the expanded group collapses navigation, which advances the
-    // controller revision once; that self-caused change must not close the
-    // editor before its saved/temporary outcome is shown.
-    deleteCollapse = context.expandedGroupId === original.id
-      ? { token, groupId: original.id, selectedAux: context.selectedAux }
-      : null;
     const change = (settings) => {
       guard(token);
       const rig = target(settings, token, false);
@@ -336,6 +330,12 @@ export function mountGroupEditor({
       ui.message.textContent = `Group not deleted. ${error.message}`;
       return Promise.resolve();
     }
+    // Deleting the expanded group collapses navigation, which advances the
+    // controller revision once; that self-caused change must not close the
+    // editor before its saved/temporary outcome is shown.
+    deleteCollapse = context.expandedGroupId === original.id
+      ? { token, groupId: original.id, selectedAux: context.selectedAux }
+      : null;
     saving = true;
     ui.cancel.textContent = "Close";
     ui.busy(true);
@@ -355,6 +355,7 @@ export function mountGroupEditor({
         }
         // The accepted memory state no longer has this group; show what remains.
         selectGroup(groups()[0]?.id || null);
+        ui.name.focus?.();
         ui.cancel.textContent = "Close";
         ui.message.textContent =
           "Group deletion is temporary; it was not saved on this device. Choose Export settings here before closing or leaving this page. Check the storage message below; reopen after resolving storage or another-window edits.";
@@ -373,7 +374,7 @@ export function mountGroupEditor({
           // on the name field rather than another group's Delete button.
           ui.name.focus?.();
         }
-        deleteCollapse = null;
+        if (deleteCollapse?.token === token) deleteCollapse = null;
       });
     return pending;
   }
