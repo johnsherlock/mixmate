@@ -47,7 +47,7 @@ The [S04 evidence](f09-s04-firmware-validation.md#final-current-matrix-and-readi
 
 ## Verified delivery checkpoints
 
-Last verified story baseline: `68e61d7964ab42fb2a149752266aa1b1148bf355` on main; closing handoff delivery is identified by its containing reviewed PR/history. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16–18:
+Last verified story baseline: `5c6a3ca995c6b56c527823689d9bce3374610dcb` on main; closing handoff delivery is identified by its containing reviewed PR/history. Root verified these merged GitHub deliveries, final-change affirmative review and passing CI on 2026-11-16–18:
 
 | PR | Delivery | Merge commit |
 | --- | --- | --- |
@@ -67,6 +67,7 @@ Last verified story baseline: `68e61d7964ab42fb2a149752266aa1b1148bf355` on main
 | [#44](https://github.com/johnsherlock/mixmate/pull/44) | F04-S03 logical stereo mixes | `c287a6cd5eb0ce51c998ca86e9552ae057f2e181` |
 | [#45](https://github.com/johnsherlock/mixmate/pull/45) | F04-S04 compact accessible channels | `09e0cc3110fdaef6b6227de0115c9307c44da815` |
 | [#46](https://github.com/johnsherlock/mixmate/pull/46) | F02-S04 live rig setup and current-document backup | `68e61d7964ab42fb2a149752266aa1b1148bf355` |
+| [#47](https://github.com/johnsherlock/mixmate/pull/47) | UI batch closing handoff | `7de61b329255242ba81d184b6b3becc561641fde` |
 | [#48](https://github.com/johnsherlock/mixmate/pull/48) | F04-S05 group editor usability | `0a387d64050466b9c138c8b9b584a867a8e85bb9` |
 | [#49](https://github.com/johnsherlock/mixmate/pull/49) | F06-S04 approved AUX GEQ controls | `5c6a3ca995c6b56c527823689d9bce3374610dcb` |
 
