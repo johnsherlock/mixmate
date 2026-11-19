@@ -9,7 +9,7 @@ import { resolveRelativeGroup, relativeGroupChange } from './relative-groups.js'
 export const OBSERVATION_WINDOW_MS = 2500;
 // F06-S04 sparse GEQ dispatch: an outgoing band request within this many
 // position units of the gesture-start coordinate is unchanged and not sent.
-// Observed 3.0.7865 firmware rounds GEQ echoes to 10 decimals and echoes only
+// Observed 3.0.7865 firmware formats echoes to 10 significant digits and echoes only
 // changed values. This applies to requests only; received values stay exact.
 export const GEQ_UNCHANGED_EPSILON = 1e-9;
 // F09-S05 live writes (user decision 2026-11-18, ADR-0008): while a deliberate
