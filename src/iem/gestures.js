@@ -96,6 +96,8 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onP
     if (cap) {
       gesture.token = onBegin ? onBegin(input) : true;
       if (!gesture?.token) { gesture = null; return; }
+      // Begin may place the cap at an owner-provided start (group reference).
+      gesture.start = +input.value;
       wrap.setPointerCapture(event.pointerId);
       input.focus({ preventScroll: true });
       event.preventDefault();

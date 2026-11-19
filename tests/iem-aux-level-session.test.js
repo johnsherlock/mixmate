@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { mountLiveController } from '../src/iem/live-controller.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
-import { continuousFaderDB, continuousDBToFader, GROUP_MIN_DB, GROUP_MAX_DB } from '../src/iem/relative-groups.js';
+import { continuousFaderDB, continuousDBToFader, GROUP_FLOOR_DB, GROUP_MAX_DB } from '../src/iem/relative-groups.js';
 import { SettingsRepository, emptySettings } from '../src/settings.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 const master = { kind: 'master', auxIndex: 0 }, send = { kind: 'send', auxIndex: 0, sourceId: 'i.0' };
@@ -29,6 +29,9 @@ function setup(factory = createAuxLevelSession, options = {}) {
     begin(target = master) { session.selectLevelTarget(target); assert.equal(session.armLevel(), true); return session.beginLevelGesture(); } };
 }
 const writes = socket => socket.sent.filter(message => message.startsWith('3:::SETD'));
+// F09-S05: a group preview is the loudest member's requested fader position.
+// This returns the position whose common delta from the current anchor is `delta` dB.
+const ref = (app, delta, members = ['i.0', 'f.0']) => continuousDBToFader(Math.max(...members.map(id => continuousFaderDB(app.session.snapshot().observations.get(`${id}.aux.0.value`)))) + delta);
 test('literal read-only factory cannot be upgraded by options and no session exposes a socket/raw sender', () => {
   const read = setup(createReadOnlySession); read.connect(); assert.deepEqual(Object.keys(read.session).sort(), ['connect', 'disconnect', 'snapshot', 'subscribe']);
   const control = setup(); control.connect(); assert.equal(control.session.socket, undefined); assert.equal(control.session.send, undefined); assert.equal(control.session.setd, undefined);
@@ -173,11 +176,11 @@ async function groupFixture(members = ['i.0', 'f.0']) {
 test('groups bind stable controller profile instead of saved selected-profile/IP and expose no member-array writer', async () => {
   const app = await groupFixture(); const token = app.beginGroup();
   assert.equal(app.session.snapshot().control.selected.kind, 'group'); assert.equal(writes(app.socket).length, 0);
-  assert.equal(app.session.previewLevelGesture(token, 3), 3); assert.equal(writes(app.socket).length, 0);
-  assert.equal(app.session.commitLevelGesture(token, 3), true);
+  const position = ref(app, 3); assert.ok(Math.abs(app.session.previewLevelGesture(token, position) - position) < 1e-12);
+  assert.equal(writes(app.socket).length, 2, 'group preview streams live'); assert.equal(app.session.commitLevelGesture(token, 3), true); assert.equal(writes(app.socket).length, 2, 'unchanged release adds nothing');
   const changes = writes(app.socket).map(message => parseIemStateFrame(message)[0]); assert.deepEqual(changes.map(item => item.sourceId), ['i.0', 'f.0']);
-  assert.ok(Math.abs(continuousFaderDB(changes[0].value) - continuousFaderDB(0.35) - 3) < 1e-10);
-  assert.ok(Math.abs(continuousFaderDB(changes[1].value) - continuousFaderDB(0.65) - 3) < 1e-10);
+  assert.ok(Math.abs(continuousFaderDB(changes[0].value) - continuousFaderDB(0.35) - 3) < 1e-9);
+  assert.ok(Math.abs(continuousFaderDB(changes[1].value) - continuousFaderDB(0.65) - 3) < 1e-9);
   for (const message of writes(app.socket)) app.socket.receive(message);
   assert.match(app.session.snapshot().control.status, /Last requested gesture Δ 3.00/); assert.equal(app.session.snapshot().control.previewDelta, 0);
   app.session.bindGroupProfile(null); assert.equal(app.session.selectGroupTarget('band', 0), false); assert.equal(app.session.armLevel(), false);
@@ -186,17 +189,18 @@ test('groups bind stable controller profile instead of saved selected-profile/IP
   assert.equal(app.session.selectGroupTarget(['i.0'], 0), false); assert.equal(app.session.commitLevelGesture({}, [0.5, 0.5]), false);
   app.session.disconnect(); await app.repository.close();
 });
-test('exact cached common preview commits at non-step upper/lower boundaries despite native input sanitization', async () => {
+test('full-range group endpoints commit the exact cached common preview: loudest at max on top, quietest at the floor at the bottom', async () => {
   for (const endpoint of ['upper', 'lower']) {
     const app = await groupFixture();
-    const baseline = endpoint === 'upper' ? continuousDBToFader(GROUP_MAX_DB - 0.523456) : continuousDBToFader(GROUP_MIN_DB + 0.523456);
+    const baseline = endpoint === 'upper' ? continuousDBToFader(GROUP_MAX_DB - 0.523456) : continuousDBToFader(GROUP_FLOOR_DB + 0.523456);
     app.socket.receive(`3:::SETD^i.0.aux.0.value^${baseline}`);
-    const token = app.beginGroup(), delta = app.session.previewLevelGesture(token, endpoint === 'upper' ? 12 : -12);
-    assert.ok(Math.abs(Math.abs(delta) - 0.523456) < 1e-10);
-    const sanitized = Math.round(delta * 10) / 10;
-    assert.notEqual(sanitized, delta); app.session.commitLevelGesture(token, sanitized);
+    const token = app.beginGroup(), position = app.session.previewLevelGesture(token, endpoint === 'upper' ? 1 : 0), delta = app.session.snapshot().control.previewDelta;
+    assert.ok(Math.abs(Math.abs(delta) - 0.523456) < 1e-9, String(delta));
+    if (endpoint === 'upper') assert.ok(position > 1 - 1e-9); else assert.ok(Math.abs(continuousFaderDB(position) - (continuousFaderDB(0.65) + delta)) < 1e-9);
+    app.session.commitLevelGesture(token, Math.round(position * 10) / 10);
     const changes = writes(app.socket).map(message => parseIemStateFrame(message)[0]);
-    const expected = endpoint === 'upper' ? GROUP_MAX_DB : GROUP_MIN_DB;
+    assert.equal(changes.length, 2, 'one live step; the unchanged release sends nothing more');
+    const expected = endpoint === 'upper' ? GROUP_MAX_DB : GROUP_FLOOR_DB;
     assert.ok(Math.abs(continuousFaderDB(changes[0].value) - expected) < 1e-9);
     assert.ok(Math.abs(continuousFaderDB(changes[0].value) - continuousFaderDB(baseline) - delta) < 1e-9);
     assert.ok(Math.abs(continuousFaderDB(changes[1].value) - continuousFaderDB(0.65) - delta) < 1e-9);
@@ -207,25 +211,25 @@ test('exact cached common preview commits at non-step upper/lower boundaries des
 test('group overlap deduplicates source/output closure, preserves per-path expected values and waits for all echoes', async () => {
   const app = await groupFixture(['i.0', 'i.1']);
   app.socket.receive('3:::SETD^i.0.stereoIndex^0\nSETD^i.1.stereoIndex^1\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^i.0.aux.0.value^0.4\nSETD^i.0.aux.1.value^0.4\nSETD^i.1.aux.0.value^0.4\nSETD^i.1.aux.1.value^0.4');
-  const token = app.beginGroup(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2);
+  const token = app.beginGroup(); app.session.previewLevelGesture(token, ref(app, 2, ['i.0', 'i.1'])); app.session.commitLevelGesture(token, 2);
   assert.equal(writes(app.socket).length, 4); assert.equal(new Set(writes(app.socket).map(message => parseIemStateFrame(message)[0].path)).size, 4);
   for (const [index, message] of writes(app.socket).entries()) { app.socket.receive(message); assert.equal(app.session.snapshot().control.pending, index !== 3); }
   assert.equal(app.session.snapshot().control.armed, true); app.session.disconnect(); await app.repository.close();
 });
 test('group identity/membership/order/profile/native away-back changes invalidate frozen gestures and never rebaseline', async () => {
   for (const change of ['membership', 'order', 'profile', 'native', 'hidden']) {
-    const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 3);
+    const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, ref(app, 3)); assert.equal(writes(app.socket).length, 2);
     if (change === 'membership') await app.repository.update(settings => { settings.profiles[0].groups[0].members = ['i.0']; });
     if (change === 'order') await app.repository.update(settings => { settings.profiles[0].groups[0].members.reverse(); });
     if (change === 'profile') app.session.bindGroupProfile('two');
     if (change === 'native') app.socket.receive('3:::SETD^i.0.aux.0.value^0.4\nSETD^i.0.aux.0.value^0.35');
     if (change === 'hidden') app.session.invalidateLevelContext();
-    assert.equal(app.session.commitLevelGesture(token, 3), false); assert.equal(writes(app.socket).length, 0); assert.equal(app.session.snapshot().control.armed, false);
+    assert.equal(app.session.commitLevelGesture(token, 3), false); assert.equal(writes(app.socket).length, 2, 'stream stops; no replay'); assert.equal(app.session.snapshot().control.armed, false);
     app.session.disconnect(); await app.repository.close();
   }
 });
 test('group zero delta is a no-op, while silent/unresolved/empty groups cannot arm', async () => {
-  const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 0);
+  const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 0.65); // the loudest member's own position
   assert.equal(app.session.commitLevelGesture(token, 0), false); assert.equal(writes(app.socket).length, 0); assert.match(app.session.snapshot().control.status, /no commands/);
   app.socket.receive('3:::SETD^f.0.aux.0.value^0'); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
   await app.repository.update(settings => { settings.profiles[0].groups[0].members = ['i.20']; }); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
@@ -234,10 +238,10 @@ test('group zero delta is a no-op, while silent/unresolved/empty groups cannot a
 });
 test('group partial throws/timeout/reentrant membership changes reuse stop-and-disarm with no replay', async () => {
   for (const failure of ['throw', 'timeout', 'membership']) {
-    const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 2);
+    const app = await groupFixture(), token = app.beginGroup(), position = ref(app, 2);
     if (failure === 'throw') app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.socket.throws = true; };
     if (failure === 'membership') app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.session.bindGroupProfile('two'); };
-    app.session.commitLevelGesture(token, 2);
+    app.session.previewLevelGesture(token, position); app.session.commitLevelGesture(token, 2);
     if (failure === 'timeout') { app.move(2600); app.flush(); }
     const count = writes(app.socket).length; assert.equal(count, failure === 'timeout' ? 2 : 1); assert.equal(app.session.snapshot().control.armed, failure === 'timeout');
     app.move(3000); app.flush(); assert.equal(writes(app.socket).length, count); assert.equal(app.session.commitLevelGesture(token, 2), false);
@@ -305,15 +309,15 @@ test('F09 partial dispatch barriers cover unattempted closure and new generation
 test('peer groups wait for complete received basis and then reanchor each deliberate gesture', async () => {
   const app = await groupFixture();
   try {
-    let token = app.beginGroup(); app.session.previewLevelGesture(token, 3); app.session.commitLevelGesture(token, 3);
+    let token = app.beginGroup(); app.session.previewLevelGesture(token, ref(app, 3)); app.session.commitLevelGesture(token, 3);
     const first = writes(app.socket).slice();
     app.move(2500); assert.equal(app.session.beginLevelGesture(), null);
     app.socket.receive(first[0]); assert.equal(app.session.beginLevelGesture(), null);
     app.socket.receive(first[1]); token = app.session.beginLevelGesture(); assert.ok(token);
-    app.session.previewLevelGesture(token, 2); assert.equal(app.session.commitLevelGesture(token, -999), true);
+    app.session.previewLevelGesture(token, ref(app, 2)); assert.equal(app.session.commitLevelGesture(token, -999), true);
     const commands = writes(app.socket).map(message => parseIemStateFrame(message)[0]);
-    for (let i = 0; i < 2; i++) assert.ok(Math.abs(continuousFaderDB(commands[i + 2].value) - continuousFaderDB(commands[i].value) - 2) < 1e-10);
-    assert.equal(app.session.snapshot().control.lastDelta, 2);
+    for (let i = 0; i < 2; i++) assert.ok(Math.abs(continuousFaderDB(commands[i + 2].value) - continuousFaderDB(commands[i].value) - 2) < 1e-9);
+    assert.ok(Math.abs(app.session.snapshot().control.lastDelta - 2) < 1e-9);
     assert.equal(app.session.snapshot().observations.get('i.0.aux.0.value'), commands[0].value);
   } finally { app.session.disconnect(); await app.repository.close(); }
 });
@@ -321,9 +325,9 @@ test('peer groups wait for complete received basis and then reanchor each delibe
 test('F09 settings and socket clocks revalidate before each ordinal without replay', async () => {
   const app = await groupFixture();
   try {
-    const token = app.beginGroup(); app.session.previewLevelGesture(token, 2);
+    const token = app.beginGroup();
     app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.move(2600); };
-    assert.equal(app.session.commitLevelGesture(token, 2), false);
+    assert.equal(app.session.previewLevelGesture(token, ref(app, 2)), null); assert.equal(app.session.commitLevelGesture(token, 2), false);
     assert.equal(writes(app.socket).length, 1); assert.equal(app.session.snapshot().control.dispatched, 1);
     assert.equal(app.session.snapshot().control.armed, false);
   } finally { app.session.disconnect(); await app.repository.close(); }
@@ -371,14 +375,14 @@ test('F09 reentrant same-socket replacement keeps new operation counts/permissio
 test('F09 cumulative group clamp uses the freshly received actual anchor and exact cached common coordinate', async () => {
   const app = await groupFixture();
   try {
-    let token = app.beginGroup(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2); for (const message of writes(app.socket)) app.socket.receive(message);
-    token = app.session.beginLevelGesture(); const local = app.session.previewLevelGesture(token, 10000);
+    let token = app.beginGroup(); app.session.previewLevelGesture(token, ref(app, 2)); app.session.commitLevelGesture(token, 2); for (const message of writes(app.socket)) app.socket.receive(message);
+    token = app.session.beginLevelGesture(); const top = app.session.previewLevelGesture(token, 1), local = app.session.snapshot().control.previewDelta;
     const expectedTotal = GROUP_MAX_DB - continuousFaderDB(0.65);
-    assert.ok(Math.abs(local - (expectedTotal - 2)) < 1e-10);
+    assert.ok(top > 1 - 1e-9); assert.ok(Math.abs(local - (expectedTotal - 2)) < 1e-9);
     assert.equal(app.session.commitLevelGesture(token, Math.round(local)), true);
     const commands = writes(app.socket).slice(-2).map(message => parseIemStateFrame(message)[0]);
     for (let i = 0; i < 2; i++) assert.ok(Math.abs(continuousFaderDB(commands[i].value) - continuousFaderDB([0.35, 0.65][i]) - expectedTotal) < 1e-9);
-    assert.ok(Math.abs(app.session.snapshot().control.lastDelta - (expectedTotal - 2)) < 1e-10);
+    assert.ok(Math.abs(app.session.snapshot().control.lastDelta - (expectedTotal - 2)) < 1e-9);
   } finally { app.session.disconnect(); await app.repository.close(); }
 });
 
@@ -386,9 +390,9 @@ test('F09 recovery cannot shrink to a fresh individual or canonical group subset
   for (const shrink of ['individual', 'membership', 'overlap']) {
     const app = await groupFixture();
     try {
-      const token = app.beginGroup(); app.session.previewLevelGesture(token, 2);
+      const token = app.beginGroup(), position = ref(app, 2);
       app.socket.hook = message => { if (message.startsWith('3:::SETD')) app.session.disarmLevel(); };
-      app.session.commitLevelGesture(token, 2); app.socket.hook = null;
+      app.session.previewLevelGesture(token, position); app.session.commitLevelGesture(token, 2); app.socket.hook = null;
       app.socket.receive('3:::SETD^i.0.aux.0.value^0.35');
       app.session.selectLevelTarget(master); assert.equal(app.session.armLevel(), true); // disjoint value closure
       if (shrink === 'individual') app.session.selectLevelTarget(send);
@@ -397,7 +401,9 @@ test('F09 recovery cannot shrink to a fresh individual or canonical group subset
         app.session.selectGroupTarget('band', 0);
       }
       assert.equal(app.session.snapshot().control.eligible, false, shrink); assert.equal(app.session.armLevel(), false, shrink);
-      app.socket.receive('3:::SETD^f.0.aux.0.value^0.65'); assert.equal(app.session.armLevel(), true, shrink);
+      // F09-S05: the never-echoed i.0 live value keeps a group anchor blocked for the
+      // bounded own-echo window; the full-closure recovery rule is unchanged.
+      app.move(2500); app.socket.receive('3:::SETD^f.0.aux.0.value^0.65'); assert.equal(app.session.armLevel(), true, shrink);
       assert.equal(writes(app.socket).length, 1);
     } finally { app.session.disconnect(); await app.repository.close(); }
   }
@@ -430,7 +436,7 @@ test('F09 every clock-sample fault around dispatch preserves exact authorization
 test('peer group outstanding basis survives subset selection, recovers from historical-scope receipts and leaves disjoint scope usable', async () => {
   const app = await groupFixture();
   try {
-    let token = app.beginGroup(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2);
+    let token = app.beginGroup(); app.session.previewLevelGesture(token, ref(app, 2)); app.session.commitLevelGesture(token, 2);
     const commands = writes(app.socket).slice();
     app.session.selectLevelTarget(send); app.socket.receive(commands[0]);
     app.session.selectLevelTarget(master); assert.equal(app.session.canEditLevelTarget(master), true);
@@ -439,9 +445,9 @@ test('peer group outstanding basis survives subset selection, recovers from hist
     assert.equal(app.session.canEditLevelTarget({ kind: 'group', groupId: 'band', auxIndex: 0 }), true);
     app.session.selectGroupTarget('band', 0); token = app.session.beginLevelGesture(); assert.ok(token);
     const actual = app.session.snapshot().observations;
-    app.session.previewLevelGesture(token, 1); app.session.commitLevelGesture(token, 1);
+    app.session.previewLevelGesture(token, ref(app, 1)); app.session.commitLevelGesture(token, 1);
     const next = writes(app.socket).slice(-2).map(message => parseIemStateFrame(message)[0]);
-    for (const command of next) assert.ok(Math.abs(continuousFaderDB(command.value) - continuousFaderDB(actual.get(command.path)) - 1) < 1e-10);
+    for (const command of next) assert.ok(Math.abs(continuousFaderDB(command.value) - continuousFaderDB(actual.get(command.path)) - 1) < 1e-9);
   } finally { app.session.disconnect(); await app.repository.close(); }
 });
 
@@ -455,14 +461,17 @@ test('F04-S05 device-local group owners drive relative groups and any owner chan
   try {
     app.session.bindGroupOwner({ kind: 'local', id: 'local-set' });
     assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
-    let token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, 2); app.session.commitLevelGesture(token, 2);
+    let token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, ref(app, 2)); app.session.commitLevelGesture(token, 2);
     assert.deepEqual(writes(socket).map(message => parseIemStateFrame(message)[0].sourceId), ['i.0', 'f.0']);
     for (const message of writes(socket)) socket.receive(message);
-    const sent = writes(socket).length;
+    let sent = writes(socket).length;
     for (const next of [{ kind: 'profile', id: 'rig' }, null, { kind: 'local', id: 'other-local' }, { kind: 'mixer', id: 'rig' }, { kind: 'local', id: 'local-set', members: ['i.0'] }]) {
       app.session.bindGroupOwner({ kind: 'local', id: 'local-set' });
       assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
-      token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, 1);
+      token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, ref(app, 1));
+      // Live steps already applied stay (no rollback); their echoes are own echoes.
+      for (const message of writes(socket).slice(sent)) socket.receive(message);
+      sent = writes(socket).length;
       app.session.bindGroupOwner(next);
       assert.equal(app.session.commitLevelGesture(token, 1), false, JSON.stringify(next));
       assert.equal(app.session.snapshot().control.armed, false); assert.equal(writes(socket).length, sent);
@@ -480,14 +489,14 @@ test('F04-S05 device-local group owners drive relative groups and any owner chan
 // path during synchronous dispatch also stops the remainder.
 test('level and group dispatch stop on a reentrant unchanged receipt for an unattempted path; full closure recovery needs no Enable', async () => {
   const app = setup(), socket = app.connect(LIVE.replace('a.0.stereoIndex^-1', 'a.0.stereoIndex^0').replace('a.1.stereoIndex^-1', 'a.1.stereoIndex^1'));
-  const token = app.begin(master); app.session.previewLevelGesture(token, 0.7);
+  const token = app.begin(master);
   socket.hook = () => { socket.hook = null; socket.receive('3:::SETD^a.1.mix^0.4'); };
-  assert.equal(app.session.commitLevelGesture(token, 0.7), false); assert.equal(writes(socket).length, 1);
+  assert.equal(app.session.previewLevelGesture(token, 0.7), null); assert.equal(app.session.commitLevelGesture(token, 0.7), false); assert.equal(writes(socket).length, 1);
   assert.equal(app.session.canEditLevelTarget(master), false);
   socket.receive('3:::SETD^a.0.mix^0.7'); assert.equal(app.session.canEditLevelTarget(master), false, 'unattempted side unresolved');
   socket.receive('3:::SETD^a.1.mix^0.4'); assert.equal(app.session.canEditLevelTarget(master), false, 'linked sides unequal stay read-only');
   socket.receive('3:::SETD^a.0.mix^0.4'); assert.equal(app.session.canEditLevelTarget(master), true);
-  const group = await groupFixture(); const groupToken = group.beginGroup(); group.session.previewLevelGesture(groupToken, 2);
+  const group = await groupFixture(); const groupToken = group.beginGroup(), position = ref(group, 2);
   group.socket.hook = () => { group.socket.hook = null; group.socket.receive('3:::SETD^f.0.aux.0.value^0.65'); };
-  assert.equal(group.session.commitLevelGesture(groupToken, 0), false); assert.equal(writes(group.socket).length, 1);
+  assert.equal(group.session.previewLevelGesture(groupToken, position), null); assert.equal(group.session.commitLevelGesture(groupToken, 0), false); assert.equal(writes(group.socket).length, 1);
 });

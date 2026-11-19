@@ -12,6 +12,21 @@ export const OBSERVATION_WINDOW_MS = 2500;
 // Observed 3.0.7865 firmware rounds GEQ echoes to 10 decimals and echoes only
 // changed values. This applies to requests only; received values stay exact.
 export const GEQ_UNCHANGED_EPSILON = 1e-9;
+// F09-S05 live writes (user decision 2026-11-18, ADR-0008): while a deliberate
+// gesture is active the private owner streams the latest cached preview at most
+// once per interval (latest value wins, no queue), then sends the final exact
+// value on release when it differs. Every kind uses the same sparse request
+// filter: a path is sent only when it differs from the last value requested for
+// it by at least this epsilon, so the desk (which echoes only changed values)
+// echoes every step. Timing only: no new paths, fields or senders.
+export const STREAM_UNCHANGED_EPSILON = GEQ_UNCHANGED_EPSILON;
+export const LIVE_STREAM_INTERVAL_MS = Object.freeze({ level: 50, group: 50, pan: 50, geq: 120 });
+// Observed 3.0.7865 companion echoes round own values to 10 decimals. A peer
+// receipt equal (exactly or at that rounding) to a value this owner authorized
+// for the same path within the observation window, and not yet superseded by a
+// later matched echo, is an own echo; any other changed value is native.
+export const OWN_ECHO_DECIMALS = 10;
+const echoRound = value => Number(value.toFixed(OWN_ECHO_DECIMALS));
 const scopes = new WeakSet();
 const requireScope = scope => { if (!scopes.has(scope)) throw Error('Use a validated typed pure scope.'); };
 const uint = x => Number.isSafeInteger(x) && x >= 0;
@@ -67,7 +82,7 @@ export function createControlState({ scope, generation, revision, now }) {
 // The historical pure constructor remains available to compatibility fixtures.
 // Only the private owner chooses peer policy; this data object grants no sender.
 export function createPeerControlState(input) {
-  return freeze({ ...createControlState(input), peer: true, basis: [] });
+  return freeze({ ...createControlState(input), peer: true, basis: [], echoes: [] });
 }
 const row = (s, path) => s.actual.find(x => x.path === path);
 const owns = (s, op) => op && op.generation === s.generation && op.revision === s.revision && op.scope === s.scope;
@@ -137,6 +152,38 @@ function rememberBasis(s, op) {
   if (members.size > 1024 || s.basis.length >= 1024) throw Error('Bounded received-basis capacity exhausted.');
   s.basis.push({ members: [...members.values()] });
 }
+// Bounded own-echo journal (peer only): values authorized per path, pruned
+// after the observation window. A match consumes it and every older entry.
+function pruneEchoes(s, now) {
+  if (!s.peer) return;
+  s.echoes = s.echoes.map(e => ({ path: e.path, values: e.values.filter(v => elapsed(now, v.at) < OBSERVATION_WINDOW_MS) })).filter(e => e.values.length);
+}
+function rememberEcho(s, path, value, now) {
+  if (!s.peer) return;
+  let entry = s.echoes.find(e => e.path === path);
+  if (!entry) {
+    if (s.echoes.length >= 1024) throw Error('Bounded own-echo journal exhausted.');
+    entry = { path, values: [] }; s.echoes.push(entry);
+  }
+  entry.values.push({ value, at: now });
+  if (entry.values.length > 128) entry.values.shift();
+}
+function consumeEcho(s, path, value) {
+  if (!s.peer) return false;
+  const entry = s.echoes.find(e => e.path === path);
+  const index = entry ? entry.values.findIndex(v => v.value === value || echoRound(v.value) === value) : -1;
+  if (index < 0) return false;
+  entry.values.splice(0, index + 1);
+  if (!entry.values.length) s.echoes.splice(s.echoes.indexOf(entry), 1);
+  return true;
+}
+const sparsePlan = (s, preview) => preview.expected.filter((x, i) => Math.abs(x.value - s.chain.requested[i].value) >= STREAM_UNCHANGED_EPSILON);
+function newOperation(s, preview, planned, now, live) {
+  retire(s);
+  s.operation = { id: s.nextId++, generation: s.generation, revision: s.revision, scope: s.scope, status: 'dispatching', expected: planned.map(x => ({ ...x, cutpoint: null, matched: false })),
+    delta: preview.delta, started: now, authorized: 0, returned: 0, flight: null, unknownDelivery: false, completed: null, live, rounded: false };
+  s.status = 'dispatching';
+}
 function stop(s, status) {
   barrier(s);
   if (active(s)) s.operation.status = status;
@@ -147,6 +194,8 @@ function eligible(s) {
   if (s.scope.closures.some(paths => paths.some(path => row(s, path).value !== row(s, paths[0]).value))) return false;
   const unresolvedBasis = () => s.basis.some(b => b.members.some(m => s.scope.members.some(x => x.path === m.path)) && b.members.some(m => (row(s, m.path)?.receipt ?? 0) <= m.floor));
   if (s.peer && s.scope.kind === 'group' && unresolvedBasis()) return false;
+  // F09-S05: never freeze a group anchor while own streamed echoes are outstanding.
+  if (s.peer && s.scope.kind === 'group' && s.echoes.some(e => s.scope.members.some(x => x.path === e.path))) return false;
   // GEQ (F06-S04): a retained chain continues from its requested coordinate, but
   // re-arming from received state needs every prior local write's touched path to
   // have a newer receipt after its cutpoint; otherwise stale bands would be resent.
@@ -169,7 +218,7 @@ function complete(s) {
   if (op?.status === 'pending' && op.expected.every(x => x.matched)) { op.status = 'observed-match'; s.status = 'observed-match'; }
 }
 function copy(s) {
-  return { ...s, ...(s.peer ? { basis: s.basis.map(b => ({ members: b.members.map(m => ({ ...m })) })) } : {}), actual: s.actual.map(x => ({ ...x })), barriers: s.barriers.map(x => ({ ...x })),
+  return { ...s, ...(s.peer ? { basis: s.basis.map(b => ({ members: b.members.map(m => ({ ...m })) })), echoes: s.echoes.map(e => ({ path: e.path, values: e.values.map(v => ({ ...v })) })) } : {}), actual: s.actual.map(x => ({ ...x })), barriers: s.barriers.map(x => ({ ...x })),
     chain: s.chain && { ...s.chain }, gesture: s.gesture && { ...s.gesture },
     operation: s.operation && { ...s.operation, expected: s.operation.expected.map(x => ({ ...x })) },
     retired: s.retired.map(op => ({ ...op, expected: op.expected.map(x => ({ ...x })) })) };
@@ -177,7 +226,7 @@ function copy(s) {
 
 // All time, socket receipts and send outcomes are explicit data. This reducer
 // performs no dispatch, listener installation, timers, persistence or networking.
-const eventKeys = Object.freeze({ tick: [], arm: [], begin: [], preview: ['token', 'value'], commit: ['token'], authorize: ['id', 'ordinal'], returned: ['id', 'ordinal'], threw: ['id', 'ordinal'], receive: ['generation', 'path', 'value', 'receipt'], invalidate: ['reason', 'revision'], select: ['scope', 'revision'], 'new-generation': ['generation', 'revision', 'scope'] });
+const eventKeys = Object.freeze({ tick: [], arm: [], begin: [], preview: ['token', 'value'], stream: ['token'], commit: ['token'], authorize: ['id', 'ordinal'], returned: ['id', 'ordinal'], threw: ['id', 'ordinal'], receive: ['generation', 'path', 'value', 'receipt'], invalidate: ['reason', 'revision'], select: ['scope', 'revision'], 'new-generation': ['generation', 'revision', 'scope'] });
 const invalidations = ['selection', 'profile', 'topology', 'membership', 'native', 'processing', 'hide', 'navigation', 'disconnect', 'sleep', 'cancel', 'missing'];
 function validatedEvent(input, state) {
   const descriptor = input && Object.getOwnPropertyDescriptor(input, 'type');
@@ -215,8 +264,9 @@ function settleOutcome(s, event, now, allowProgress) {
       op.status = 'pending'; op.completed = now; s.status = 'pending';
       rememberBasis(s, op);
       const sent = new Map(op.expected.map(({ path, target, value }) => [path, { path, target, value }]));
-      // Sparse GEQ: merge dispatched bands into the full retained coordinate.
-      s.chain = { ...s.chain, delta: op.delta, requested: s.scope.kind === 'geq' ? s.chain.requested.map(x => sent.get(x.path) ?? x) : [...sent.values()], touched: true };
+      // Sparse dispatch (every kind since F09-S05): merge sent paths into the
+      // full retained coordinate, which is also the next step's sparse basis.
+      s.chain = { ...s.chain, delta: op.delta, requested: s.chain.requested.map(x => sent.get(x.path) ?? x), touched: true };
       complete(s);
     }
   }
@@ -234,6 +284,7 @@ export function transitionControl(state, input) {
     return freeze(s);
   }
   s.now = now;
+  pruneEchoes(s, now);
   if (owns(s, s.operation) && s.operation.status === 'dispatching' && elapsed(now, s.operation.started) >= OBSERVATION_WINDOW_MS) stop(s, 'dispatch-expired');
   if (owns(s, s.operation) && s.operation.status === 'pending' && elapsed(now, s.operation.completed) >= OBSERVATION_WINDOW_MS) {
     s.operation.status = 'sent-unverified'; s.status = 'sent-unverified';
@@ -251,11 +302,12 @@ export function transitionControl(state, input) {
         s.operation.status = 'sent-unverified'; s.status = 'sent-unverified';
       }
       if (!s.armed || active(s) || s.gesture || !eligible(s)) throw Error('Owned eligible gesture required.');
-      s.gesture = { token: freeze({ id: s.nextId++ }), preview: null }; s.status = 'gesture'; break;
+      // baseDelta/origin freeze the gesture start; streamed steps update chain.
+      s.gesture = { token: freeze({ id: s.nextId++ }), preview: null, baseDelta: s.chain.delta, origin: s.chain.requested, streamed: false }; s.status = 'gesture'; break;
     case 'preview': {
       const { token, value } = fields(['token', 'value']);
       if (token !== s.gesture?.token || !s.armed) throw Error('Foreign gesture.');
-      let expected, delta = s.chain.delta;
+      let expected, delta = s.gesture.baseDelta;
       if (s.scope.kind === 'group') {
         if (!finite(value) || !finite(delta + value)) throw Error('Finite relative intent required.');
         const change = relativeGroupChange({ members: s.chain.anchor }, delta + value);
@@ -268,24 +320,37 @@ export function transitionControl(state, input) {
         const normalized = s.scope.kind === 'pan' ? normalizeAuxPanPosition(value) : value;
         expected = s.scope.members.map(x => ({ path: x.path, target: x.target, value: normalized }));
       }
-      s.gesture.preview = { expected, delta, gestureDelta: delta - s.chain.delta }; break;
+      s.gesture.preview = { expected, delta, gestureDelta: delta - s.gesture.baseDelta }; break;
+    }
+    case 'stream': {
+      // One throttled live step of the current cached preview. The gesture was
+      // fully eligible at begin; afterwards only native/context events (which
+      // stop it) or own echoes can change its scope, so it stays alive.
+      const { token } = fields(['token']);
+      if (token !== s.gesture?.token || !s.gesture.preview || !s.armed || !s.scopeCurrent) throw Error('Owned streaming preview required.');
+      if (owns(s, s.operation) && s.operation.status === 'dispatching') throw Error('Previous live step still dispatching.');
+      const planned = sparsePlan(s, s.gesture.preview);
+      if (!planned.length) break; // Unchanged: the desk would not echo it.
+      if (owns(s, s.operation) && s.operation.status === 'pending') s.operation.status = 'sent-unverified';
+      newOperation(s, s.gesture.preview, planned, now, true); s.gesture.streamed = true; break;
     }
     case 'commit': {
-      const { token } = fields(['token']);
-      if (token !== s.gesture?.token || !s.gesture.preview || !s.armed || !eligible(s)) throw Error('Owned cached preview required.');
+      const { token } = fields(['token']), streamed = Boolean(s.gesture?.streamed);
+      if (token !== s.gesture?.token || !s.gesture.preview || !s.armed || !(streamed ? s.scopeCurrent : eligible(s))) throw Error('Owned cached preview required.');
+      if (owns(s, s.operation) && s.operation.status === 'dispatching') throw Error('Previous live step still dispatching.');
       const preview = s.gesture.preview; s.gesture = null;
-      // GEQ dispatches only bands that differ from the gesture-start coordinate.
-      const planned = s.scope.kind === 'geq' ? preview.expected.filter((x, i) => Math.abs(x.value - s.chain.requested[i].value) >= GEQ_UNCHANGED_EPSILON) : preview.expected;
-      if (!planned.length || preview.expected.every((x, i) => x.value === s.chain.requested[i].value)) { s.status = 'no-op'; break; }
-      retire(s);
-      s.operation = { id: s.nextId++, generation: s.generation, revision: s.revision, scope: s.scope, status: 'dispatching', expected: planned.map(x => ({ ...x, cutpoint: null, matched: false })),
-        delta: preview.delta, started: now, authorized: 0, returned: 0, flight: null, unknownDelivery: false, completed: null };
-      s.status = 'dispatching'; break;
+      // Only paths that differ from the last requested coordinate are sent; a
+      // streamed release sends the final exact value only when it differs.
+      const planned = sparsePlan(s, preview);
+      if (!planned.length) { s.status = streamed && owns(s, s.operation) ? s.operation.status : 'no-op'; break; }
+      if (streamed && owns(s, s.operation) && s.operation.status === 'pending') s.operation.status = 'sent-unverified';
+      newOperation(s, preview, planned, now, streamed); break;
     }
     case 'authorize': {
       const { id, ordinal } = fields(['id', 'ordinal']), op = s.operation;
       if (id !== op?.id || op.status !== 'dispatching' || !s.armed || !uint(ordinal) || ordinal !== op.authorized || ordinal !== op.returned || ordinal >= op.expected.length || op.flight !== null) throw Error('Ordered single authorization required.');
       op.expected[ordinal].cutpoint = row(s, op.expected[ordinal].path).receipt;
+      rememberEcho(s, op.expected[ordinal].path, op.expected[ordinal].value, now);
       op.flight = ordinal; op.authorized++; s.chain.touched = true; break;
     }
     case 'returned':
@@ -297,22 +362,25 @@ export function transitionControl(state, input) {
       if (generation !== s.generation) break; // old socket events have no authority
       if (receipt <= s.lastReceipt) throw Error('Receipt sequence must increase.');
       s.lastReceipt = receipt;
+      const echo = consumeEcho(s, path, value);
       const actual = row(s, path); if (!actual) break; // unrelated path cannot match
       const previous = actual.value; actual.value = value; actual.receipt = receipt;
       if (!s.scope.members.some(member => member.path === path)) break; // Historical disjoint actual data grants no current invalidation authority.
       const op = owns(s, s.operation) ? s.operation : null, expectation = op?.expected.find(x => x.path === path);
       if (active(s) && expectation?.cutpoint !== null && receipt > expectation?.cutpoint) {
         if (op.status === 'dispatching') stop(s, 'reentrant-invalidated');
-        else if (value !== expectation.value) stop(s, 'precision-or-native-conflict');
-        else { expectation.matched = true; complete(s); }
-      } else if (previous !== value && !(s.chain && expectation?.value === value && ['sent-unverified', 'observed-match'].includes(op?.status))) stop(s, 'native-invalidated');
+        else if (value === expectation.value || echo && echoRound(expectation.value) === value) {
+          expectation.matched = true; if (value !== expectation.value) op.rounded = true; complete(s);
+        } else if (!echo) stop(s, 'precision-or-native-conflict');
+        // else: own echo of an earlier live step; actual follows, no cancellation.
+      } else if (!echo && previous !== value && !(s.chain && expectation?.value === value && ['sent-unverified', 'observed-match'].includes(op?.status))) stop(s, 'native-invalidated');
       break;
     }
     case 'invalidate': {
       const { reason, revision } = fields(['reason', 'revision']);
       if (!invalidations.includes(reason) || !uint(revision) || revision <= s.revision) throw Error('Owned advancing context required.');
       stop(s, reason + '-invalidated'); s.revision = revision; s.scopeCurrent = false;
-      if (['disconnect', 'hide', 'sleep'].includes(reason)) s.actual = [];
+      if (['disconnect', 'hide', 'sleep'].includes(reason)) { s.actual = []; if (s.peer) s.echoes = []; }
       break;
     }
     case 'select': {
@@ -330,7 +398,7 @@ export function transitionControl(state, input) {
     case 'new-generation': {
       const { generation, revision, scope } = fields(['generation', 'revision', 'scope']); requireScope(scope);
       if (!uint(generation) || generation <= s.generation || !uint(revision) || revision <= s.revision) throw Error('Explicit new owned generation required.');
-      stop(s, 'generation-invalidated'); retire(s); s.barriers = []; if (s.peer) s.basis = []; s.generation = generation; s.revision = revision; s.scope = scope; s.scopeCurrent = true;
+      stop(s, 'generation-invalidated'); retire(s); s.barriers = []; if (s.peer) { s.basis = []; s.echoes = []; } s.generation = generation; s.revision = revision; s.scope = scope; s.scopeCurrent = true;
       s.actual = scope.members.map(x => ({ path: x.path, value: x.value, receipt: x.receipt })); s.lastReceipt = Math.max(...scope.members.map(x => x.receipt));
       break;
     }

@@ -66,11 +66,12 @@ test('literal read-only factory remains one socket and only three connection for
   for (const { fn, at } of a.jobs.values()) if (at === Infinity) fn();
   assert.ok(socket.sent.every(message => ['3:::INIT', '3:::ALIVE', '2::'].includes(message))); a.session.disconnect();
 });
-test('rounded compatible peer actuals become ready with raw precision and no Enable; foreign edits cancel old gesture only', () => {
+test('own echoes rounded to 10 decimals stay raw actual, are own-echo matches (F09-S05) and need no Enable; foreign edits cancel old gesture only', () => {
   const a = fixture(); a.session.connect('192.168.0.60'); const [writer, receiver] = a.sockets; writer.open(); receiver.open(); receiver.receive(BASE);
   a.session.selectLevelTarget(MASTER); a.session.commitLevelGesture(a.session.beginLevelGesture(), 0.39619533446252725);
   receiver.receive('3:::SETD^a.0.mix^0.3961953345\nSETD^a.1.mix^0.3961953345');
-  assert.equal(a.session.snapshot().observations.get('a.0.mix'), 0.3961953345); assert.match(a.session.snapshot().control.status, /Ready to edit/);
+  assert.equal(a.session.snapshot().observations.get('a.0.mix'), 0.3961953345); assert.match(a.session.snapshot().control.status, /Observed matching values \(desk-rounded to 10 decimals\)/);
+  assert.equal(a.session.snapshot().control.armed, true);
   assert.doesNotMatch(a.session.snapshot().control.status, /enable|controls off|acknowledged/i);
   const old = a.session.beginLevelGesture(); assert.ok(old); receiver.receive('3:::SETD^a.0.mix^0.42\nSETD^a.1.mix^0.42');
   assert.equal(a.session.commitLevelGesture(old, 0.8), false); assert.ok(a.session.beginLevelGesture()); assert.equal(writes(writer).length, 2); a.session.disconnect();

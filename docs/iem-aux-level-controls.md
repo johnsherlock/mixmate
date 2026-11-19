@@ -1,5 +1,9 @@
 # Individual AUX level controls — F05-S02
 
+## Current F09-S05 live-write reconciliation — 2026-11-18
+
+By explicit user decision the release-only rule is reversed: deliberate gestures stream throttled typed writes while dragging and release sends the final exact value only if it differs ([ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18)). Wire forms, allowlist and factories are unchanged; only timing changes. Level cap drag / key repeat: leading step immediately, then at most one step per 50 ms carrying the latest preview; both linked sides receive the same value; unchanged values (≥1e-9 rule) are not sent. Own companion echoes (exact or 10-decimal rounded) do not cancel; any other changed receipt stops the stream immediately.
+
 ## Current F09-S04 peer-editor reconciliation — 2026-11-17
 
 The [current runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17) supersede historical manual arming/rearming, cumulative old-anchor groups, one-socket actual state and observation-window input blocking below. Qualified connected controls accept direct cap/key gestures without Enable/Disable or prior name selection. A private receive-only companion is the sole actual journal; existing typed writer classes remain unchanged. Native/precision changes cancel obsolete intent and update raw actual; the next deliberate gesture automatically uses current compatible state. Groups reanchor per gesture only after complete overlapping local-write basis receipts. Incomplete dispatch still requires full touched-closure post-floor recovery, then a new gesture without manual rearm. No retry/replay/rollback, new fields, generic sender or EQ runtime. Old sections/evidence describe their attributed historical builds; current exact-head delivery and firmware acceptance belong to [F09-S04](stories/F09-S04.md).

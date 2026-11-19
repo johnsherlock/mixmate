@@ -312,3 +312,16 @@ Implementation on `codex/f06-s04-aux-geq` (from main `0a387d6`), opened as [PR #
 - **Entry points.** Mix EQ button and master-cap double tap (prototype shortcut). Enter-on-master is not wired in live.
 
 Live checks still outstanding (story-scoped standing permission applies; record targets/method/results/cleanup): native GEQ band and bypass edits appearing at MixMate, with precision; MixMate 31/62-write dispatch appearing in the native app on both linked sides (and whether the server mirrors); INIT completeness of all bands/bypass; which other `a.N.*` fields stream; partial/interrupted recovery on hardware; phone/tablet layout and touch. Backlog row 7a still says F04-S05 is in review although Git history shows PR #48 merged; left for the orchestrator.
+
+## F09-S05 live throttled writes — 2026-11-18
+
+Implementation on `codex/f09-s05-live-fader-writes` (from main `da7515f`), committed locally; not pushed, no PR. User decision (2026-11-18, recorded by root): reverse release-only commits; stream level/group/pan/GEQ while dragging. Routine decisions made by the story agent, for review:
+
+- **Rates.** 50 ms (~20 Hz) for level/group/pan, 120 ms (~8 Hz) for GEQ; leading step immediately, latest value wins, release sends the final exact value only if different. GEQ reset stays a confirmed one-shot.
+- **Sparse for every kind** (≥1e-9 versus the last requested value). Previously only GEQ was sparse; level/pan closures share one value so behaviour is unchanged, groups now skip unchanged members.
+- **Own-echo rule.** Exact or 10-decimal match against values this owner authorized for the path in the last 2.5 s that are not yet superseded (in-order consumption). A rounded match of the current expectation now counts as observed-match ("desk-rounded"); previously it was `precision-or-native-conflict`. Limit: a native edit to exactly such a value is indistinguishable (most plausible for 3-decimal pan).
+- **Gesture-scoped topology-only revalidation** after begin, so linked own echoes arriving one side at a time do not cancel; begin still does the full check.
+- **Group floor −100 dB** (position ≈ 0.00125) instead of 0/−∞ or the −199 dB window edge; quietest already below the floor means no downward travel. Group cap = loudest member's position. A group waits for outstanding own echoes (≤2.5 s) before re-anchoring; a never-echoed value therefore blocks group re-anchoring for up to 2.5 s.
+- **Tests.** About 30 existing tests encoded "preview never writes" or ±dB group previews; they were updated to the new semantics (hooks moved before the preview, positions instead of deltas), not deleted.
+
+Live checks outstanding: listed in [F09-S05](stories/F09-S05.md#validation-and-delivery). F08-S01 remains parked.

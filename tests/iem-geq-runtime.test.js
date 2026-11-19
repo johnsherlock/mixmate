@@ -62,7 +62,7 @@ test('sparse dispatch: only changed band peaks are written (both linked sides); 
   const token = app.session.beginEqGesture(); assert.ok(token);
   const values = app.session.previewEqGesture(token, drawFrom(app, draw => { draw[5] = 6; }));
   assert.equal(values.length, 31); assert.equal(values[5], auxEqDbToPosition(6)); assert.ok(values.every((value, band) => band === 5 || value === 0.5));
-  assert.equal(app.writes().length, 0, 'preview never writes');
+  assert.equal(app.writes().length, 2, 'a deliberate preview streams only the changed band, both sides');
   assert.equal(app.session.commitEqGesture(token), true);
   assert.deepEqual(app.writes(), [`3:::SETD^a.0.eq.peak.5^${auxEqDbToPosition(6)}`, `3:::SETD^a.1.eq.peak.5^${auxEqDbToPosition(6)}`]);
   assert.equal(control(app).authorized, 2); assert.deepEqual(app.receiver.sent.filter(message => message.startsWith('3:::SETD')), [], 'companion never writes');
@@ -81,18 +81,19 @@ test('sparse dispatch: only changed band peaks are written (both linked sides); 
   app.session.disconnect(); assert.equal(app.session.snapshot().eq.size, 0);
 });
 
-test('release-only commits: previews, cancel, mode-less no-op and invalid curves never write', () => {
+test('live EQ steps: cancel drops the coalesced pending step (no rollback); unchanged no-op and invalid curves never write', () => {
   const app = fixture(); app.session.selectEqTarget(0);
   let token = app.session.beginEqGesture();
   app.session.previewEqGesture(token, drawFrom(app, draw => { draw[1] = 3; })); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[1] = 4; }));
-  app.session.cancelEqGesture(); assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 0);
-  token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, () => {}));
-  app.session.commitEqGesture(token); assert.equal(app.writes().length, 0); assert.equal(control(app).outcome, 'no-op');
+  assert.equal(app.writes().length, 2, 'leading step sent; the second preview waits for the throttle');
+  app.session.cancelEqGesture(); app.advance(1000); assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 2, 'cancel drops the coalesced step; no rollback');
+  app.deskEcho(); token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, () => {}));
+  app.session.commitEqGesture(token); assert.equal(app.writes().length, 2); assert.equal(control(app).outcome, 'no-op');
   token = app.session.beginEqGesture();
   assert.equal(app.session.previewEqGesture(token, requestedDrawSamples(Array(31).fill(20))), null);
   assert.match(control(app).status, /not clipped/);
   assert.equal(app.session.previewEqGesture(token, requestedPointSamples([0, 1, 2].map(() => ({ x: 0.5, gainDb: 12, q: 0.5 })), control(app).eqCoordinate.map(auxEqPositionToDb))), null, 'summed point shape beyond ±15 dB is rejected, not clipped');
-  assert.equal(app.session.commitEqGesture(token), false, 'no cached valid preview'); assert.equal(app.writes().length, 0);
+  assert.equal(app.session.commitEqGesture(token), false, 'no cached valid preview'); assert.equal(app.writes().length, 2);
   app.session.disconnect();
 });
 
@@ -135,18 +136,18 @@ test('native band, away-and-back, bypass and processing changes cancel obsolete 
   const app = fixture(); app.session.selectEqTarget(0);
   let token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[9] = 5; }));
   app.receiver.receive('3:::SETD^a.0.eq.peak.3^0.6'); app.receiver.receive('3:::SETD^a.1.eq.peak.3^0.6');
-  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 0);
-  token = app.session.beginEqGesture(); assert.ok(token, 'no manual Enable or re-arm');
+  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 2, 'native edit stops the stream; no replay');
+  app.deskEcho(); token = app.session.beginEqGesture(); assert.ok(token, 'no manual Enable or re-arm');
   assert.equal(control(app).eqCoordinate[3], 0.6, 'new gesture basis is current received actual');
   const intent = drawFrom(app, draw => { draw[1] = 1; }); assert.ok(app.session.previewEqGesture(token, intent));
   // Away-and-back: equal final values cannot hide the native edit.
   app.receiver.receive('3:::SETD^a.0.eq.peak.12^0.7\nSETD^a.1.eq.peak.12^0.7'); app.receiver.receive('3:::SETD^a.0.eq.peak.12^0.5\nSETD^a.1.eq.peak.12^0.5');
-  assert.equal(app.session.previewEqGesture(token, intent), null); assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 0);
+  assert.equal(app.session.previewEqGesture(token, intent), null); assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 4);
   for (const change of ['3:::SETD^a.0.eq.bypass^1', '3:::SETD^a.1.eq.hpf.freq^0.3', '3:::SETS^a.0.eq.preset^Vocal', '3:::SETD^a.0.dyn.threshold^' + 'x'.repeat(200)]) {
     const item = fixture(); item.session.selectEqTarget(0); const gesture = item.session.beginEqGesture();
     item.session.previewEqGesture(gesture, drawFrom(item, draw => { draw[2] = 2; }));
     item.receiver.receive(change);
-    assert.equal(item.session.commitEqGesture(gesture), false, change); assert.equal(item.writes().length, 0); item.session.disconnect();
+    assert.equal(item.session.commitEqGesture(gesture), false, change); assert.equal(item.writes().length, 2); item.session.disconnect();
   }
   // Unchanged raw processing and other outputs' processing leave the gesture alone.
   const quiet = fixture(); quiet.session.selectEqTarget(0); const gesture = quiet.session.beginEqGesture();
@@ -159,18 +160,17 @@ test('native band, away-and-back, bypass and processing changes cancel obsolete 
 test('reentrant receipts stop the remainder; the full dispatched (62-path) closure must be received again; throwing send disconnects', () => {
   for (const [reentrant, expected] of [['3:::SETD^a.1.eq.peak.20^0.5', 10], ['3:::SETD^a.0.eq.peak.4^0.5', 5], ['3:::SETD^a.1.eq.bypass^0', 7]]) {
     const app = fixture(); app.session.selectEqTarget(0); const token = app.session.beginEqGesture();
-    app.session.previewEqGesture(token, drawFrom(app, draw => { draw.fill(3); }));
     app.writer.hook = () => { if (app.writes().length === expected) { app.writer.hook = null; app.receiver.receive(reentrant); } };
+    assert.equal(app.session.previewEqGesture(token, drawFrom(app, draw => { draw.fill(3); })), null);
     assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, expected, reentrant);
     assert.equal(app.session.canEditEqTarget(0), false); assert.match(control(app).status, /some values may have changed|interrupted/i);
     app.receiver.receive('3:::' + bandLines(0).join('\n')); assert.equal(app.session.canEditEqTarget(0), false, 'unattempted side still unresolved');
     app.receiver.receive('3:::' + bandLines(1).join('\n')); assert.equal(app.session.canEditEqTarget(0), true);
     assert.ok(app.session.beginEqGesture(), 'complete compatible recovery permits a new gesture without Enable'); app.session.disconnect();
   }
-  const app = fixture(); app.session.selectEqTarget(2); const token = app.session.beginEqGesture();
-  app.session.previewEqGesture(token, drawFrom(app, draw => { draw.fill(-3); }));
+  const app = fixture(); app.session.selectEqTarget(2); const token = app.session.beginEqGesture(), intent = drawFrom(app, draw => { draw.fill(-3); });
   app.writer.send = message => { if (message.startsWith('3:::SETD') && app.writer.sent.filter(x => x.startsWith('3:::SETD')).length === 2) throw Error('socket'); app.writer.sent.push(message); };
-  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 2);
+  assert.equal(app.session.previewEqGesture(token, intent), null); assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 2);
   assert.equal(app.session.snapshot().phase, 'error'); assert.match(app.session.snapshot().detail, /EQ bands may have changed/); assert.equal(app.session.snapshot().eq.size, 0); assert.ok(app.sockets.every(socket => socket.readyState === 3));
 });
 
@@ -228,19 +228,19 @@ test('EQ view: explicit open, visible approximation/bypass status, mutually excl
   const gain = ui.find('[data-eq-param="gain"]'), cap = gain.parentElement.querySelector('.mm-fader-hit');
   assert.equal(gain.disabled, false); assert.equal(ui.find('[data-eq-point="1"]').disabled, false);
   press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 });
-  assert.equal(ui.writes().length, 0, 'moving previews only');
-  press(cap, 'pointerup', { clientY: 60 }); const n = ui.writes().length;
+  const n = ui.writes().length; assert.ok(n > 0, 'moving streams changed bands live');
+  press(cap, 'pointerup', { clientY: 60 }); assert.equal(ui.writes().length, n, 'unchanged release adds nothing');
   assert.ok(n > 0 && n < 62 && n % 2 === 0, `sparse: ${n}`); assert.deepEqual(pathsOf(ui.writes()).slice(n / 2).map(path => path.replace('a.1.', 'a.0.')), pathsOf(ui.writes()).slice(0, n / 2));
   assert.ok(ui.writes().every(message => GEQ_WRITE.test(message)));
   // Draw mode disables point controls/handles; switching mid-gesture cancels without writes.
-  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 30 });
+  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 30 }); const m = ui.writes().length; assert.ok(m > n);
   ui.find('[data-eq-mode="draw"]').emit('click');
-  assert.equal(ui.eq.mode, 'draw'); assert.equal(ui.writes().length, n);
+  assert.equal(ui.eq.mode, 'draw'); assert.equal(ui.writes().length, m, 'switching mid-gesture sends nothing more');
   assert.equal(gain.disabled, true); assert.equal(ui.find('[data-eq-point="0"]').disabled, true);
   assert.equal(ui.find('[data-eq-handle="0"]').attributes.visibility, 'hidden');
   assert.equal(ui.find('[data-eq-mode="draw"]').attributes['aria-pressed'], 'true'); assert.equal(ui.find('[data-eq-mode="points"]').attributes['aria-pressed'], 'false');
   ui.find('[data-eq-mode="points"]').emit('click'); assert.equal(ui.find('[data-eq-handle="0"]').attributes.visibility, 'visible');
-  // The first release was never echoed and the chain was cancelled: no re-arm from stale received bands.
+  // The live steps were never echoed and the chain was cancelled: no re-arm from stale received bands.
   assert.equal(gain.disabled, true); assert.match(ui.find('.mm-live-eq-status').textContent, /Waiting for the desk to report the last EQ change/);
   ui.receiver.receive('3:::' + ui.writes().map(message => message.slice(4)).join('\n')); assert.equal(gain.disabled, false, 'matching echo clears the barrier automatically');
   ui.eq.close(); assert.equal(ui.eq.section.hidden, true); assert.equal(ui.root.dataset.eqOpen, 'false'); assert.equal(ui.session.snapshot().control.selected, null);
@@ -273,12 +273,12 @@ test('EQ graph: background touch in points mode never begins; handle drag and dr
   assert.equal(ui.session.snapshot().control.gestureActive, false); assert.equal(ui.writes().length, 0, 'background swipe scrolls without writing');
   const handle = ui.find('[data-eq-handle="1"]');
   press(handle.children[1], 'pointerdown', { clientX: 90, clientY: 94 }); press(svg, 'pointermove', { clientX: 70, clientY: 60 });
-  assert.equal(ui.writes().length, 0); assert.equal(ui.find('[data-eq-point="1"]').attributes['aria-pressed'], 'true');
-  press(svg, 'pointerup', { clientX: 70, clientY: 60 }); const n = ui.writes().length; assert.ok(n > 0 && n < 62);
+  const n = ui.writes().length; assert.ok(n > 0 && n < 62, 'handle drag streams changed bands'); assert.equal(ui.find('[data-eq-point="1"]').attributes['aria-pressed'], 'true');
+  press(svg, 'pointerup', { clientX: 70, clientY: 60 }); assert.equal(ui.writes().length, n);
   ui.deskEcho(); assert.equal(ui.find('[data-eq-param="gain"]').disabled, false, 'rounded changed-only echoes clear the basis');
   ui.find('[data-eq-mode="draw"]').emit('click'); assert.equal(svg.dataset.draw, 'true');
   press(svg, 'pointerdown', { clientX: 30, clientY: 50 }); press(svg, 'pointermove', { clientX: 130, clientY: 50 });
-  assert.equal(ui.writes().length, n, 'drawing previews only');
+  assert.ok(ui.writes().length > n, 'drawing streams live');
   press(svg, 'pointerup', { clientX: 130, clientY: 50 }); assert.ok(ui.writes().length > n);
   assert.ok(ui.writes().every(message => GEQ_WRITE.test(message)));
   ui.eq.destroy(); ui.session.disconnect();
@@ -349,8 +349,8 @@ test('EQ view: handles are keyboard reachable; L/R readback is distinct and labe
 
 test('processing receipts on the selected output during GEQ dispatch stop the remainder', () => {
   const app = fixture(); app.session.selectEqTarget(0); const token = app.session.beginEqGesture();
-  app.session.previewEqGesture(token, drawFrom(app, draw => { draw.fill(2); }));
   app.writer.hook = () => { if (app.writes().length === 8) { app.writer.hook = null; app.receiver.receive('3:::SETD^a.0.eq.hpf.freq^0.1'); } };
+  assert.equal(app.session.previewEqGesture(token, drawFrom(app, draw => { draw.fill(2); })), null);
   assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, 8, 'even an unchanged processing value');
   app.session.disconnect();
 });
@@ -395,7 +395,7 @@ test('desk-like rounded changed-only echoes clear sparse dispatch barriers; next
   assert.equal(control(app).authorized, 4); assert.equal(control(app).dispatched, 4);
   assert.equal(app.deskEcho(), 4, 'desk echoes the four changed paths, rounded');
   assert.equal(app.session.snapshot().eq.get('a.0.eq.peak.4'), Number(auxEqDbToPosition(0.1).toFixed(10)), 'rounded receipt is actual, distinct from the request');
-  assert.match(control(app).status, /returned 4\/4 authorized/); assert.doesNotMatch(control(app).status, /Waiting for complete/);
+  assert.match(control(app).status, /Observed matching values \(desk-rounded to 10 decimals\)/); assert.doesNotMatch(control(app).status, /Waiting for complete/);
   token = app.session.beginEqGesture(); app.session.cancelEqGesture(); app.session.closeEq(); app.session.selectEqTarget(0);
   assert.equal(app.session.canEditEqTarget(0), true, 'no reconnect needed'); token = app.session.beginEqGesture(); assert.ok(token);
   assert.equal(control(app).eqCoordinate[4], Number(auxEqDbToPosition(0.1).toFixed(10)));

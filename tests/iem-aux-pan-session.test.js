@@ -99,9 +99,10 @@ test('literal factories preserve read-only and level-only capabilities despite m
   assert.equal(levels.session.selectLevelTarget({ kind: 'pan', ...target }), false); assert.equal(writes(levels.sockets[0]).length, 0);
   const control = fixture(); control.connect(); assert.equal(control.session.snapshot().control.panCapable, true); assert.equal(control.session.socket, undefined); assert.equal(control.session.send, undefined);
 });
-test('pan selection/arm/preview never write; only current cached normalized pan gesture releases two rounded commands', () => {
+test('pan selection/arm never write; a deliberate preview streams the cached normalized pan live and an unchanged release adds nothing', () => {
   const app = fixture(), socket = app.connect(); app.session.selectPanTarget(target); assert.equal(writes(socket).length, 0);
-  app.session.armPan(); const token = app.session.beginPanGesture(); assert.ok(token); assert.equal(app.session.previewPanGesture(token, 0.1235), 0.124); assert.equal(writes(socket).length, 0);
+  app.session.armPan(); const token = app.session.beginPanGesture(); assert.ok(token); assert.equal(writes(socket).length, 0);
+  assert.equal(app.session.previewPanGesture(token, 0.1235), 0.124); assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.124', '3:::SETD^i.0.aux.1.pan^0.124']);
   assert.equal(app.session.snapshot().observations.get('i.0.aux.0.pan'), 0.4); assert.equal(app.session.commitPanGesture({}), false);
   assert.equal(app.session.commitPanGesture(token), true); assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.124', '3:::SETD^i.0.aux.1.pan^0.124']);
   assert.equal(app.session.snapshot().control.expectedPan, 0.124); assert.equal(app.session.snapshot().control.pending, true);
@@ -114,7 +115,8 @@ test('level/group and pan permissions/tokens exclude each other and wrong-kind e
   assert.equal(app.session.armLevel(), false); app.session.armPan(); const token = app.session.beginPanGesture(); assert.equal(app.session.beginLevelGesture(), null); assert.equal(app.session.previewLevelGesture(token, 0.7), null);
   app.session.cancelLevelGesture(); assert.equal(app.session.snapshot().control.gestureActive, true); app.session.previewPanGesture(token, 0.6);
   app.session.selectLevelTarget(level); assert.equal(app.session.snapshot().control.armed, false); assert.equal(app.session.commitPanGesture(token), false); assert.equal(app.session.armPan(), false);
-  assert.equal(writes(socket).length, 0);
+  // Only the owned pan gesture's live preview wrote; no level or wrong-kind write.
+  assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.6', '3:::SETD^i.0.aux.1.pan^0.6']);
 });
 test('pan-only observed sources can control without levels; linked/FX/mono-AUX/missing/unequal cases remain unavailable', () => {
   const app = fixture(), socket = app.connect(); socket.receive('3:::SETD^i.5.stereoIndex^-1\nSETD^i.5.aux.0.pan^0.25\nSETD^i.5.aux.1.pan^0.25');
@@ -127,7 +129,8 @@ test('pan-only observed sources can control without levels; linked/FX/mono-AUX/m
 });
 test('native pan away/back, level or topology edits invalidate pan baseline; identical receipts/names do not', () => {
   for (const frame of ['3:::SETD^i.0.aux.0.pan^0.7\nSETD^i.0.aux.0.pan^0.4', '3:::SETD^a.1.matrix^1']) {
-    const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); socket.receive(frame); assert.equal(app.session.commitPanGesture(token), false); assert.equal(app.session.snapshot().control.armed, false); assert.equal(writes(socket).length, 0);
+    const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); assert.equal(writes(socket).length, 2);
+    socket.receive(frame); assert.equal(app.session.commitPanGesture(token), false); assert.equal(app.session.snapshot().control.armed, false); assert.equal(writes(socket).length, 2, 'native edit stops the live stream; no replay');
   }
   const app = fixture(), socket = app.connect(), token = app.begin(); socket.receive('3:::SETD^i.0.aux.0.pan^0.4\nSETS^i.0.name^Synthetic <svg>'); assert.equal(app.session.previewPanGesture(token, 0.6), 0.6); assert.equal(app.session.commitPanGesture(token), true);
 });
@@ -138,8 +141,8 @@ test('unrelated pan values do not cancel a selected level scope in either factor
   }
 });
 test('same-value and rounded expected pan needs fresh post-authorization receipt on every path', () => {
-  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.60049); socket.receive('3:::SETD^i.0.aux.0.pan^0.4\nSETD^i.0.aux.1.pan^0.4');
-  app.session.commitPanGesture(token); assert.equal(app.session.snapshot().control.pending, true); socket.receive(writes(socket)[0]); assert.equal(app.session.snapshot().control.pending, true); socket.receive(writes(socket)[1]); assert.equal(app.session.snapshot().control.pending, false);
+  const app = fixture(), socket = app.connect(), token = app.begin(); socket.receive('3:::SETD^i.0.aux.0.pan^0.4\nSETD^i.0.aux.1.pan^0.4'); app.session.previewPanGesture(token, 0.60049);
+  assert.equal(app.session.commitPanGesture(token), true); assert.equal(writes(socket).length, 2); assert.equal(app.session.snapshot().control.pending, true); socket.receive(writes(socket)[0]); assert.equal(app.session.snapshot().control.pending, true); socket.receive(writes(socket)[1]); assert.equal(app.session.snapshot().control.pending, false);
 });
 test('held confirmation timers, late echo and backwards clocks never confirm expired pan or rearm', () => {
   for (const mode of ['snapshot', 'late', 'backward']) {
@@ -155,15 +158,16 @@ test('fresh conflict is labelled pan; invalidation/close/reconnect never replays
 });
 test('partial/reentrant cancellation, selection or reconnect stops remaining pan ordinals without overwriting new context counts', () => {
   for (const mode of ['close', 'level', 'reconnect', 'native']) {
-    const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6);
+    const app = fixture(), socket = app.connect(), token = app.begin();
     socket.hook = message => { if (!message.startsWith('3:::SETD')) return; if (mode === 'close') app.session.closePan(); if (mode === 'level') app.session.selectLevelTarget(level); if (mode === 'reconnect') app.connect(); if (mode === 'native') socket.receive('3:::SETD^i.0.aux.0.pan^0.6'); };
+    assert.equal(app.session.previewPanGesture(token, 0.6), null, 'the interrupted live step ends the gesture');
     assert.equal(app.session.commitPanGesture(token), false); assert.equal(writes(socket).length, 1); assert.equal(app.session.snapshot().control.armed, false); assert.equal(app.session.snapshot().control.dispatched, ['reconnect', 'level'].includes(mode) ? 0 : 1);
     app.move(3000); app.flush(); assert.equal(writes(socket).length, 1);
   }
 });
 test('throwing second pan send records unknown partial, clears state and never retries/rolls back', () => {
-  const app = fixture(), socket = app.connect(), token = app.begin(); app.session.previewPanGesture(token, 0.6); socket.hook = message => { if (message.startsWith('3:::SETD')) socket.throws = true; };
-  assert.equal(app.session.commitPanGesture(token), false); const snapshot = app.session.snapshot(); assert.equal(snapshot.phase, 'error'); assert.equal(snapshot.control.authorized, 2); assert.equal(snapshot.control.dispatched, 1); assert.equal(snapshot.observations.size, 0); assert.match(snapshot.detail, /some levels or pan positions may have changed/);
+  const app = fixture(), socket = app.connect(), token = app.begin(); socket.hook = message => { if (message.startsWith('3:::SETD')) socket.throws = true; };
+  assert.equal(app.session.previewPanGesture(token, 0.6), null); assert.equal(app.session.commitPanGesture(token), false); const snapshot = app.session.snapshot(); assert.equal(snapshot.phase, 'error'); assert.equal(snapshot.control.authorized, 2); assert.equal(snapshot.control.dispatched, 1); assert.equal(snapshot.observations.size, 0); assert.match(snapshot.detail, /some levels or pan positions may have changed/);
   app.move(3000); app.flush(); assert.equal(socket.attempts, 2);
 });
 test('reentrant arm/gesture observers cannot retain permission or an old pan token', () => {
@@ -185,8 +189,8 @@ test('F09 no-echo repeated pan uses explicit requested coordinate, no-op suppres
 });
 
 test('pan dispatch stops on a reentrant unchanged receipt for the unattempted linked output (F06-S04 broadened rule)', () => {
-  const app = fixture(), socket = app.connect(); const token = app.begin(); app.session.previewPanGesture(token, 0.7);
+  const app = fixture(), socket = app.connect(); const token = app.begin();
   socket.hook = () => { socket.hook = null; socket.receive('3:::SETD^i.0.aux.1.pan^0.4'); };
-  assert.equal(app.session.commitPanGesture(token), false); assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.7']);
+  assert.equal(app.session.previewPanGesture(token, 0.7), null); assert.equal(app.session.commitPanGesture(token), false); assert.deepEqual(writes(socket), ['3:::SETD^i.0.aux.0.pan^0.7']);
   assert.match(app.session.snapshot().control.status, /interrupted/i);
 });
