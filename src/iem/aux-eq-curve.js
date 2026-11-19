@@ -38,8 +38,8 @@ export function mapRequestedAuxEqCurve(input) {
 // It is sampled ONLY at the 31 native display centres. It is a requested-curve
 // drawing aid, not three parametric hardware filters and never an inverse fit
 // of native bands. A band whose bump is negligible keeps its exact basis dB, so
-// the session preserves its raw coordinate; any result outside ±15 dB is
-// rejected whole by mapRequestedAuxEqCurve rather than clipped.
+// the session preserves its raw coordinate; since F09-S06 a band the bump would
+// push outside ±15 dB saturates at exactly ±15 dB (see below).
 export const AUX_EQ_POINT_COUNT = 3;
 export const AUX_EQ_POINT_NEGLIGIBLE_DB = 1e-3;
 export const auxEqCentreX = frequencyHz => Math.log(frequencyHz / 20) / Math.log(1000);
@@ -58,36 +58,22 @@ export function requestedPointSamples(input, basisInput) {
   if (!basis.every(value => typeof value === 'number' && Number.isFinite(value))) throw Error('A finite current EQ basis is required.');
   return Object.freeze({ mode: 'points', samples: Object.freeze(AUX_EQ_DISPLAY_CENTRES.map((frequencyHz, index) => {
     const bump = auxEqPointGain(points, auxEqCentreX(frequencyHz));
-    return Object.freeze({ frequencyHz, gainDb: Math.abs(bump) < AUX_EQ_POINT_NEGLIGIBLE_DB ? basis[index] : basis[index] + bump });
+    if (Math.abs(bump) < AUX_EQ_POINT_NEGLIGIBLE_DB) return Object.freeze({ frequencyHz, gainDb: basis[index] });
+    return Object.freeze({ frequencyHz, gainDb: Math.max(-AUX_EQ_GAIN_LIMIT_DB, Math.min(AUX_EQ_GAIN_LIMIT_DB, basis[index] + bump)) });
   })) });
 }
-// F09-S06 point-gain limit: the largest-magnitude gain for ONE point (index)
-// that keeps every sampled band of basis + bump within the ±15 dB GEQ range,
-// given the other points unchanged. It clamps that point's single parameter
-// (like a group delta stopping at its first member limit); it never clips
-// bands independently. Returns null when no gain can satisfy the range (the
-// other points alone already exceed it), so the caller keeps rejecting.
+// F09-S06 (live finding 2026-11-19): POINTS saturate at ±15 dB per band and
+// are never rejected whole. A band the bump would push past the GEQ range sits
+// at exactly ±15 dB (one-sided: a band already at +15 stays there for a
+// positive bump and can still move inward); every other band follows the
+// points. The session's unchanged range check therefore always passes and the
+// session itself never clips. Draw mode is unaffected.
 export const AUX_EQ_GAIN_LIMIT_DB = 15;
-export function clampPointGain(input, index, requestedGain, basisInput) {
-  const points = eqArray(input, AUX_EQ_POINT_COUNT), basis = eqArray(basisInput, AUX_EQ_DISPLAY_CENTRES.length);
-  if (!Number.isInteger(index) || index < 0 || index >= points.length || typeof requestedGain !== 'number' || !Number.isFinite(requestedGain)) throw Error('Invalid point gain request.');
-  const point = points[index], others = points.filter((_, i) => i !== index);
-  let low = -AUX_EQ_GAIN_LIMIT_DB, high = AUX_EQ_GAIN_LIMIT_DB;
-  for (const [band, frequencyHz] of AUX_EQ_DISPLAY_CENTRES.entries()) {
-    const x = auxEqCentreX(frequencyHz), weight = Math.exp(-0.5 * Math.pow((x - point.x) / auxEqPointWidth(point.q), 2)), rest = basis[band] + auxEqPointGain(others, x);
-    if (weight < 1e-12) {
-      // This point cannot move the band: it must already be in range (a
-      // negligible bump keeps the exact in-range basis value).
-      if (Math.abs(rest) > AUX_EQ_GAIN_LIMIT_DB && Math.abs(rest - basis[band]) >= AUX_EQ_POINT_NEGLIGIBLE_DB) return null;
-      continue;
-    }
-    high = Math.min(high, (AUX_EQ_GAIN_LIMIT_DB - rest) / weight);
-    low = Math.max(low, (-AUX_EQ_GAIN_LIMIT_DB - rest) / weight);
-  }
-  // Move the one bound inward by a tiny margin so floating-point addition can
-  // never land a band a hair outside ±15 dB.
-  high -= 1e-9; low += 1e-9;
-  if (!(low <= high)) return null;
+// The dragged handle follows vertically only until its OWN centre reaches the
+// limit: the gain that puts basis + other points + gain at ±15 at x = point.x.
+export function pointCentreGainLimit(rest, requestedGain) {
+  if (typeof rest !== 'number' || !Number.isFinite(rest) || typeof requestedGain !== 'number' || !Number.isFinite(requestedGain)) throw Error('Invalid point gain request.');
+  const low = Math.min(0, -AUX_EQ_GAIN_LIMIT_DB - rest), high = Math.max(0, AUX_EQ_GAIN_LIMIT_DB - rest);
   return Math.max(low, Math.min(high, requestedGain));
 }
 // Draw intent: one requested gain per native display centre, in index order.

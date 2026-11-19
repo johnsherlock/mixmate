@@ -2627,13 +2627,14 @@ body {
 }
 
 /* F09-S06 stable geometry during gestures: a strip's state line is one fixed
-   single line in every live layout (hidden by visibility, never by display), so
-   toggling or changing its text cannot resize .mm-fader-space mid-drag. Full
+   single-line overlay (absolute, no layout height, no pointer events) above the
+   Pan/Details row in every live layout, hidden by visibility, never by display,
+   so it neither costs fader travel nor resizes .mm-fader-space mid-drag. Full
    text stays in its title and Details. Header/footer status text is one
    ellipsised line whose length never changes the row wrapping. */
 #mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-live-strip-state,
 #mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,
-#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{display:block;visibility:hidden;position:static;box-sizing:border-box;width:auto;height:16px;min-height:16px;max-height:16px;flex:0 0 16px;margin:0;padding:2px 6px;font-size:10px;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;clip:auto;clip-path:none}
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{display:block;visibility:hidden;position:absolute;left:3px;right:3px;bottom:26px;z-index:1;pointer-events:none;box-sizing:border-box;width:auto;height:16px;min-height:16px;max-height:16px;flex:none;margin:0;padding:2px 6px;font-size:10px;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;clip:auto;clip-path:none;background:#13191be6;border-radius:2px}
 #mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{visibility:visible}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip > .mm-live-strip-state,
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,

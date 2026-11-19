@@ -6,7 +6,7 @@ import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { auxEqPositionToDb, auxEqDbToPosition, parseAuxProcessingFrame } from '../src/iem/aux-eq-protocol.js';
 import { mapRequestedAuxEqCurve } from '../src/iem/aux-eq-curve.js';
-import { requestedDrawSamples, requestedPointSamples, auxEqCentreX, auxEqPointGain, clampPointGain, AUX_EQ_POINT_NEGLIGIBLE_DB } from '../src/iem/aux-eq-curve.js';
+import { requestedDrawSamples, requestedPointSamples, auxEqCentreX, auxEqPointGain, pointCentreGainLimit, AUX_EQ_POINT_NEGLIGIBLE_DB } from '../src/iem/aux-eq-curve.js';
 import { mountEqControls, projectEqReadback, eqSideText, EQ_APPROXIMATION_NOTE, EQ_MODE_NOTES, EQ_SIDE_COLOURS } from '../src/iem/eq-controls.js';
 const VU = JSON.parse(await readFile(new URL('./fixtures/iem-vu2.json', import.meta.url))).frame;
 import { domFixture, Node } from './helpers/fake-dom.js';
@@ -93,8 +93,10 @@ test('live EQ steps: cancel drops the coalesced pending step (no rollback); unch
   token = app.session.beginEqGesture();
   assert.equal(app.session.previewEqGesture(token, requestedDrawSamples(Array(31).fill(20))), null);
   assert.match(control(app).status, /not clipped/);
-  assert.equal(app.session.previewEqGesture(token, requestedPointSamples([0, 1, 2].map(() => ({ x: 0.5, gainDb: 12, q: 0.5 })), control(app).eqCoordinate.map(auxEqPositionToDb))), null, 'summed point shape beyond ±15 dB is rejected, not clipped');
-  assert.equal(app.session.commitEqGesture(token), false, 'no cached valid preview'); assert.equal(app.writes().length, 2);
+  // F09-S06: summed point shapes beyond ±15 dB saturate per band in the requested samples (never rejected whole).
+  const saturated = app.session.previewEqGesture(token, requestedPointSamples([0, 1, 2].map(() => ({ x: 0.5, gainDb: 12, q: 0.5 })), control(app).eqCoordinate.map(auxEqPositionToDb)));
+  assert.ok(saturated.includes(1) && saturated.every(value => value <= 1), 'saturated at exactly +15 dB');
+  app.session.cancelEqGesture(); assert.ok(app.writes().length > 2);
   app.session.disconnect();
 });
 
@@ -285,7 +287,7 @@ test('EQ graph: background touch in points mode never begins; handle drag and dr
   ui.eq.destroy(); ui.session.disconnect();
 });
 
-test('points are a relative Δ: bands outside influence keep exact raw values; zero Δ is a no-op; out-of-range results reject whole', () => {
+test('points are a relative Δ: bands outside influence keep exact raw values; zero Δ is a no-op; out-of-range point bands saturate at ±15 while the session still rejects (never clips) an out-of-range curve', () => {
   const app = fixture(); app.session.selectEqTarget(2);
   let token = app.session.beginEqGesture(); const basis = control(app).eqCoordinate.map(auxEqPositionToDb);
   const neutral = [0.233, 0.566, 0.85].map(x => ({ x, gainDb: 0, q: 0.5 }));
@@ -298,12 +300,16 @@ test('points are a relative Δ: bands outside influence keep exact raw values; z
   const influenced = centres.map((f, band) => band).filter(band => Math.abs(auxEqPointGain(points, auxEqCentreX(centres[band]))) >= AUX_EQ_POINT_NEGLIGIBLE_DB);
   assert.deepEqual(pathsOf(writes), influenced.map(band => `a.2.eq.peak.${band}`), 'only influenced bands are sent; all others keep exact raw values by not being written');
   assert.ok(influenced.length <= 11); assert.ok(writes.includes(`3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(auxEqPositionToDb(MONO(17)) + 3)}`), 'Δ applies on top of the received −value, not around 0 dB');
-  // A received +14 dB band plus +3 dB Δ leaves the range: rejected whole, never clipped.
+  // F09-S06 (live finding 2026-11-19): a received +14 dB band plus +3 dB Δ saturates at exactly +15 dB in the
+  // requested point samples; the session's unchanged range check passes. An out-of-range curve is still rejected whole.
   app.receiver.receive('3:::' + writes.map(message => message.slice(4)).join('\n'));
   app.receiver.receive(`3:::SETD^a.2.eq.peak.17^${auxEqDbToPosition(14)}`);
   token = app.session.beginEqGesture();
-  assert.equal(app.session.previewEqGesture(token, requestedPointSamples(points, control(app).eqCoordinate.map(auxEqPositionToDb))), null);
-  assert.equal(app.session.commitEqGesture(token), false); assert.equal(app.writes().length, writes.length);
+  const requested = app.session.previewEqGesture(token, requestedPointSamples(points, control(app).eqCoordinate.map(auxEqPositionToDb)));
+  assert.equal(requested[17], 1, 'band 17 saturates at exactly +15 dB'); assert.ok(requested.every(value => value >= 0 && value <= 1));
+  const over = control(app).eqCoordinate.map(auxEqPositionToDb); over[4] = 15.5;
+  assert.equal(app.session.previewEqGesture(token, requestedDrawSamples(over)), null, 'session still rejects, never clips');
+  assert.equal(app.session.commitEqGesture(token), true); assert.ok(app.writes().length > writes.length);
   app.session.disconnect();
 });
 
@@ -494,34 +500,47 @@ test('probe desk: coalesced intermediate echoes never count as native edits; a f
   app.session.disconnect();
 });
 
-test('point gain clamp: one common parameter limit keeps every band within ±15 dB (never per-band clipping)', () => {
-  const basis = Array.from({ length: 31 }, (_, band) => band >= 16 ? 14 : 0);
-  const points = [{ x: auxEqCentreX(630), gainDb: 12, q: 0.5 }, { x: 0.05, gainDb: 0, q: 0.5 }, { x: 0.95, gainDb: 0, q: 0.5 }];
-  assert.throws(() => mapPoints(points, basis), 'unclamped request leaves the range');
-  const limited = clampPointGain(points, 0, 12, basis); assert.ok(limited > 0 && limited < 12);
-  const bands = requestedPointSamples([{ ...points[0], gainDb: limited }, points[1], points[2]], basis).samples.map(sample => sample.gainDb);
-  assert.ok(Math.max(...bands) <= 15 && Math.max(...bands) > 15 - 1e-6, 'stops exactly at the first band limit');
-  const shape = bands.map((value, band) => value - basis[band]), weightRatio = shape[16] / shape[15];
-  assert.ok(Math.abs(weightRatio - Math.exp(-0.5 * ((auxEqCentreX(800) - points[0].x) ** 2 - 0) / (0.13 / Math.sqrt(0.1 * Math.pow(100, 0.5))) ** 2)) < 1e-9, 'bump shape unchanged: no band clipped on its own');
-  assert.equal(clampPointGain(points, 0, 1, basis), 1, 'in-range gains are untouched');
-  assert.ok(clampPointGain(points, 0, -20, basis) >= -15);
-  assert.equal(clampPointGain([{ x: 0.1, gainDb: 0, q: 1 }, { x: 0.9, gainDb: 15, q: 0 }, { x: 0.9, gainDb: 15, q: 0 }], 0, 0, Array(31).fill(0)), null, 'other points alone exceed the range: still rejected');
+test('points saturate at ±15 dB per band (live finding 2026-11-19): a band at +15 never blocks another point; saturated bands are exactly ±15; inward moves still work', () => {
+  // Point 1 pushed until the 100 Hz region hits +15 (live repro), then point 2 near 1 kHz moves up.
+  const basis = Array(31).fill(0), first = { x: auxEqCentreX(100), gainDb: 12, q: 0.5 }, idle = { x: 0.95, gainDb: 0, q: 0.5 };
+  const pushed = requestedPointSamples([{ ...first, gainDb: 15 }, { x: auxEqCentreX(1000), gainDb: 0, q: 0.5 }, idle], basis).samples.map(sample => sample.gainDb);
+  assert.equal(Math.max(...pushed), 15, 'bands the bump pushes past the range sit exactly at +15');
+  const atLimit = pushed; // new basis after the desk applied point 1
+  const second = requestedPointSamples([{ x: 0.05, gainDb: 0, q: 0.5 }, { x: auxEqCentreX(1000), gainDb: 6, q: 0.5 }, idle], atLimit).samples.map(sample => sample.gainDb);
+  const k1 = AUX_EQ_CENTRES.indexOf(1000), k100 = AUX_EQ_CENTRES.indexOf(100);
+  assert.ok(second[k1] - atLimit[k1] > 5.9, 'point 2 moves its own centre band up');
+  assert.equal(second[k100], 15, 'a band already at +15 stays at +15 for a positive bump (one-sided)');
+  assert.ok(second.every(value => value <= 15 && value >= -15)); assert.doesNotThrow(() => mapPoints([{ x: 0.05, gainDb: 0, q: 0.5 }, { x: auxEqCentreX(1000), gainDb: 6, q: 0.5 }, idle], atLimit), 'session range check passes');
+  const inward = requestedPointSamples([{ x: auxEqCentreX(100), gainDb: -4, q: 0.5 }, { x: 0.5, gainDb: 0, q: 0.5 }, idle], atLimit).samples.map(sample => sample.gainDb);
+  assert.ok(inward[k100] < 15 - 3.9, 'a saturated band can still move inward');
+  const low = requestedPointSamples([{ x: 0.5, gainDb: -12, q: 0.5 }, { x: 0.5, gainDb: -12, q: 0.5 }, idle], Array(31).fill(-10)).samples.map(sample => sample.gainDb);
+  assert.equal(Math.min(...low), -15, 'negative saturation is exactly -15');
+  const untouched = requestedPointSamples([{ x: 0.05, gainDb: 3, q: 1 }, { x: 0.05, gainDb: 0, q: 1 }, { x: 0.05, gainDb: 0, q: 1 }], atLimit).samples.map(sample => sample.gainDb);
+  assert.equal(untouched[30], atLimit[30], 'bands outside influence keep exact basis values');
+  assert.equal(pointCentreGainLimit(14, 12), 1, 'the handle stops when its own centre reaches the limit'); assert.equal(pointCentreGainLimit(15, -5), -5, 'and can move inward'); assert.equal(pointCentreGainLimit(15, 3), 0);
 });
+const AUX_EQ_CENTRES = [20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000];
 function mapPoints(points, basis) { return mapRequestedAuxEqCurve(requestedPointSamples(points, basis)); }
 
-test('EQ view: dragging a point past the ±15 dB limit stops the handle at the limit and keeps streaming instead of freezing', () => {
+test('EQ view (live repro 2026-11-19): with 100 Hz bands at +15, dragging point 2 up still moves it; saturated bands stay exactly +15; x follows', () => {
   const ui = uiFixture(); ui.eq.open(0);
-  ui.receiver.receive('3:::' + Array.from({ length: 15 }, (_, i) => `SETD^a.0.eq.peak.${i + 16}^${auxEqDbToPosition(14)}\nSETD^a.1.eq.peak.${i + 16}^${auxEqDbToPosition(14)}`).join('\n'));
+  const centre = AUX_EQ_CENTRES.indexOf(100);
+  ui.receiver.receive('3:::' + [centre - 1, centre, centre + 1].map(band => `SETD^a.0.eq.peak.${band}^1\nSETD^a.1.eq.peak.${band}^1`).join('\n'));
   const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg'), handle = ui.find('[data-eq-handle="1"]');
-  const x = 28 + auxEqCentreX(630) * 108;
-  press(handle.children[1], 'pointerdown', { clientX: x, clientY: 94 }); press(svg, 'pointermove', { clientX: x, clientY: 0 });
-  const n = ui.writes().length; assert.ok(n > 0, 'clamped request is sent, not rejected');
-  const dbs = ui.writes().map(message => auxEqPositionToDb(Number(message.split('^')[2])));
-  assert.ok(Math.max(...dbs) <= 15 && Math.max(...dbs) > 14.99, 'the first band reaches the limit');
-  assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /rejected/);
-  ui.advance(200); press(svg, 'pointermove', { clientX: x + 6, clientY: 0 }); ui.advance(200);
-  assert.ok(ui.writes().length > n, 'the handle still follows horizontally at the limit');
-  press(svg, 'pointerup', { clientX: x + 6, clientY: 0 });
+  const x = 28 + 0.566 * 108;
+  press(handle.children[1], 'pointerdown', { clientX: x, clientY: 94 }); press(svg, 'pointermove', { clientX: x, clientY: 54 });
+  const n = ui.writes().length; assert.ok(n > 0, 'point 2 moves although other bands sit at +15');
+  assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /Unchanged requested coordinate|rejected/);
+  const byPath = new Map(ui.writes().map(message => [message.split('^')[1], Number(message.split('^')[2])]));
+  for (const band of [centre - 1, centre, centre + 1]) assert.ok(!byPath.has(`a.0.eq.peak.${band}`) || byPath.get(`a.0.eq.peak.${band}`) === 1, 'saturated band stays exactly +15 dB');
+  // Push far up: the handle's own centre stops at +15, x keeps following.
+  ui.advance(200); press(svg, 'pointermove', { clientX: x, clientY: 0 }); ui.advance(200);
+  const top = ui.writes().map(message => auxEqPositionToDb(Number(message.split('^')[2])));
+  assert.ok(Math.max(...top) <= 15 && Math.max(...top) > 11.99, 'reaches the ±12 dB point Δ (within ±15)');
+  const before = ui.writes().length; press(svg, 'pointermove', { clientX: x + 8, clientY: 0 }); ui.advance(300); // SETD budget gap for a wide linked step
+  assert.ok(ui.writes().length > before, 'the handle still follows horizontally at the limit');
+  assert.match(ui.find('[data-eq-handle="1"]').attributes['aria-label'], /Requested point 2/);
+  press(svg, 'pointerup', { clientX: x + 8, clientY: 0 });
   assert.ok(ui.writes().every(message => GEQ_WRITE.test(message) && Number(message.split('^')[2]) <= 1));
   ui.eq.destroy(); ui.session.disconnect();
 });

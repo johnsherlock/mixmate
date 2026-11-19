@@ -5,7 +5,7 @@ Status: Accepted; pure implementation merged in [PR #29](https://github.com/john
 
 ## F09-S06 note — 2026-11-19
 
-Decision 3 (reject, never clip) still governs the session. The EQ view now constructs point intents with one common clamp on the dragged point's gain so a drag stops at ±15 dB instead of being rejected (no independent band clipping). Missing echoes bound the received-basis wait to the 2.5 s observation window ([ADR-0008 amendment](0008-control-state-model.md#f09-s06-amendment--2026-11-19)).
+Decision 3 (reject, never clip) still governs the session and draw intents. **2026-11-19 change from the live finding: points saturate at ±15 per band; never reject whole.** The point-intent builder saturates each band the summed bump would push past ±15 dB at exactly ±15 (one-sided; inward moves still work), so a band already at the limit never blocks another point; untouched bands keep exact basis values and the session's range check always passes. Missing echoes bound the received-basis wait to the 2.5 s observation window ([ADR-0008 amendment](0008-control-state-model.md#f09-s06-amendment--2026-11-19)).
 
 ## Context
 

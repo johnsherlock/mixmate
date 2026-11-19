@@ -173,8 +173,9 @@ test('controller coalesces session redraws to one per animation frame during an 
 test('stable strip/header geometry rules: fixed single-line strip state toggled by visibility, single-line header/footer status', async () => {
   const css = await readFile(new URL('../src/iem/iem.css', import.meta.url), 'utf8'), block = css.slice(css.indexOf('/* F09-S06 stable geometry'));
   assert.ok(block.length > 100);
-  const rule = /\.mm-strip\[data-actionable="true"\] > \.mm-live-strip-state\{display:block;visibility:hidden;[^}]*height:16px;min-height:16px;max-height:16px;flex:0 0 16px;[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/.exec(block);
-  assert.ok(rule, 'one fixed-height, single-line state line in every live layout');
+  const rule = /\.mm-strip\[data-actionable="true"\] > \.mm-live-strip-state\{display:block;visibility:hidden;position:absolute;[^}]*pointer-events:none;[^}]*height:16px;min-height:16px;max-height:16px;flex:none;[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/.exec(block);
+  assert.ok(rule, 'one fixed-height, single-line absolute overlay: no layout height, never steals fader travel or touches');
+  assert.doesNotMatch(block.split('[data-ultra-compact')[0], /\.mm-live-strip-state\{[^}]*position:static/, 'never back in the flex flow');
   assert.match(block, /\.mm-strip\[data-actionable="true"\] > \.mm-live-strip-state\{visibility:visible\}/, 'actionable toggles visibility, never display or height');
   assert.match(block, /\.mm-preview \.mm-feedback\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
   assert.match(block, /\.mm-bottom \.mm-dirty\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
