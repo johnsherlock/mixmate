@@ -36,14 +36,14 @@ function fixture(options = {}, factory = createAuxControlSession) {
   const [writer, receiver] = sockets;
   (receiver ?? writer).receive(baseFrame(options));
   // Fake desk modelled on observed 3.0.7865 behaviour: only CHANGED band values
-  // echo, rounded to 10 decimals, to the receive-only companion only.
+  // echo, formatted to 10 significant digits (observed firmware), to the receive-only companion only.
   const desk = new Map(baseFrame(options).slice(4).split('\n').map(line => /^SETD\^(a\.\d\.eq\.peak\.\d+)\^(.+)$/.exec(line)).filter(Boolean).map(m => [m[1], Number(m[2])]));
   let echoed = 0;
   const writes = () => writer.sent.filter(message => message.startsWith('3:::SETD'));
   return { session, sockets, writer, receiver, jobs, desk, writes,
     deskEcho() {
       const all = writes(), lines = [];
-      for (const message of all.slice(echoed)) { const [, path, raw] = message.split('^'), value = Number(raw); if (desk.get(path) !== value) { desk.set(path, value); lines.push(`SETD^${path}^${Number(value.toFixed(10))}`); } }
+      for (const message of all.slice(echoed)) { const [, path, raw] = message.split('^'), value = Number(raw); if (desk.get(path) !== value) { desk.set(path, value); lines.push(`SETD^${path}^${Number(value.toPrecision(10))}`); } }
       echoed = all.length; if (lines.length) receiver.receive('3:::' + lines.join('\n')); return lines.length;
     },
     advance(ms) { time += ms; for (const [id, job] of [...jobs]) if (job.at <= time) { jobs.delete(id); job.fn(); } } };
@@ -395,7 +395,7 @@ test('desk-like rounded changed-only echoes clear sparse dispatch barriers; next
   assert.equal(control(app).authorized, 4); assert.equal(control(app).dispatched, 4);
   assert.equal(app.deskEcho(), 4, 'desk echoes the four changed paths, rounded');
   assert.equal(app.session.snapshot().eq.get('a.0.eq.peak.4'), Number(auxEqDbToPosition(0.1).toFixed(10)), 'rounded receipt is actual, distinct from the request');
-  assert.match(control(app).status, /Observed matching values \(desk-rounded to 10 decimals\)/); assert.doesNotMatch(control(app).status, /Waiting for complete/);
+  assert.match(control(app).status, /Observed matching values \(desk-rounded to 10 significant digits\)/); assert.doesNotMatch(control(app).status, /Waiting for complete/);
   token = app.session.beginEqGesture(); app.session.cancelEqGesture(); app.session.closeEq(); app.session.selectEqTarget(0);
   assert.equal(app.session.canEditEqTarget(0), true, 'no reconnect needed'); token = app.session.beginEqGesture(); assert.ok(token);
   assert.equal(control(app).eqCoordinate[4], Number(auxEqDbToPosition(0.1).toFixed(10)));

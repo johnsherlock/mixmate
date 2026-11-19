@@ -28,12 +28,15 @@ export const LIVE_STREAM_INTERVAL_MS = Object.freeze({ level: 50, group: 50, pan
 // bufferedAmount exceeds the backpressure threshold.
 export const LIVE_SETD_BUDGET_PER_S = Object.freeze({ level: 100, group: 200, pan: 100, geq: 250 });
 export const LIVE_BACKPRESSURE_BYTES = 4096;
-// Observed 3.0.7865 companion echoes round own values to 10 decimals. A peer
+// Observed 3.0.7865 companion echoes format own values to 10 SIGNIFICANT digits
+// (live 2026-11-19: 0.031999458946648573 echoed as 0.03199945895; values >= 0.1
+// coincide with 10 decimals). A peer
 // receipt equal (exactly or at that rounding) to a value this owner authorized
 // for the same path within the observation window, and not yet superseded by a
 // later matched echo, is an own echo; any other changed value is native.
-export const OWN_ECHO_DECIMALS = 10;
-const echoRound = value => Number(value.toFixed(OWN_ECHO_DECIMALS));
+export const OWN_ECHO_SIGNIFICANT_DIGITS = 10;
+export const deskFormat = value => (value === 0 ? 0 : Number(value.toPrecision(OWN_ECHO_SIGNIFICANT_DIGITS)));
+const echoRound = deskFormat;
 const scopes = new WeakSet();
 const requireScope = scope => { if (!scopes.has(scope)) throw Error('Use a validated typed pure scope.'); };
 const uint = x => Number.isSafeInteger(x) && x >= 0;
@@ -191,7 +194,9 @@ function consumeEcho(s, path, value) {
 }
 const setRow = (s, path, patch) => { s.actual = s.actual.map(x => x.path === path ? { ...x, ...patch } : x); };
 const setExpected = (op, index, patch) => { op.expected = op.expected.map((x, i) => i === index ? { ...x, ...patch } : x); };
-const sparsePlan = (s, preview) => preview.expected.filter((x, i) => Math.abs(x.value - s.chain.requested[i].value) >= STREAM_UNCHANGED_EPSILON);
+// A path is sent only when it differs by >= epsilon AND survives the desk's
+// 10-significant-digit formatting, so the desk always echoes what is sent.
+const sparsePlan = (s, preview) => preview.expected.filter((x, i) => { const prev = s.chain.requested[i].value; return Math.abs(x.value - prev) >= STREAM_UNCHANGED_EPSILON && deskFormat(x.value) !== deskFormat(prev); });
 function newOperation(s, preview, planned, now, live) {
   retire(s);
   s.operation = { id: s.nextId++, generation: s.generation, revision: s.revision, scope: s.scope, status: 'dispatching', expected: planned.map(x => ({ ...x, cutpoint: null, matched: false })),

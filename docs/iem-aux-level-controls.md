@@ -2,7 +2,7 @@
 
 ## Current F09-S05 live-write reconciliation — 2026-11-18
 
-By explicit user decision the release-only rule is reversed: deliberate gestures stream throttled typed writes while dragging and release sends the final exact value only if it differs ([ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18)). Wire forms, allowlist and factories are unchanged; only timing changes. Level cap drag / key repeat: leading step immediately, then at most one step per 50 ms carrying the latest preview; both linked sides receive the same value; unchanged values (≥1e-9 rule) are not sent. Own companion echoes (exact or 10-decimal rounded) do not cancel; any other changed receipt stops the stream immediately.
+By explicit user decision the release-only rule is reversed: deliberate gestures stream throttled typed writes while dragging and release sends the final exact value only if it differs ([ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18)). Wire forms, allowlist and factories are unchanged; only timing changes. Level cap drag / key repeat: leading step immediately, then at most one step per 50 ms carrying the latest preview; both linked sides receive the same value; unchanged values (≥1e-9 rule) are not sent. Own companion echoes (exact or 10-significant-digit formatted) do not cancel; any other changed receipt stops the stream immediately.
 
 ## Current F09-S04 peer-editor reconciliation — 2026-11-17
 

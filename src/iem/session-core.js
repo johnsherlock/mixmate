@@ -127,7 +127,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (gestureOwned()) return controlStatus;
     if (model?.status === 'pending') return 'Waiting for fresh observations; application unverified.';
     if (model?.status === 'sent-unverified') return 'Sent; application unverified. Requested coordinate retained; no retry. Some values may have changed.';
-    if (model?.status === 'observed-match') return `${selected?.kind === 'group' ? `Last requested gesture Δ ${model.chain?.delta.toFixed(2)} dB; ` : ''}Observed matching values${op?.rounded ? ' (desk-rounded to 10 decimals)' : ''}; no correlated acknowledgement.`;
+    if (model?.status === 'observed-match') return `${selected?.kind === 'group' ? `Last requested gesture Δ ${model.chain?.delta.toFixed(2)} dB; ` : ''}Observed matching values${op?.rounded ? ' (desk-rounded to 10 significant digits)' : ''}; no correlated acknowledgement.`;
     if (model?.status === 'no-op') return 'Unchanged requested coordinate; no commands sent.';
     if (model && !model.armed) {
       if (ready) return `Ready to edit current received state. ${op?.authorized ? `Previous adjustment returned ${op.returned}/${op.authorized} authorized${op.authorized < op.expected.length ? ` of ${op.expected.length} planned` : ''}${op.unknownDelivery ? '; throwing send delivery unknown' : ''}; application unverified.${op.live ? ' Values already sent live while dragging stay applied; no rollback.' : ''}` : 'Obsolete preview cancelled.'}`;

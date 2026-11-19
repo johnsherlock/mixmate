@@ -4,7 +4,7 @@ import { createAuxControlSession } from '../src/iem/aux-control-session.js';
 import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
-import { LIVE_STREAM_INTERVAL_MS, OBSERVATION_WINDOW_MS, createControlScope, createPeerControlState, transitionControl } from '../src/iem/control-state-model.js';
+import { LIVE_STREAM_INTERVAL_MS, OBSERVATION_WINDOW_MS, deskFormat, createControlScope, createPeerControlState, transitionControl } from '../src/iem/control-state-model.js';
 import { continuousFaderDB, continuousDBToFader, GROUP_FLOOR_DB, GROUP_MAX_DB, groupTravel, groupReferenceDelta, groupReferencePosition } from '../src/iem/relative-groups.js';
 import { auxEqPositionToDb } from '../src/iem/aux-eq-protocol.js';
 import { requestedDrawSamples } from '../src/iem/aux-eq-curve.js';
@@ -32,7 +32,7 @@ function setup(factory = createAuxControlSession, options = {}) {
   const writes = () => writer.sent.filter(message => message.startsWith('3:::SETD'));
   return { session, writer, receiver, writes, jobs,
     advance(ms) { clock += ms; for (const [id, job] of [...jobs].sort((a, b) => a[1].at - b[1].at)) if (job.at <= clock && jobs.has(id)) { jobs.delete(id); job.fn(); } },
-    echo(from = 0, round = false) { const lines = writes().slice(from).map(message => { const [, path, raw] = message.split('^'); return `SETD^${path}^${round ? Number(Number(raw).toFixed(10)) : raw}`; }); if (lines.length) receiver.receive('3:::' + lines.join('\n')); } };
+    echo(from = 0, round = false) { const lines = writes().slice(from).map(message => { const [, path, raw] = message.split('^'); return `SETD^${path}^${round ? Number(Number(raw).toPrecision(10)) : raw}`; }); if (lines.length) receiver.receive('3:::' + lines.join('\n')); } };
 }
 const master = { kind: 'master', auxIndex: 0 };
 const values = list => list.map(message => Number(message.split('^')[2]));
@@ -56,7 +56,7 @@ test('throttle: leading step immediately, then at most one latest-value step per
   app.session.disconnect();
 });
 
-test('own echoes (exact and 10-decimal rounded) never cancel; a foreign value stops the stream immediately with no replay', () => {
+test('own echoes (exact and 10-significant-digit desk formatted) never cancel; a foreign value stops the stream immediately with no replay', () => {
   for (const round of [false, true]) {
     const app = setup(); app.session.selectLevelTarget(master); const token = app.session.beginLevelGesture();
     app.session.previewLevelGesture(token, 0.41123456789012345); app.session.previewLevelGesture(token, 0.52987654321098765);
@@ -274,4 +274,28 @@ test('P3: commit reports the final release dispatch outcome; cancel after live s
   other.session.previewLevelGesture(token, 0.45); other.session.cancelLevelGesture();
   assert.match(other.session.snapshot().control.status, /already sent live while dragging stay applied; no rollback/);
   assert.equal(other.writes().length, 2); other.session.disconnect();
+});
+
+test('live 2026-11-19 regression: low-magnitude own echoes use the desk 10-significant-digit format and never self-cancel; sends always survive that format', () => {
+  // Observed: 0.031999458946648573 echoed as 0.03199945895 (10 significant digits, not 10 decimals).
+  assert.equal(deskFormat(0.031999458946648573), 0.03199945895);
+  assert.equal(deskFormat(0.0012589254117941673), 0.001258925412);
+  assert.equal(deskFormat(0), 0);
+  const app = setup(); app.session.selectLevelTarget(master); const token = app.session.beginLevelGesture();
+  const low = [0.031999458946648573, 0.0123456789012345, 0.0012589254117941673];
+  for (const value of low) {
+    const from = app.writes().length;
+    app.session.previewLevelGesture(token, value); app.advance(60);
+    assert.ok(app.writes().length > from, `streams ${value}`);
+    app.echo(from, true);
+    assert.equal(app.session.snapshot().control.gestureActive, true, `own desk-formatted echo of ${value} must not cancel`);
+  }
+  // A change that the desk format cannot represent is not sent (the desk would not echo it).
+  const before = app.writes().length;
+  app.session.previewLevelGesture(token, 0.0012589254117941673 + 1e-16); app.advance(60);
+  assert.equal(app.writes().length, before, 'sub-format change not sent');
+  // A genuinely foreign low value still cancels.
+  app.receiver.receive('3:::SETD^a.0.mix^0.0222');
+  assert.equal(app.session.snapshot().control.gestureActive, false);
+  app.session.disconnect();
 });

@@ -12,7 +12,7 @@ User decision: [ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s0
 | Budget | Next step waits `max(interval, paths × 1000 / budget)`: 100 SETD/s level/pan, 200 group, 250 GEQ; streamed steps defer while writer `bufferedAmount` > 4096 B; release always sends. Per-step reducer work is bounded by structural sharing. |
 | Cancel | Cancel/Escape/pointercancel/focus loss after live steps leaves streamed values applied; status says so. |
 | Sparse | Paths within 1e-9 of the last requested value are never sent, so the desk echoes every step. |
-| Echo | Authorized values are journaled per path (≤128, 2.5 s). A receipt equal exactly or at 10 decimals to a journaled, unsuperseded value is an own echo (actual updates, no cancel, consumes older entries); a rounded match of the current expectation counts toward observed-match ("desk-rounded"). Any other changed receipt is native → immediate stop, no rollback/replay. |
+| Echo | Authorized values are journaled per path (≤128, 2.5 s). A receipt equal exactly or at the desk's 10-significant-digit format to a journaled, unsuperseded value is an own echo (actual updates, no cancel, consumes older entries); a rounded match of the current expectation counts toward observed-match ("desk-rounded"). Any other changed receipt is native → immediate stop, no rollback/replay. |
 | Failure | Socket close/error/timeout clears state and stops; a throw records unknown delivery and touched-closure recovery; applied steps may remain. |
 | UI | The active gesture's target stays editable while its echoes land; group members preview requested values; statuses say changes are sent live. |
 

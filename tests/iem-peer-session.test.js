@@ -70,7 +70,7 @@ test('own echoes rounded to 10 decimals stay raw actual, are own-echo matches (F
   const a = fixture(); a.session.connect('192.168.0.60'); const [writer, receiver] = a.sockets; writer.open(); receiver.open(); receiver.receive(BASE);
   a.session.selectLevelTarget(MASTER); a.session.commitLevelGesture(a.session.beginLevelGesture(), 0.39619533446252725);
   receiver.receive('3:::SETD^a.0.mix^0.3961953345\nSETD^a.1.mix^0.3961953345');
-  assert.equal(a.session.snapshot().observations.get('a.0.mix'), 0.3961953345); assert.match(a.session.snapshot().control.status, /Observed matching values \(desk-rounded to 10 decimals\)/);
+  assert.equal(a.session.snapshot().observations.get('a.0.mix'), 0.3961953345); assert.match(a.session.snapshot().control.status, /Observed matching values \(desk-rounded to 10 significant digits\)/);
   assert.equal(a.session.snapshot().control.armed, true);
   assert.doesNotMatch(a.session.snapshot().control.status, /enable|controls off|acknowledged/i);
   const old = a.session.beginLevelGesture(); assert.ok(old); receiver.receive('3:::SETD^a.0.mix^0.42\nSETD^a.1.mix^0.42');
