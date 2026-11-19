@@ -2,11 +2,11 @@ import { mixerURL } from '../mixer-address.js';
 import { createLiveProvider } from './live-provider.js';
 import { decodeVu2Frame } from './meters.js';
 import { IEM_RECEIVE_LIMITS, parseIemStateFrame } from './protocol.js';
-import { createControlScope, createPeerControlState, transitionControl, OBSERVATION_WINDOW_MS, LIVE_STREAM_INTERVAL_MS } from './control-state-model.js';
+import { createControlScope, createPeerControlState, transitionControl, OBSERVATION_WINDOW_MS, LIVE_STREAM_INTERVAL_MS, LIVE_SETD_BUDGET_PER_S, LIVE_BACKPRESSURE_BYTES } from './control-state-model.js';
 import { auxPanPath, encodeAuxPanCommand, resolveAuxPanTopology } from './aux-pan-protocol.js';
 import { validateSettings, validateDefinitionOwner, definitionOwner } from '../settings.js';
 import { auxLevelPath, encodeAuxLevelCommand, resolveAuxLevelTopology } from './aux-level-protocol.js';
-import { AUX_EQ_DISPLAY_CENTRES, auxEqPath, auxEqPositionToDb, encodeAuxEqCommand, eqArray, eqDataFields, parseAuxEqStateFrame, parseAuxProcessingFrame, resolveAuxEqTargets } from './aux-eq-protocol.js';
+import { AUX_EQ_DISPLAY_CENTRES, auxEqPath, auxEqPositionToDb, encodeAuxEqCommand, eqArray, eqDataFields, parseAuxEqStateFrame, parseAuxProcessingFrame, resolveAuxEqTopology } from './aux-eq-protocol.js';
 import { resolveGroupTopology, groupReferenceDelta, groupReferencePosition } from './relative-groups.js';
 import { mapRequestedAuxEqCurve } from './aux-eq-curve.js';
 
@@ -77,10 +77,17 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       return { identity: JSON.stringify([resolved.groupId, resolved.membership]), members: resolved.members };
     }
     if (kind === 'pan') { const pan = { sourceId: target.sourceId, auxIndex: target.auxIndex }; return { identity: JSON.stringify([kind, pan]), members: resolveAuxPanTopology(observed, pan).members }; }
-    if (kind === 'geq') { const eq = { auxIndex: target.auxIndex }; return { identity: JSON.stringify([kind, eq]), members: resolveAuxEqTargets(observed, eq, { allowUnequal: true }).members }; }
+    if (kind === 'geq') {
+      // Topology only: link/mode/bypass metadata via the strict resolver; band
+      // paths follow deterministically (31 per output) without per-band values.
+      const eq = { auxIndex: target.auxIndex }, outputs = resolveAuxEqTopology(observed, eq).outputs;
+      return { identity: JSON.stringify([kind, eq]), members: outputs.flatMap(({ auxIndex }) => AUX_EQ_DISPLAY_CENTRES.map((_, bandIndex) => ({ path: `a.${auxIndex}.eq.peak.${bandIndex}`, target: { auxIndex, bandIndex } }))) };
+    }
     return { identity: JSON.stringify([kind, target]), members: resolveAuxLevelTopology(observed, target).members };
   }
-  const sameClosure = (current, scope) => current.identity === scope.identity && JSON.stringify(current.members.map(x => [x.path, x.target])) === JSON.stringify(scope.members.map(x => [x.path, x.target]));
+  const closureKey = members => JSON.stringify(members.map(x => [x.path, x.target])), scopeKeys = new WeakMap();
+  const scopeKey = scope => { if (!scopeKeys.has(scope)) scopeKeys.set(scope, closureKey(scope.members)); return scopeKeys.get(scope); };
+  const sameClosure = (current, scope) => current.identity === scope.identity && current.members.length === scope.members.length && closureKey(current.members) === scopeKey(scope);
   const gestureOwned = () => Boolean(model?.gesture && model.generation === generation && model.armed && model.scopeCurrent);
   function cancelStream() { if (stream?.timer !== undefined) timers.clearTimeout(stream.timer); stream = null; }
   function installScope() {
@@ -123,7 +130,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (model?.status === 'observed-match') return `${selected?.kind === 'group' ? `Last requested gesture Δ ${model.chain?.delta.toFixed(2)} dB; ` : ''}Observed matching values${op?.rounded ? ' (desk-rounded to 10 decimals)' : ''}; no correlated acknowledgement.`;
     if (model?.status === 'no-op') return 'Unchanged requested coordinate; no commands sent.';
     if (model && !model.armed) {
-      if (ready) return `Ready to edit current received state. ${op?.authorized ? `Previous adjustment returned ${op.returned}/${op.authorized} authorized${op.authorized < op.expected.length ? ` of ${op.expected.length} planned` : ''}${op.unknownDelivery ? '; throwing send delivery unknown' : ''}; application unverified.` : 'Obsolete preview cancelled.'}`;
+      if (ready) return `Ready to edit current received state. ${op?.authorized ? `Previous adjustment returned ${op.returned}/${op.authorized} authorized${op.authorized < op.expected.length ? ` of ${op.expected.length} planned` : ''}${op.unknownDelivery ? '; throwing send delivery unknown' : ''}; application unverified.${op.live ? ' Values already sent live while dragging stay applied; no rollback.' : ''}` : 'Obsolete preview cancelled.'}`;
       const reasons = {
         'precision-or-native-conflict': 'Received value differs from the request; precision or native change is unknown.',
         'native-invalidated': 'Received control value changed; the next gesture uses current state.',
@@ -132,7 +139,9 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
         'dispatch-expired': 'Dispatch deadline elapsed; obsolete adjustment cancelled.',
         'interrupted': 'Adjustment interrupted; obsolete adjustment cancelled.',
       };
-      const reason = reasons[model.status] ?? controlStatus;
+      // Cancel/Escape/pointercancel/focus loss after live steps no longer means
+      // nothing was sent: say the streamed values stay applied.
+      const reason = `${reasons[model.status] ?? controlStatus}${op?.live ? ' Values already sent live while dragging stay applied; no rollback.' : ''}`;
       if (op?.authorized) return `${reason} Returned ${op.returned}/${op.authorized} authorized${op.authorized < op.expected.length ? ` of ${op.expected.length} planned` : ''}${op.unknownDelivery ? '; throwing send delivery unknown' : ''}; some values may have changed. Waiting for complete current received state; no replay.`;
       return reason;
     }
@@ -295,21 +304,30 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   // step goes through the same private reducer authorization and per-ordinal
   // dispatch guard as a release commit. Only an owned deliberate gesture's
   // preview schedules a step; receipts, scroll and selection never do.
+  // SETD budget (P2): the next step waits at least the kind's interval AND the
+  // time the previous step's path count spends at the kind's SETD/s budget.
+  const streamGap = () => { const kind = kindOf(selected); return Math.max(LIVE_STREAM_INTERVAL_MS[kind], stream.lastPaths * 1000 / LIVE_SETD_BUDGET_PER_S[kind]); };
   function scheduleStream(token) {
-    if (stream?.token !== token) { cancelStream(); stream = { token, timer: undefined, lastAt: -Infinity }; }
+    if (stream?.token !== token) { cancelStream(); stream = { token, timer: undefined, lastAt: -Infinity, lastPaths: 0 }; }
     if (stream.timer !== undefined) return;
-    const interval = LIVE_STREAM_INTERVAL_MS[kindOf(selected)], wait = Math.min(interval, stream.lastAt + interval - now());
+    const gap = streamGap(), wait = Math.min(gap, stream.lastAt + gap - now());
     if (!(wait > 0)) { streamStep(token); return; }
+    deferStream(token, wait);
+  }
+  function deferStream(token, wait) {
     const current = stream;
     current.timer = timers.setTimeout(() => { if (stream !== current) return; current.timer = undefined; streamStep(token); }, wait);
   }
   function streamStep(token) {
     if (stream?.token !== token || !canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || !model.gesture.preview || activeOperation()?.status === 'dispatching') return;
+    // Backpressure: while the writer still buffers unsent data, defer the step
+    // (the latest preview is kept; release still sends the final value).
+    if ((Number(socket.bufferedAmount) || 0) > LIVE_BACKPRESSURE_BYTES) { deferStream(token, streamGap()); return; }
     const before = model.operation?.id;
     try { revalidate(false); step({ type: 'stream', token }); }
     catch (error) { cancelControl(error.message); emit('controls'); return; }
     if (model.operation?.id === before || model.operation?.status !== 'dispatching') return; // Unchanged preview: nothing to send.
-    stream.lastAt = now();
+    stream.lastAt = now(); stream.lastPaths = model.operation.expected.length;
     dispatch();
   }
   function preview(token, value, kind, live = true) {
@@ -357,7 +375,12 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       if (kind === 'level' && selected.kind !== 'group') { if (preview(token, value, 'level', false) === null) return false; }
       if (!model.gesture?.preview) return false;
       const streamed = model.gesture.streamed;
-      step({ type: 'commit', token }); return dispatch() || streamed;
+      const before = model.operation?.id;
+      step({ type: 'commit', token });
+      // The final release write's own outcome; an unchanged streamed release
+      // needs no write and reports true (its live steps already returned).
+      if (model.operation?.id !== before && model.operation?.status === 'dispatching') return dispatch();
+      emit('controls'); return streamed;
     } catch (error) { cancelControl(error.message); emit('controls'); return false; }
   }
   function canEditTarget(target) {

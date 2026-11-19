@@ -21,6 +21,13 @@ export const GEQ_UNCHANGED_EPSILON = 1e-9;
 // echoes every step. Timing only: no new paths, fields or senders.
 export const STREAM_UNCHANGED_EPSILON = GEQ_UNCHANGED_EPSILON;
 export const LIVE_STREAM_INTERVAL_MS = Object.freeze({ level: 50, group: 50, pan: 50, geq: 120 });
+// Overall live SETD budget per kind (writes/s): a step of N paths delays the
+// next by max(interval, N * 1000 / budget). Worst-case streamed rates are
+// therefore <= 100/s (level, pan), <= 200/s (groups), <= 250/s (GEQ), plus one
+// final release step. Streamed steps also wait while the writer's
+// bufferedAmount exceeds the backpressure threshold.
+export const LIVE_SETD_BUDGET_PER_S = Object.freeze({ level: 100, group: 200, pan: 100, geq: 250 });
+export const LIVE_BACKPRESSURE_BYTES = 4096;
 // Observed 3.0.7865 companion echoes round own values to 10 decimals. A peer
 // receipt equal (exactly or at that rounding) to a value this owner authorized
 // for the same path within the observation window, and not yet superseded by a
@@ -32,8 +39,10 @@ const requireScope = scope => { if (!scopes.has(scope)) throw Error('Use a valid
 const uint = x => Number.isSafeInteger(x) && x >= 0;
 const finite = x => typeof x === 'number' && Number.isFinite(x);
 const unit = x => finite(x) && x >= 0 && x <= 1;
+// Already-frozen subtrees (validated scopes, settled retired operations, shared
+// tokens) are immutable and structurally shared, so they are never re-walked.
 const freeze = x => {
-  if (x && typeof x === 'object') { Object.values(x).forEach(freeze); Object.freeze(x); }
+  if (x && typeof x === 'object' && !Object.isFrozen(x)) { Object.values(x).forEach(freeze); Object.freeze(x); }
   return x;
 };
 const data = (input, keys) => eqDataFields(input, keys);
@@ -89,6 +98,10 @@ const owns = (s, op) => op && op.generation === s.generation && op.revision === 
 const active = s => owns(s, s.operation) && ['dispatching', 'pending'].includes(s.operation.status);
 function retire(s) {
   if (!s.operation) return;
+  // F09-S05: a settled, fully returned live step is superseded by the next step;
+  // its own values live on in the bounded echo journal and basis, so it is not
+  // retained as a diagnostic record (keeps per-transition work bounded).
+  if (s.operation.live && s.operation.flight === null && !s.operation.unknownDelivery && s.operation.returned === s.operation.expected.length) { s.operation = null; return; }
   if (s.retired.length >= 128) {
     const settled = s.retired.findIndex(x => x.flight === null);
     if (settled < 0) throw Error('Bounded diagnostic capacity exhausted.');
@@ -154,29 +167,30 @@ function rememberBasis(s, op) {
 }
 // Bounded own-echo journal (peer only): values authorized per path, pruned
 // after the observation window. A match consumes it and every older entry.
+// Copy-on-write: unchanged entries stay frozen and shared between states.
+const fresh = (now, v) => elapsed(now, v.at) < OBSERVATION_WINDOW_MS;
 function pruneEchoes(s, now) {
-  if (!s.peer) return;
-  s.echoes = s.echoes.map(e => ({ path: e.path, values: e.values.filter(v => elapsed(now, v.at) < OBSERVATION_WINDOW_MS) })).filter(e => e.values.length);
+  if (!s.peer || !s.echoes.some(e => !fresh(now, e.values[0]))) return;
+  s.echoes = s.echoes.map(e => fresh(now, e.values[0]) ? e : { path: e.path, values: e.values.filter(v => fresh(now, v)) }).filter(e => e.values.length);
 }
 function rememberEcho(s, path, value, now) {
   if (!s.peer) return;
-  let entry = s.echoes.find(e => e.path === path);
-  if (!entry) {
-    if (s.echoes.length >= 1024) throw Error('Bounded own-echo journal exhausted.');
-    entry = { path, values: [] }; s.echoes.push(entry);
-  }
-  entry.values.push({ value, at: now });
-  if (entry.values.length > 128) entry.values.shift();
+  const index = s.echoes.findIndex(e => e.path === path);
+  if (index < 0 && s.echoes.length >= 1024) throw Error('Bounded own-echo journal exhausted.');
+  const values = [...(index < 0 ? [] : s.echoes[index].values), { value, at: now }].slice(-128);
+  s.echoes = index < 0 ? [...s.echoes, { path, values }] : s.echoes.map((e, i) => i === index ? { path, values } : e);
 }
 function consumeEcho(s, path, value) {
   if (!s.peer) return false;
-  const entry = s.echoes.find(e => e.path === path);
+  const entryIndex = s.echoes.findIndex(e => e.path === path), entry = s.echoes[entryIndex];
   const index = entry ? entry.values.findIndex(v => v.value === value || echoRound(v.value) === value) : -1;
   if (index < 0) return false;
-  entry.values.splice(0, index + 1);
-  if (!entry.values.length) s.echoes.splice(s.echoes.indexOf(entry), 1);
+  const values = entry.values.slice(index + 1);
+  s.echoes = values.length ? s.echoes.map((e, i) => i === entryIndex ? { path, values } : e) : s.echoes.filter((_, i) => i !== entryIndex);
   return true;
 }
+const setRow = (s, path, patch) => { s.actual = s.actual.map(x => x.path === path ? { ...x, ...patch } : x); };
+const setExpected = (op, index, patch) => { op.expected = op.expected.map((x, i) => i === index ? { ...x, ...patch } : x); };
 const sparsePlan = (s, preview) => preview.expected.filter((x, i) => Math.abs(x.value - s.chain.requested[i].value) >= STREAM_UNCHANGED_EPSILON);
 function newOperation(s, preview, planned, now, live) {
   retire(s);
@@ -218,10 +232,14 @@ function complete(s) {
   if (op?.status === 'pending' && op.expected.every(x => x.matched)) { op.status = 'observed-match'; s.status = 'observed-match'; }
 }
 function copy(s) {
-  return { ...s, ...(s.peer ? { basis: s.basis.map(b => ({ members: b.members.map(m => ({ ...m })) })), echoes: s.echoes.map(e => ({ path: e.path, values: e.values.map(v => ({ ...v })) })) } : {}), actual: s.actual.map(x => ({ ...x })), barriers: s.barriers.map(x => ({ ...x })),
+  // Structural sharing (F09-S05 P1): basis, echoes, actual rows and expected
+  // entries are frozen and replaced copy-on-write by their mutation sites, so a
+  // transition only allocates/freezes what it changes. Barriers stay copied.
+  return { ...s, barriers: s.barriers.map(x => ({ ...x })),
     chain: s.chain && { ...s.chain }, gesture: s.gesture && { ...s.gesture },
-    operation: s.operation && { ...s.operation, expected: s.operation.expected.map(x => ({ ...x })) },
-    retired: s.retired.map(op => ({ ...op, expected: op.expected.map(x => ({ ...x })) })) };
+    operation: s.operation && { ...s.operation },
+    // Retired records are frozen and shared; only an outstanding outcome clones one on write.
+    retired: [...s.retired] };
 }
 
 // All time, socket receipts and send outcomes are explicit data. This reducer
@@ -251,7 +269,8 @@ function outstandingOutcome(s, event) {
   return op;
 }
 function settleOutcome(s, event, now, allowProgress) {
-  const op = outstandingOutcome(s, event);
+  let op = outstandingOutcome(s, event);
+  if (op !== s.operation) { const index = s.retired.indexOf(op); op = { ...op, expected: op.expected.map(x => ({ ...x })) }; s.retired[index] = op; }
   op.flight = null;
   if (event.type === 'threw') {
     op.unknownDelivery = true;
@@ -349,7 +368,7 @@ export function transitionControl(state, input) {
     case 'authorize': {
       const { id, ordinal } = fields(['id', 'ordinal']), op = s.operation;
       if (id !== op?.id || op.status !== 'dispatching' || !s.armed || !uint(ordinal) || ordinal !== op.authorized || ordinal !== op.returned || ordinal >= op.expected.length || op.flight !== null) throw Error('Ordered single authorization required.');
-      op.expected[ordinal].cutpoint = row(s, op.expected[ordinal].path).receipt;
+      setExpected(op, ordinal, { cutpoint: row(s, op.expected[ordinal].path).receipt });
       rememberEcho(s, op.expected[ordinal].path, op.expected[ordinal].value, now);
       op.flight = ordinal; op.authorized++; s.chain.touched = true; break;
     }
@@ -364,13 +383,13 @@ export function transitionControl(state, input) {
       s.lastReceipt = receipt;
       const echo = consumeEcho(s, path, value);
       const actual = row(s, path); if (!actual) break; // unrelated path cannot match
-      const previous = actual.value; actual.value = value; actual.receipt = receipt;
+      const previous = actual.value; setRow(s, path, { value, receipt });
       if (!s.scope.members.some(member => member.path === path)) break; // Historical disjoint actual data grants no current invalidation authority.
-      const op = owns(s, s.operation) ? s.operation : null, expectation = op?.expected.find(x => x.path === path);
+      const op = owns(s, s.operation) ? s.operation : null, expectationIndex = op ? op.expected.findIndex(x => x.path === path) : -1, expectation = op?.expected[expectationIndex];
       if (active(s) && expectation?.cutpoint !== null && receipt > expectation?.cutpoint) {
         if (op.status === 'dispatching') stop(s, 'reentrant-invalidated');
         else if (value === expectation.value || echo && echoRound(expectation.value) === value) {
-          expectation.matched = true; if (value !== expectation.value) op.rounded = true; complete(s);
+          setExpected(op, expectationIndex, { matched: true }); if (value !== expectation.value) op.rounded = true; complete(s);
         } else if (!echo) stop(s, 'precision-or-native-conflict');
         // else: own echo of an earlier live step; actual follows, no cancellation.
       } else if (!echo && previous !== value && !(s.chain && expectation?.value === value && ['sent-unverified', 'observed-match'].includes(op?.status))) stop(s, 'native-invalidated');
@@ -389,8 +408,8 @@ export function transitionControl(state, input) {
       stop(s, 'selection-invalidated'); retire(s); s.scope = scope; s.scopeCurrent = true; s.revision = revision;
       for (const x of scope.members) {
         const actual = row(s, x.path);
-        if (!actual) s.actual.push({ path: x.path, value: x.value, receipt: x.receipt });
-        else if (x.receipt > actual.receipt) Object.assign(actual, { value: x.value, receipt: x.receipt });
+        if (!actual) s.actual = [...s.actual, { path: x.path, value: x.value, receipt: x.receipt }];
+        else if (x.receipt > actual.receipt) setRow(s, x.path, { value: x.value, receipt: x.receipt });
         s.lastReceipt = Math.max(s.lastReceipt, x.receipt);
       }
       break;

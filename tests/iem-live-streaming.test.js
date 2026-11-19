@@ -212,3 +212,66 @@ test('pure reducer: stream steps keep the gesture, are sparse, and own-echo matc
   step('receive', { generation: 1, path: 'a.0.mix', value: 0.6, receipt: 3 }); assert.equal(state.status, 'observed-match'); assert.equal(state.echoes.length, 0, 'consumed');
   step('commit', { token }); assert.equal(state.gesture, null); assert.equal(state.status, 'observed-match', 'unchanged streamed release keeps the last step outcome');
 });
+
+test('P1 regression: per-step reducer work stays bounded after hundreds of live GEQ steps (no retired growth, shared frozen subtrees)', () => {
+  const received = new Map([['model', 'ui24'], ['a.0.stereoIndex', 0], ['a.1.stereoIndex', 1], ['a.0.matrix', false], ['a.1.matrix', false], ['a.0.eq.bypass', false], ['a.1.eq.bypass', false]]);
+  for (let band = 0; band < 31; band++) for (const aux of [0, 1]) received.set(`a.${aux}.eq.peak.${band}`, 0.5);
+  const receipts = new Map([...received.keys()].map(path => [path, 1]));
+  let time = 0, receipt = 1, state = createPeerControlState({ scope: createControlScope({ kind: 'geq', received, receipts, target: { auxIndex: 0 }, group: null }), generation: 1, revision: 1, now: { mono: 0, wall: 0 } });
+  const step = (type, fields = {}) => { time += 1; state = transitionControl(state, { type, now: { mono: time, wall: time }, ...fields }); };
+  step('arm'); step('begin'); const token = state.gesture.token;
+  const original = Object.freeze; let freezes = 0;
+  const liveStep = n => {
+    step('preview', { token, value: Array(31).fill(n % 2 ? 0.6 : 0.4) }); step('stream', { token });
+    const op = state.operation; assert.equal(op.expected.length, 62);
+    for (let ordinal = 0; ordinal < 62; ordinal++) { step('authorize', { id: op.id, ordinal }); step('returned', { id: op.id, ordinal }); }
+    for (const item of op.expected) step('receive', { generation: 1, path: item.path, value: Number(item.value.toFixed(10)), receipt: ++receipt });
+    time += 200;
+  };
+  const measure = n => { freezes = 0; Object.freeze = value => { freezes++; return original(value); }; try { liveStep(n); } finally { Object.freeze = original; } return freezes; };
+  const first = measure(0);
+  for (let n = 1; n < 400; n++) liveStep(n);
+  const late = measure(400);
+  assert.ok(state.gesture, 'own rounded echoes never cancelled the gesture');
+  assert.equal(state.retired.length, 0, 'settled superseded live steps are not retained');
+  assert.ok(late <= first * 1.2 + 50, `work per step stays bounded: first ${first}, after 400 steps ${late}`);
+  assert.ok(late < 12000, `small absolute work per linked GEQ step: ${late}`);
+  assert.equal(state.echoes.length, 0, 'every own echo consumed');
+});
+
+test('P2: SETD budget stretches the step gap by path count; writer backpressure defers streamed steps; release still sends', () => {
+  const app = setup(); app.session.selectEqTarget(0); const token = app.session.beginEqGesture();
+  const draw = shift => requestedDrawSamples(Array(31).fill(shift));
+  app.session.previewEqGesture(token, draw(1)); assert.equal(app.writes().length, 62, 'leading 62-path step');
+  app.session.previewEqGesture(token, draw(2)); app.advance(240); assert.equal(app.writes().length, 62, '62 paths at 250 SETD/s wait 248 ms, not 120 ms');
+  app.advance(8); assert.equal(app.writes().length, 124);
+  app.writer.bufferedAmount = 10000; app.session.previewEqGesture(token, draw(3)); app.advance(1000); assert.equal(app.writes().length, 124, 'buffered writer defers streamed steps');
+  app.writer.bufferedAmount = 0; app.advance(248); assert.equal(app.writes().length, 186, 'latest preview sent once the buffer drains');
+  app.writer.bufferedAmount = 10000; app.session.previewEqGesture(token, draw(4));
+  assert.equal(app.session.commitEqGesture(token), true); assert.equal(app.writes().length, 248, 'release sends the final value regardless');
+  app.session.disconnect();
+});
+
+test('P3: a group cannot re-anchor while any own live echo is outstanding (step-1 echoes alone are not enough)', async () => {
+  const app = await groups(); app.session.selectGroupTarget('band', 0);
+  try {
+    const token = app.session.beginLevelGesture(), ref = delta => continuousDBToFader(continuousFaderDB(0.65) + delta);
+    app.session.previewLevelGesture(token, ref(1)); app.advance(50); app.session.previewLevelGesture(token, ref(2));
+    assert.equal(app.writes().length, 8); app.session.commitLevelGesture(token, 0);
+    assert.equal(app.session.beginLevelGesture(), null, 'no echoes yet');
+    app.receiver.receive('3:::' + app.writes().slice(0, 4).map(message => message.slice(4)).join('\n'));
+    assert.equal(app.session.beginLevelGesture(), null, 'step-2 echoes still outstanding (basis cutpoints alone would pass)');
+    assert.equal(app.session.canEditLevelTarget({ kind: 'group', groupId: 'band', auxIndex: 0 }), false);
+    app.echo(4); assert.ok(app.session.beginLevelGesture(), 'all own echoes received: re-anchors without Enable');
+  } finally { app.session.disconnect(); await app.repository.close(); }
+});
+
+test('P3: commit reports the final release dispatch outcome; cancel after live steps says streamed values stay applied', () => {
+  const app = setup(); app.session.selectLevelTarget(master); let token = app.session.beginLevelGesture();
+  app.session.previewLevelGesture(token, 0.41); app.writer.send = () => { throw Error('socket'); };
+  assert.equal(app.session.commitLevelGesture(token, 0.5), false, 'failed final write is not reported as success');
+  const other = setup(); other.session.selectLevelTarget(master); token = other.session.beginLevelGesture();
+  other.session.previewLevelGesture(token, 0.45); other.session.cancelLevelGesture();
+  assert.match(other.session.snapshot().control.status, /already sent live while dragging stay applied; no rollback/);
+  assert.equal(other.writes().length, 2); other.session.disconnect();
+});

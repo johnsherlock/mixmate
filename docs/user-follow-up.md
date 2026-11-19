@@ -325,3 +325,5 @@ Implementation on `codex/f09-s05-live-fader-writes` (from main `da7515f`), commi
 - **Tests.** About 30 existing tests encoded "preview never writes" or ±dB group previews; they were updated to the new semantics (hooks moved before the preview, positions instead of deltas), not deleted.
 
 Live checks outstanding: listed in [F09-S05](stories/F09-S05.md#validation-and-delivery). F08-S01 remains parked.
+
+PR #51 review corrections (2026-11-19, story agent): budgets chosen as 100 SETD/s (level/pan), 200 (groups) and 250 (GEQ) — GEQ higher so a linked points drag still updates about 4×/s; backpressure threshold 4096 buffered bytes, applied to streamed steps only (release always sends its one final step). Commit now returns the final release dispatch's outcome; an unchanged streamed release returns true. Cancel after live steps reports that streamed values stay applied. Added live-check items: echo rounding at low positions (0.0123, −100 dB floor ≈ 0.00125: decimals vs significant digits) and native edits equal to unconsumed own values.
