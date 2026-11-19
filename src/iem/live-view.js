@@ -4,6 +4,7 @@ import { observeIemLayout } from './layout.js';
 import { startLocalClock } from './clock.js';
 import { sourceLabel } from './live-provider.js';
 import { outputColour, overviewColour } from './theme.js';
+import { FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
@@ -58,6 +59,27 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     }
   }
   const deltaText = value => `Δ ${value > 0 ? '+' : ''}${value.toFixed(2)} dB`;
+  // F09-S06 dB-linear level display: input values are scale units (dB from
+  // -60 to +10, plus a short bottom segment down to -inf); the private session
+  // still receives and returns desk positions 0..1.
+  const unitPosition = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+  const scaleText = position => String(positionToScale(position));
+  function levelInput(input) {
+    input.min = String(FADER_SCALE_MIN); input.max = String(FADER_SCALE_TOP_DB); input.step = 'any';
+    input.dataset.gestureStep = String(FADER_SCALE_POINTER_STEP_DB); input.dataset.keyStep = String(FADER_SCALE_KEY_STEP_DB);
+    input.dataset.scale = 'db'; input.value = String(FADER_SCALE_MIN);
+  }
+  function ruler(scale) {
+    scale.textContent = '';
+    for (const value of [...FADER_SCALE_TICKS, FADER_SCALE_MIN]) {
+      const tick = element('span', '', value === FADER_SCALE_MIN ? '−∞' : `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}`);
+      tick.style.top = `${scaleTickPercent(value)}%`; scale.append(tick);
+    }
+    scale.setAttribute('aria-hidden', 'true');
+    scale.setAttribute('title', 'dB scale: equal dB = equal distance from +10 to −60 dB; the bottom segment reaches −∞');
+  }
+  // One fixed single line; the full text stays in the title and Details.
+  const setState = (strip, text, title = text) => { strip.state.textContent = text; strip.state.setAttribute('title', title); strip.stateFull = title; };
   const selectedTarget = target => control?.selected && JSON.stringify(target) === JSON.stringify(control.selected);
   function renderShortcuts(model, selected) {
     if (!shortcuts) return;
@@ -95,16 +117,22 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       return token;
     },
     onPreview(input, token, value) {
-      const next = onPreviewLevel(token, value);
-      // Group previews return the requested loudest-member reference position;
-      // the common Δ and member previews render from the owned session snapshot.
+      // Scale → desk position for the private owner; its returned (clamped)
+      // position → scale for the cap. Groups return the loudest-member
+      // reference position; one common Δ renders from the owned snapshot.
+      const position = onPreviewLevel(token, scaleToPosition(value));
+      if (!unitPosition(position)) return null;
+      const next = positionToScale(position);
       const group = groupInputs.get(input);
-      if (group && typeof next === 'number') group.note.textContent = 'Live Δ · sending while you drag';
-      if (preview?.input === input) preview.value = next;
+      if (group) group.note.textContent = 'Live Δ · sending while you drag';
+      if (preview?.input === input) { preview.value = next; preview.position = position; }
       mirrorPreview(input, next);
       return next;
     },
-    onCommit(input, token) { preview = null; onCommitLevel(token, Number(input.value)); },
+    onCommit(input, token) {
+      const position = preview?.input === input && unitPosition(preview.position) ? preview.position : scaleToPosition(Number(input.value));
+      preview = null; onCommitLevel(token, position);
+    },
     onCancel(input, token) { preview = null; onCancelLevel(token); },
   }), layout = observeIemLayout(root, () => { bankLayout(); gestures.sync(); }), stopClock = startLocalClock($('.mm-clock'));
   function createStrip(kind) {
@@ -113,7 +141,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     name.type = 'button'; name.disabled = true; head.append(name, description);
     const detail = element('button', 'mm-detail-button', 'Details'); detail.type = 'button'; detail.dataset.channelDetail = ''; detail.setAttribute('aria-haspopup', 'dialog');
     article.append(detail);
-    const output = element('output', 'mm-value'), space = element('div', 'mm-fader-space'), scale = element('span', 'mm-ruler', 'POSITION');
+    const output = element('output', 'mm-value'), space = element('div', 'mm-fader-space'), scale = element('span', 'mm-ruler');
+    ruler(scale);
     if (kind === 'group') {
       const badge = element('span', 'mm-group-master-label', 'GROUP MASTER');
       const selection = element('div', 'mm-group-selection'); selection.append(badge);
@@ -121,16 +150,16 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (select) { select.type = 'button'; selection.append(select); }
       if (!control) head.append(selection);
       const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
-      // F09-S05: full-range group fader. The cap starts at the loudest member's
-      // received fader position and moves it along the normal fader law; every
-      // member gets the same dB Δ (top: loudest at max; bottom: quietest at floor).
+      // Full-range group fader on the dB-linear scale (F09-S06): the cap starts
+      // at the loudest member's received level; every member gets the same dB Δ,
+      // so all move the same distance (top: loudest at max; bottom: quietest at
+      // -60 dB; a member already below -60 dB allows no downward travel).
       unavailable.setAttribute('aria-label', 'Relative group level unavailable · read-only');
       const state = element('span', 'mm-live-strip-state'), note = element('span', 'mm-group-control-note', control ? 'REQUESTED Δ · no balance proof' : 'Local definition · no group meter');
       space.append(scale, unavailable);
       let input;
       if (control) {
-        scale.textContent = 'GROUP · LOUDEST';
-        input = element('input', 'mm-vertical'); input.type = 'range'; input.min = '0'; input.max = '1'; input.step = 'any'; input.dataset.gestureStep = '0.001'; input.value = '0'; input.disabled = true; input.dataset.group = '';
+        input = element('input', 'mm-vertical'); input.type = 'range'; levelInput(input); input.disabled = true; input.dataset.group = '';
         space.append(input);
       }
       if (control) {
@@ -145,7 +174,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       return strip;
     }
     const input = element('input', 'mm-vertical');
-    input.type = 'range'; input.min = '0'; input.max = '1'; input.step = '0.001'; input.disabled = true;
+    input.type = 'range'; levelInput(input); input.disabled = true;
     if (kind === 'source') input.dataset.channel = ''; else input.dataset.master = '';
     const meter = element('span', 'mm-meter-pair'); meter.setAttribute('role', 'img');
     const tracks = [0, 1].map(() => {
@@ -227,25 +256,26 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           strip.input.dataset.group = model.groupId;
           strip.input.disabled = !(eligible && !control.dispatching);
           strip.input.setAttribute('aria-label', `${model.name} group fader at the loudest member; one common Δ to every member; cap drag or arrow keys; changes are sent live while you drag`);
-          const reference = chosen && typeof control?.groupReference === 'number' ? control.groupReference : typeof model.referencePosition === 'number' ? model.referencePosition : 0;
-          if (preview?.input !== strip.input) strip.input.value = String(reference);
+          const reference = chosen && unitPosition(control?.groupReference) ? control.groupReference : unitPosition(model.referencePosition) ? model.referencePosition : 0;
+          if (preview?.input !== strip.input) strip.input.value = scaleText(reference);
           strip.unavailable.hidden = Boolean(eligible);
         }
         strip.note.textContent = chosen && control?.gestureActive ? 'Live Δ · sending while you drag' : chosen && control?.lastDelta !== null ? 'Last requested gesture Δ' : 'Gesture Δ · starts at zero';
         strip.output.textContent = eligible ? deltaText(chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0) : 'Δ —';
         strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
-        strip.state.textContent = chosen ? control.reason || control.status : model.stateText;
+        setState(strip, chosen ? control.reason || control.status : model.stateText);
         strip.article.dataset.actionable = String(!eligible || chosen && (control?.pending || !control?.eligible));
         const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
         if (chosen && control?.requestedDiagnostic?.length) strip.requestedSignature = diagnostic;
         const inactive = !chosen && control?.requestedDiagnostic?.length && strip.requestedSignature === diagnostic;
-        detailModels.set(detailButton, { ...model, requestedDetail: inactive ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')} · ${control.status}` : strip.state.textContent });
+        detailModels.set(detailButton, { ...model, requestedDetail: inactive ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')} · ${control.status}` : strip.stateFull });
         continue;
       }
       (strip.panReadout || strip.pan).textContent = model.panText ?? 'Pan unavailable';
       if (control?.panCapable && model.sourceId && model.auxIndex !== undefined) { strip.pan.type = 'button'; strip.pan.disabled = false; strip.pan.dataset.openPan = model.sourceId; strip.pan.dataset.panAux = String(model.auxIndex); strip.pan.setAttribute('aria-label', `Inspect normalized AUX pan for ${model.name}`); strip.pan.setAttribute('aria-haspopup', 'dialog'); }
-      else if (strip.panReadout) { strip.pan.disabled = true; delete strip.pan.dataset.openPan; delete strip.pan.dataset.panAux; strip.pan.setAttribute('aria-label', 'Pan unavailable for unresolved member'); } strip.state.textContent = model.stateText ?? '';
-      strip.pan.setAttribute('title', model.panText ?? 'Pan unavailable'); strip.state.setAttribute('title', strip.state.textContent);
+      else if (strip.panReadout) { strip.pan.disabled = true; delete strip.pan.dataset.openPan; delete strip.pan.dataset.panAux; strip.pan.setAttribute('aria-label', 'Pan unavailable for unresolved member'); }
+      setState(strip, model.stateText ?? '');
+      strip.pan.setAttribute('title', model.panText ?? 'Pan unavailable');
       strip.name.setAttribute('title', model.name);
       const levelTarget = model.sourceId && model.auxIndex !== undefined ? { kind: 'send', auxIndex: model.auxIndex, sourceId: model.sourceId }
         : model.auxIndex !== undefined ? { kind: 'master', auxIndex: model.auxIndex } : null;
@@ -266,27 +296,23 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       const groupValue = control?.groupRequested?.find(item => item.sourceId === model.sourceId && item.auxIndex === model.auxIndex)?.value;
       const groupPreview = typeof groupValue === 'number' && !isSelected;
       strip.article.dataset.groupRequested = String(groupPreview);
-      if (groupPreview) {
-        strip.state.textContent = `Last received ${model.levelText ?? '—'} · Group requested ${groupValue}`;
-        strip.state.setAttribute('title', strip.state.textContent);
-      }
-      if (requested) {
-        strip.state.textContent = `Last received ${model.levelText ?? '—'} · Requested ${control.requestedValue}`;
-        strip.state.setAttribute('title', strip.state.textContent);
-      }
+      // Requested levels are formatted dB (1 decimal); raw positions stay in
+      // the title and Details, never in the fixed strip line (F09-S06).
+      if (groupPreview) setState(strip, `Last received ${model.levelText ?? '—'} · Group requested ${positionDbText(groupValue)}`, `Last received ${model.levelText ?? '—'} · Group requested ${positionDbText(groupValue)} (raw ${groupValue})`);
+      if (requested) setState(strip, `Last received ${model.levelText ?? '—'} · Requested ${positionDbText(control.requestedValue)}`, `Last received ${model.levelText ?? '—'} · Requested ${positionDbText(control.requestedValue)} (raw ${control.requestedValue})`);
       if (isSelected && !control.armed && control.requestedDiagnostic?.length) {
-        strip.state.textContent = `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}`;
-        strip.state.setAttribute('title', strip.state.textContent);
+        const text = `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')}`;
+        setState(strip, `Last requested (inactive): ${control.requestedDiagnostic.length === 1 ? positionDbText(control.requestedDiagnostic[0].value) : `${control.requestedDiagnostic.length} values`}`, text);
       }
       strip.output.setAttribute('aria-label', `${model.name} last received level${model.actualLevelText ? ': ' + model.actualLevelText : ''}`);
       strip.output.setAttribute('title', model.actualLevelText || model.levelText || 'No received level');
       strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; changes are sent live while you drag'}`);
-      if (preview?.input !== strip.input) strip.input.value = groupPreview ? String(groupValue) : isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested ? String(control.requestedValue) : known ? String(model.position) : '0';
+      if (preview?.input !== strip.input) strip.input.value = groupPreview ? scaleText(groupValue) : isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested && unitPosition(control.requestedValue) ? scaleText(control.requestedValue) : known ? scaleText(model.position) : String(FADER_SCALE_MIN);
       strip.article.dataset.actionable = String(strip.input.disabled || isSelected && (control?.pending || !control?.eligible));
       const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
       if ((isSelected || requested) && control?.requestedDiagnostic?.length) strip.requestedSignature = diagnostic;
       const inactive = !isSelected && control?.requestedDiagnostic?.length && strip.requestedSignature === diagnostic;
-      detailModels.set(detailButton, { ...model, requestedDetail: inactive ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')} · ${control.status}` : `${strip.state.textContent}${isSelected ? ' · ' + control.status : ''}` });
+      detailModels.set(detailButton, { ...model, requestedDetail: inactive ? `Last requested (inactive): ${control.requestedDiagnostic.map(item => `${item.path}=${item.value}`).join(', ')} · ${control.status}` : `${strip.stateFull}${isSelected ? ' · ' + control.status : ''}` });
       updateMeter(strip, model);
     }
   }

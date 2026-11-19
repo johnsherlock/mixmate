@@ -145,7 +145,21 @@ export function mountLiveController({ session, repository, view, ui, document = 
     ui.note.textContent = snapshot.detail;
     if (kind !== 'meters') emitContext();
   }
-  const unsubscribe = session.subscribe(render);
+  // F09-S06: while an owned gesture is active, session-driven redraws (live
+  // steps, echoes, meters) are coalesced to one per animation frame, so a drag
+  // never pays for a full reconcile per streamed step. Gesture end renders now.
+  const requestFrame = typeof window?.requestAnimationFrame === 'function' ? callback => window.requestAnimationFrame(callback) : null;
+  let framePending = false, frameId;
+  function onSession(snapshot, kind) {
+    if (destroyed) return;
+    if (requestFrame && snapshot?.control?.gestureActive) {
+      if (!framePending) { framePending = true; frameId = requestFrame(() => { if (!framePending) return; framePending = false; if (!destroyed) render(session.snapshot(), 'controls'); }); }
+      return;
+    }
+    if (framePending) { framePending = false; window?.cancelAnimationFrame?.(frameId); }
+    render(snapshot, kind);
+  }
+  const unsubscribe = session.subscribe(onSession);
   function invalidate(detach = false) { setupIntent++; touched = true; selectedAux = null; restoreCandidate = requestedNavigation = null; navIntent++; navigationMessage = ''; invalidateDraft(detach); session.disconnect(); }
   listen(ui.address, 'input', () => { invalidate(true); ui.profile.value = ''; ui.address.setCustomValidity(''); feedback('Manual address — not bound to a saved rig. Edit Groups uses the groups kept on this device.'); });
   listen(ui.profile, 'change', () => {
@@ -316,6 +330,6 @@ export function mountLiveController({ session, repository, view, ui, document = 
     toggleLevel() { if (session.snapshot().control?.armed) session.disarmLevel(); else session.armLevel?.(); },
     clearLevelContext() { session.invalidateLevelContext?.(); render(); },
     whenNavigationIdle: () => navPending,
-    destroy() { invalidateDraft(true); destroyed = true; contextListeners.clear(); navIntent++; unsubscribeSettings(); unsubscribe(); session.disconnect(); for (const [target, type, callback] of handlers) target.removeEventListener(type, callback); ui.destroy?.(); view.destroy(); },
+    destroy() { if (framePending) { framePending = false; window?.cancelAnimationFrame?.(frameId); } invalidateDraft(true); destroyed = true; contextListeners.clear(); navIntent++; unsubscribeSettings(); unsubscribe(); session.disconnect(); for (const [target, type, callback] of handlers) target.removeEventListener(type, callback); ui.destroy?.(); view.destroy(); },
   };
 }

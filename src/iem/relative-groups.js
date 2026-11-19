@@ -8,12 +8,13 @@ const amplitude = position => (position < 0.055 ? Math.sin(28.559933214452666 * 
   Math.exp((23.90844819639692 + (-26.23877598214595 + (12.195249692570245 - 0.4878099877028098 * position) * position) * position) * position) * 0.0002676529517952372;
 export const GROUP_MIN_DB = -199;
 export const GROUP_MAX_DB = 20 * Math.log10(amplitude(1));
-// F09-S05 full-range group travel (docs/iem-relative-groups.md). Downward travel
-// stops when the QUIETEST member reaches this finite floor (fader position about
-// 0.00125, visually the bottom). It sits far inside the finite anchor window, so
-// a desk-rounded echo still re-anchors the next gesture; a group never writes
-// position 0 / -inf. Upward travel stops when the LOUDEST member reaches 1.
-export const GROUP_FLOOR_DB = -100;
+// Full-range group travel (F09-S05; floor changed by F09-S06, user decision
+// 2026-11-19, docs/iem-relative-groups.md). Downward travel stops when the
+// QUIETEST member reaches this floor: the bottom of the dB-linear display scale
+// (src/iem/fader-scale.js), like the Demo. A member already below it makes
+// downward travel zero. A group never writes position 0 / -inf. Upward travel
+// stops when the LOUDEST member reaches desk position 1 (+10 dB).
+export const GROUP_FLOOR_DB = -60;
 export function continuousFaderDB(position) {
   if (typeof position !== 'number' || !Number.isFinite(position) || position < 0 || position > 1) throw Error('Invalid received fader position.');
   const value = amplitude(position);
@@ -83,9 +84,11 @@ export function groupTravel(baseline) {
     upper: Math.max(0, Math.min(...dbs.map(db => GROUP_MAX_DB - db))),
   });
 }
-// The group cap is the loudest member's fader position moved along the normal
-// fader law: requested delta = dB(position) - dB(reference anchor), clamped to
-// the whole-group travel (top: loudest at 1; bottom: quietest at the floor).
+// The group cap is the loudest member's fader position. The live view shows it
+// on the dB-linear display scale and converts the scale back to a position, so
+// requested delta = dB(position) - dB(reference anchor) is one common dB offset,
+// clamped to the whole-group travel (top: loudest at 1; bottom: quietest at the
+// floor).
 export function groupReferenceDelta(baseline, position) {
   if (typeof position !== 'number' || !Number.isFinite(position) || position < 0 || position > 1) throw Error('Group reference position must be finite from zero to one.');
   const { referenceDb, lower, upper } = groupTravel(baseline);

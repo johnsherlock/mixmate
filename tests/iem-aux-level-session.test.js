@@ -311,7 +311,8 @@ test('peer groups wait for complete received basis and then reanchor each delibe
   try {
     let token = app.beginGroup(); app.session.previewLevelGesture(token, ref(app, 3)); app.session.commitLevelGesture(token, 3);
     const first = writes(app.socket).slice();
-    app.move(2500); assert.equal(app.session.beginLevelGesture(), null);
+    // F09-S06: the wait is bounded by the 2.5 s window (tested separately).
+    app.move(2400); assert.equal(app.session.beginLevelGesture(), null);
     app.socket.receive(first[0]); assert.equal(app.session.beginLevelGesture(), null);
     app.socket.receive(first[1]); token = app.session.beginLevelGesture(); assert.ok(token);
     app.session.previewLevelGesture(token, ref(app, 2)); assert.equal(app.session.commitLevelGesture(token, -999), true);

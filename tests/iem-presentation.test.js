@@ -8,6 +8,7 @@ import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
+import { positionToScale, scaleToPosition, FADER_SCALE_MIN, FADER_SCALE_TOP_DB } from '../src/iem/fader-scale.js';
 
 test('logical overview uses five reciprocal pairs and preserves unequal individual readbacks', () => {
   const frame = '3:::SETS^model^ui24\n' + Array.from({ length: 10 }, (_, index) =>
@@ -319,7 +320,7 @@ test('selected armed level preview preserves cap/input/received readout across r
     assert.equal(input.disabled, false); assert.equal(article.dataset.levelSelected, 'true'); assert.equal(root.querySelector('.mm-level-enable'), undefined);
     model.control.requestedValue = .7; view.render(model);
     const requestedDetail = detailSnapshot.find(item => item.sourceId === 'i.0').requestedDetail;
-    assert.match(requestedDetail, /Requested 0.7/);
+    assert.match(requestedDetail, /Requested -2\.4 dB \(raw 0\.7\)/, 'F09-S06: formatted dB in the strip, raw value kept for Details');
     view.renderMeters(model);
     assert.equal(detailSnapshot.find(item => item.sourceId === 'i.0').requestedDetail, requestedDetail, 'meter-only receipts retain requested diagnostics in detail');
     delete model.control.requestedValue;
@@ -327,11 +328,11 @@ test('selected armed level preview preserves cap/input/received readout across r
     const targetNode = { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null };
     const pointer = y => ({ target: targetNode, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
     root.querySelector('.mm-content').emit('pointerdown', pointer(100)); root.querySelector('.mm-content').emit('pointermove', pointer(60)); const draft = input.value;
-    assert.deepEqual(selectedByGesture, target); assert.notEqual(Number(draft), 0.4); assert.equal(article.querySelector('.mm-value').textContent, '-20.0 dB');
+    assert.deepEqual(selectedByGesture, target); assert.notEqual(Number(draft), positionToScale(0.4)); assert.equal(article.querySelector('.mm-value').textContent, '-20.0 dB');
     view.render({ ...model, sources: [{ ...source, name: 'Renamed' }] }); view.renderMeters(model);
     assert.equal(input.value, draft); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(commits, 0);
     model.control.armed = false; model.control.eligible = false; model.control.gestureActive = false; view.render(model);
-    assert.equal(input.disabled, false); assert.equal(Number(input.value), 0.4); root.querySelector('.mm-content').emit('pointerup', pointer(60)); assert.equal(commits, 0);
+    assert.equal(input.disabled, false); assert.equal(Number(input.value), positionToScale(0.4)); root.querySelector('.mm-content').emit('pointerup', pointer(60)); assert.equal(commits, 0);
   } finally {
     view?.destroy();
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
@@ -378,21 +379,23 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     const base = { control, status: 'Live', mixes: [mix], selectedAux: 0, selectedMix: mix, sources: [{ id: 'i.0@0', auxIndex: 0, sourceId: 'i.0', name: 'Input', position: 0.4, levelText: 'Received' }] };
     const model = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'band' }); view.render(model);
     const bank = root.querySelector('.mm-strip-scroll'), article = bank.children[0], input = article.querySelector('input'), cap = article.querySelector('.mm-fader-hit');
-    assert.equal(article.querySelector('.mm-meter-pair'), undefined); assert.equal(input.disabled, false); assert.equal(input.min, '0'); assert.equal(input.max, '1'); assert.equal(input.step, 'any'); assert.equal(Number(input.value), 0.4, 'cap starts at the loudest member position');
+    assert.equal(article.querySelector('.mm-meter-pair'), undefined); assert.equal(input.disabled, false); assert.equal(input.min, String(FADER_SCALE_MIN)); assert.equal(input.max, String(FADER_SCALE_TOP_DB)); assert.equal(input.step, 'any'); assert.equal(input.dataset.keyStep, '0.5'); assert.equal(Number(input.value), positionToScale(0.4), 'cap starts at the loudest member level on the dB scale');
+    assert.deepEqual(article.querySelector('.mm-ruler').children.map(node => node.textContent), ['+10', '0', '−12', '−24', '−40', '−60', '−∞'], 'dB ticks replace the POSITION label');
     assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.match(article.querySelector('.mm-value').textContent, /Δ 0.00/);
     assert.equal(root.querySelector('.mm-pinned').children.length, 0); assert.equal(root.querySelector('.mm-level-enable'), undefined);
     const name = article.querySelector('.mm-strip-name'), select = article.querySelector('.mm-group-level-select');
     root.emit('click', { target: { closest: selector => selector === 'button' ? name : null } }); root.emit('click', { target: { closest: selector => selector === 'button' ? select : null } }); assert.deepEqual(actions, ['nav:band', 'level:band']);
     const wrap = input.parentElement, event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
-    root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60)); assert.equal(Number(input.value), 0.523456);
+    root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60)); assert.equal(Number(input.value), positionToScale(0.523456));
     bank.scrollLeft = 87; control.previewDelta = 0.523456; control.groupRequested = [{ sourceId: 'i.0', auxIndex: 0, value: 0.45 }]; view.render(model); view.renderMeters(model);
     assert.match(article.querySelector('.mm-value').textContent, /\+0.52/);
     const member = bank.children[1];
-    assert.equal(Number(member.querySelector('input').value), 0.45, 'member cap previews the requested common delta'); assert.equal(member.dataset.groupRequested, 'true');
-    assert.match(member.querySelector('.mm-live-strip-state').textContent, /Last received Received · Group requested 0.45/);
+    assert.equal(Number(member.querySelector('input').value), positionToScale(0.45), 'member cap previews the requested common delta'); assert.equal(member.dataset.groupRequested, 'true');
+    assert.match(member.querySelector('.mm-live-strip-state').textContent, /^Last received Received · Group requested -[0-9]+\.[0-9] dB$/, 'formatted dB, no raw full-precision value');
+    assert.match(member.querySelector('.mm-live-strip-state').attributes.title, /raw 0\.45/);
     assert.equal(bank.children[0], article); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(bank.scrollLeft, 87);
-    control.armed = false; control.eligible = false; control.gestureActive = false; control.groupRequested = null; view.render(model); assert.equal(Number(input.value), 0.4);
-    assert.equal(bank.children[1].dataset.groupRequested, 'false'); assert.equal(Number(bank.children[1].querySelector('input').value), 0.4, 'member returns to received actual'); assert.equal(input.disabled, false); assert.equal(article.querySelector('.mm-meter-pair'), undefined);
+    control.armed = false; control.eligible = false; control.gestureActive = false; control.groupRequested = null; view.render(model); assert.equal(Number(input.value), positionToScale(0.4));
+    assert.equal(bank.children[1].dataset.groupRequested, 'false'); assert.equal(Number(bank.children[1].querySelector('input').value), positionToScale(0.4), 'member returns to received actual'); assert.equal(input.disabled, false); assert.equal(article.querySelector('.mm-meter-pair'), undefined);
     profile.groups.push({ id: 'other', name: 'Other', members: ['i.0'] });
     control.eligible = true; control.lastDelta = 3;
     view.render(projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: null }));
@@ -455,15 +458,15 @@ test('logical topology transitions retain both overview nodes and linked source 
     const input = a.querySelector('input'), peer = b.querySelector('input'), cap = a.querySelector('.mm-fader-hit'), wrap = input.parentElement;
     const event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
     root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60));
-    assert.equal(Number(input.value), Number(peer.value)); assert.notEqual(Number(input.value), 0.4); assert.equal(commits, 0); assert.equal(previews, 1);
+    assert.equal(Number(input.value), Number(peer.value)); assert.notEqual(Number(input.value), positionToScale(0.4)); assert.equal(commits, 0); assert.equal(previews, 1);
     assert.equal(a.querySelector('.mm-value').textContent, b.querySelector('.mm-value').textContent);
     const actual = a.querySelector('.mm-value').textContent, draft = String(input.value);
     view.render(project(0)); view.renderMeters(project(0));
     assert.equal(peer.value, draft); assert.equal(a.querySelector('.mm-value').textContent, actual);
     root.querySelector('.mm-content').emit('pointerup', event(60)); assert.equal(commits, 1);
-    control.requestedValue = Number(draft); view.render(project(0)); assert.equal(peer.value, draft);
+    control.requestedValue = scaleToPosition(Number(draft)); view.render(project(0)); assert.ok(Math.abs(Number(peer.value) - Number(draft)) < 1e-9);
     control.requestedValue = null; control.armed = false; control.eligible = false; view.render(project(0));
-    assert.equal(Number(input.value), 0.4); assert.equal(Number(peer.value), 0.4); assert.equal(input.disabled, true); assert.equal(peer.disabled, true);
+    assert.equal(Number(input.value), positionToScale(0.4)); assert.equal(Number(peer.value), positionToScale(0.4)); assert.equal(input.disabled, true); assert.equal(peer.disabled, true);
     assert.equal(observations.get('i.2.aux.0.value'), 0.4); assert.equal(observations.get('i.3.aux.1.value'), 0.4);
   } finally {
     view?.destroy();

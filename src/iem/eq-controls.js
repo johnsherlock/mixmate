@@ -1,7 +1,7 @@
 import { installFaderGestures } from './gestures.js';
 import { stereoRelationship } from './protocol.js';
 import { AUX_EQ_DISPLAY_CENTRES, auxEqPositionToDb } from './aux-eq-protocol.js';
-import { AUX_EQ_POINT_COUNT, auxEqCentreX, auxEqPointGain, requestedDrawSamples, requestedPointSamples } from './aux-eq-curve.js';
+import { AUX_EQ_POINT_COUNT, auxEqCentreX, auxEqPointGain, clampPointGain, requestedDrawSamples, requestedPointSamples } from './aux-eq-curve.js';
 
 // Live AUX GEQ view. Presentation copies never grant authority: only the private
 // session's typed GEQ API can select/begin/preview/commit. Received per-side band
@@ -269,6 +269,8 @@ export function mountEqControls({ root, session, controller, window = globalThis
     onPreview(input, token, value) {
       if (!gesture || gesture.token !== token) return null;
       const key = { freq: 'x', q: 'q', gain: 'gainDb' }[input.dataset.eqParam], previous = points[selectedPoint][key];
+      // F09-S06: a gain that would push any band past ±15 dB stops at the limit.
+      if (key === 'gainDb') { const limited = clampPointGain(points, selectedPoint, value, gesture.basis); if (limited !== null) value = limited; }
       points[selectedPoint] = { ...points[selectedPoint], [key]: value };
       if (!previewIntent(requestedPointSamples(points, gesture.basis))) { points[selectedPoint] = { ...points[selectedPoint], [key]: previous }; syncParams(); return previous; }
       syncParams(); return value;
@@ -310,8 +312,15 @@ export function mountEqControls({ root, session, controller, window = globalThis
     // The handle follows the pointer: its own gain is the remainder after the
     // other points' shape at the new position.
     const others = auxEqPointGain(points.filter((_, index) => index !== selectedPoint), p.x);
-    points[selectedPoint] = { ...previous, x: p.x, gainDb: clamp(p.db - basisAt(gesture.basis, p.x) - others, -12, 12) };
-    if (previewIntent(requestedPointSamples(points, gesture.basis))) drag.changed = true; else points[selectedPoint] = previous;
+    const moved = points.map((point, index) => index === selectedPoint ? { ...previous, x: p.x } : point);
+    // F09-S06: the point's single gain Δ is clamped to the largest magnitude that
+    // keeps every band within ±15 dB, so the handle stops at the limit and still
+    // follows horizontally instead of freezing on a rejected curve.
+    const limited = clampPointGain(moved, selectedPoint, clamp(p.db - basisAt(gesture.basis, p.x) - others, -12, 12), gesture.basis);
+    if (limited !== null) {
+      points[selectedPoint] = { ...previous, x: p.x, gainDb: limited };
+      if (previewIntent(requestedPointSamples(points, gesture.basis))) drag.changed = true; else points[selectedPoint] = previous;
+    }
     syncParams();
   }
   function onPointerUp(event) {

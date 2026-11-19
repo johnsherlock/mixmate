@@ -5,7 +5,8 @@ import { createAuxControlSession } from '../src/iem/aux-control-session.js';
 import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { auxEqPositionToDb, auxEqDbToPosition, parseAuxProcessingFrame } from '../src/iem/aux-eq-protocol.js';
-import { requestedDrawSamples, requestedPointSamples, auxEqCentreX, auxEqPointGain, AUX_EQ_POINT_NEGLIGIBLE_DB } from '../src/iem/aux-eq-curve.js';
+import { mapRequestedAuxEqCurve } from '../src/iem/aux-eq-curve.js';
+import { requestedDrawSamples, requestedPointSamples, auxEqCentreX, auxEqPointGain, clampPointGain, AUX_EQ_POINT_NEGLIGIBLE_DB } from '../src/iem/aux-eq-curve.js';
 import { mountEqControls, projectEqReadback, eqSideText, EQ_APPROXIMATION_NOTE, EQ_MODE_NOTES, EQ_SIDE_COLOURS } from '../src/iem/eq-controls.js';
 const VU = JSON.parse(await readFile(new URL('./fixtures/iem-vu2.json', import.meta.url))).frame;
 import { domFixture, Node } from './helpers/fake-dom.js';
@@ -40,7 +41,7 @@ function fixture(options = {}, factory = createAuxControlSession) {
   const desk = new Map(baseFrame(options).slice(4).split('\n').map(line => /^SETD\^(a\.\d\.eq\.peak\.\d+)\^(.+)$/.exec(line)).filter(Boolean).map(m => [m[1], Number(m[2])]));
   let echoed = 0;
   const writes = () => writer.sent.filter(message => message.startsWith('3:::SETD'));
-  return { session, sockets, writer, receiver, jobs, desk, writes,
+  return { session, sockets, writer, receiver, jobs, desk, writes, now: () => time,
     deskEcho() {
       const all = writes(), lines = [];
       for (const message of all.slice(echoed)) { const [, path, raw] = message.split('^'), value = Number(raw); if (desk.get(path) !== value) { desk.set(path, value); lines.push(`SETD^${path}^${Number(value.toPrecision(10))}`); } }
@@ -241,7 +242,7 @@ test('EQ view: explicit open, visible approximation/bypass status, mutually excl
   assert.equal(ui.find('[data-eq-mode="draw"]').attributes['aria-pressed'], 'true'); assert.equal(ui.find('[data-eq-mode="points"]').attributes['aria-pressed'], 'false');
   ui.find('[data-eq-mode="points"]').emit('click'); assert.equal(ui.find('[data-eq-handle="0"]').attributes.visibility, 'visible');
   // The live steps were never echoed and the chain was cancelled: no re-arm from stale received bands.
-  assert.equal(gain.disabled, true); assert.match(ui.find('.mm-live-eq-status').textContent, /Waiting for the desk to report the last EQ change/);
+  assert.equal(gain.disabled, true); assert.match(ui.find('.mm-live-eq-status').textContent, /for the desk to report the last EQ change/);
   ui.receiver.receive('3:::' + ui.writes().map(message => message.slice(4)).join('\n')); assert.equal(gain.disabled, false, 'matching echo clears the barrier automatically');
   ui.eq.close(); assert.equal(ui.eq.section.hidden, true); assert.equal(ui.root.dataset.eqOpen, 'false'); assert.equal(ui.session.snapshot().control.selected, null);
   ui.eq.destroy(); ui.session.disconnect();
@@ -355,7 +356,7 @@ test('processing receipts on the selected output during GEQ dispatch stop the re
   app.session.disconnect();
 });
 
-test('after an unechoed GEQ write, losing the chain never re-arms from stale received bands; a later matching echo clears it', () => {
+test('within the 2.5 s window after an unechoed GEQ write, losing the chain never re-arms from stale received bands; a matching echo clears it', () => {
   const sequences = {
     'no-move cancel': app => { const token = app.session.beginEqGesture(); assert.ok(token, 'retained chain continues from requested'); assert.equal(control(app).eqCoordinate[3], auxEqDbToPosition(4.9)); app.session.cancelEqGesture(); },
     'close and reopen': app => { app.session.closeEq(); app.session.selectEqTarget(0); },
@@ -365,10 +366,10 @@ test('after an unechoed GEQ write, losing the chain never re-arms from stale rec
   for (const [name, loseChain] of Object.entries(sequences)) {
     const app = fixture(); app.session.selectEqTarget(0);
     let token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 4.9; })); app.session.commitEqGesture(token);
-    const first = app.writes(); assert.deepEqual(pathsOf(first), ['a.0.eq.peak.3', 'a.1.eq.peak.3']); app.advance(2500); assert.equal(control(app).outcome, 'sent-unverified');
+    const first = app.writes(); assert.deepEqual(pathsOf(first), ['a.0.eq.peak.3', 'a.1.eq.peak.3']); app.advance(2000);
     loseChain(app);
     assert.equal(app.session.canEditEqTarget(0), false, name); assert.equal(app.session.beginEqGesture(), null, name);
-    if (control(app).selected?.kind === 'geq') assert.match(control(app).reason, /Waiting for the desk to report the last EQ change/, name);
+    if (control(app).selected?.kind === 'geq') assert.match(control(app).reason, /for the desk to report the last EQ change/, name);
     assert.equal(app.session.resetEqBands(), false); assert.equal(app.writes().length, 2, `${name}: no stale band resent`);
     // Level controls on the same output are unaffected.
     app.session.selectLevelTarget({ kind: 'master', auxIndex: 0 }); assert.ok(app.session.beginLevelGesture(), `${name}: level unaffected`); app.session.cancelLevelGesture();
@@ -414,4 +415,127 @@ test('live entry wires GEQ only through the private control session; demo stays 
   for (const file of ['src/iem/demo-entry.js', 'src/iem/demo-view.js', 'src/iem/demo-provider.js', 'src/iem/demo-eq.js']) assert.doesNotMatch(await read(file), /eq-controls|session-core|aux-eq-|control-session/);
   for (const file of ['src/iem/eq-controls.js', 'src/iem/session-core.js', 'src/iem/live-entry.js']) assert.doesNotMatch(await read(file), /demo-|aux-eq-safety/);
   const pkg = JSON.parse(await read('package.json')); assert.equal(pkg.dependencies['dissect.extfs'], undefined);
+});
+
+// F09-S06 probe desk, modelled on live 2026-11-19 probes (writer + separate
+// receive-only socket): writes to one path closer than 20 ms coalesce into one
+// burst whose FINAL value is echoed only if it differs from the value the desk
+// held before the burst (so a re-sent equal value and a reversal within 5 ms
+// produce no echo at all; intermediates of a fast burst are never echoed).
+function probeDesk(app) {
+  const log = []; app.writer.hook = message => { if (message.startsWith('3:::SETD')) log.push({ message, at: app.now() }); };
+  let flushed = 0;
+  return {
+    flush() {
+      const byPath = new Map();
+      for (const { message, at } of log.slice(flushed)) { const [, path, raw] = message.split('^'); (byPath.get(path) ?? byPath.set(path, []).get(path)).push({ value: Number(raw), at }); }
+      flushed = log.length; const lines = [];
+      for (const [path, list] of byPath) {
+        let burst = [list[0]];
+        const close = () => { const final = burst.at(-1).value; if (app.desk.get(path) !== final) { app.desk.set(path, final); lines.push(`SETD^${path}^${Number(final.toPrecision(10))}`); } };
+        for (const item of list.slice(1)) { if (item.at - burst.at(-1).at < 20) burst.push(item); else { close(); burst = [item]; } }
+        close();
+      }
+      if (lines.length) app.receiver.receive('3:::' + lines.join('\n'));
+      return lines.length;
+    },
+  };
+}
+
+test('probe desk: a release reversal within 5 ms gets no echo; editing is blocked only for the 2.5 s window, then resumes from the desk-reported bands with no reconnect or replay', () => {
+  const app = fixture(), desk = probeDesk(app); app.session.selectEqTarget(0);
+  let token = app.session.beginEqGesture(); const start = control(app).eqCoordinate.map(auxEqPositionToDb);
+  app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 3; })); assert.equal(app.writes().length, 2, 'leading live step');
+  app.advance(3); // release 3 ms later returns band 3 to its received value
+  app.session.previewEqGesture(token, requestedDrawSamples(start)); assert.equal(app.session.commitEqGesture(token), true);
+  assert.deepEqual(app.writes().slice(2), ['3:::SETD^a.0.eq.peak.3^0.5', '3:::SETD^a.1.eq.peak.3^0.5']);
+  assert.equal(desk.flush(), 0, 'the desk reports nothing for the reversal');
+  app.session.closeEq(); app.session.selectEqTarget(0); // chain lost
+  assert.equal(app.session.canEditEqTarget(0), false); assert.match(control(app).reason, /Waiting up to 2\.5 s for the desk to report the last EQ change/);
+  app.advance(2499); assert.equal(app.session.canEditEqTarget(0), false, 'the window runs from the last write (t = 3 ms)');
+  app.advance(1); assert.equal(app.session.canEditEqTarget(0), true, 'window expiry releases the received-basis barrier');
+  assert.match(control(app).status, /did not report the last change within 2\.5 s; MixMate is using the desk.s reported values/);
+  token = app.session.beginEqGesture(); assert.ok(token, 'no reconnect needed');
+  assert.equal(control(app).eqCoordinate[3], 0.5, 'basis is the desk-reported band, never the unconfirmed request');
+  assert.equal(app.writes().length, 4, 'nothing replayed');
+  app.session.previewEqGesture(token, drawFrom(app, draw => { draw[8] = -2; })); app.session.commitEqGesture(token);
+  assert.deepEqual(pathsOf(app.writes().slice(4)), ['a.0.eq.peak.8', 'a.1.eq.peak.8']);
+  assert.equal(desk.flush(), 2); assert.equal(control(app).outcome, 'observed-match');
+  app.session.disconnect();
+});
+
+test('probe desk: a write equal to the value the desk already holds gets no echo and never blocks later gestures', () => {
+  const app = fixture(), desk = probeDesk(app); app.session.selectEqTarget(0);
+  const value = auxEqDbToPosition(2); app.desk.set('a.0.eq.peak.6', value); app.desk.set('a.1.eq.peak.6', value); // desk already holds it (received state lags)
+  let token = app.session.beginEqGesture(); app.session.previewEqGesture(token, drawFrom(app, draw => { draw[6] = 2; })); app.session.commitEqGesture(token);
+  assert.equal(desk.flush(), 0, 'same-value resend: no echo');
+  app.session.cancelEqGesture(); app.session.closeEq(); app.session.selectEqTarget(0);
+  assert.equal(app.session.canEditEqTarget(0), false);
+  app.advance(2500); assert.equal(app.session.canEditEqTarget(0), true);
+  token = app.session.beginEqGesture(); assert.ok(token); app.session.cancelEqGesture();
+  app.session.disconnect();
+});
+
+test('probe desk: coalesced intermediate echoes never count as native edits; a foreign band value still stops the stream', () => {
+  const app = fixture(), desk = probeDesk(app); app.session.selectEqTarget(0);
+  const token = app.session.beginEqGesture();
+  app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 1; }));
+  assert.equal(desk.flush(), 2); app.advance(120);
+  app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 2; })); app.advance(5);
+  app.session.previewEqGesture(token, drawFrom(app, draw => { draw[3] = 3; })); app.session.commitEqGesture(token);
+  assert.equal(app.writes().length, 6);
+  assert.equal(desk.flush(), 2, 'only the final value of the fast burst is echoed');
+  assert.equal(control(app).outcome, 'observed-match', 'no native cancellation from the skipped intermediate');
+  assert.equal(app.session.canEditEqTarget(0), true, 'resolved immediately, no window wait');
+  const next = app.session.beginEqGesture(), later = drawFrom(app, draw => { draw[3] = 5; }); app.session.previewEqGesture(next, drawFrom(app, draw => { draw[3] = 4; }));
+  app.receiver.receive('3:::SETD^a.0.eq.peak.3^0.11\nSETD^a.1.eq.peak.3^0.11'); // native app edit
+  assert.equal(control(app).gestureActive, false); const count = app.writes().length;
+  assert.equal(app.session.previewEqGesture(next, later), null); app.advance(500); assert.equal(app.writes().length, count, 'no further writes, no replay');
+  app.session.disconnect();
+});
+
+test('point gain clamp: one common parameter limit keeps every band within ±15 dB (never per-band clipping)', () => {
+  const basis = Array.from({ length: 31 }, (_, band) => band >= 16 ? 14 : 0);
+  const points = [{ x: auxEqCentreX(630), gainDb: 12, q: 0.5 }, { x: 0.05, gainDb: 0, q: 0.5 }, { x: 0.95, gainDb: 0, q: 0.5 }];
+  assert.throws(() => mapPoints(points, basis), 'unclamped request leaves the range');
+  const limited = clampPointGain(points, 0, 12, basis); assert.ok(limited > 0 && limited < 12);
+  const bands = requestedPointSamples([{ ...points[0], gainDb: limited }, points[1], points[2]], basis).samples.map(sample => sample.gainDb);
+  assert.ok(Math.max(...bands) <= 15 && Math.max(...bands) > 15 - 1e-6, 'stops exactly at the first band limit');
+  const shape = bands.map((value, band) => value - basis[band]), weightRatio = shape[16] / shape[15];
+  assert.ok(Math.abs(weightRatio - Math.exp(-0.5 * ((auxEqCentreX(800) - points[0].x) ** 2 - 0) / (0.13 / Math.sqrt(0.1 * Math.pow(100, 0.5))) ** 2)) < 1e-9, 'bump shape unchanged: no band clipped on its own');
+  assert.equal(clampPointGain(points, 0, 1, basis), 1, 'in-range gains are untouched');
+  assert.ok(clampPointGain(points, 0, -20, basis) >= -15);
+  assert.equal(clampPointGain([{ x: 0.1, gainDb: 0, q: 1 }, { x: 0.9, gainDb: 15, q: 0 }, { x: 0.9, gainDb: 15, q: 0 }], 0, 0, Array(31).fill(0)), null, 'other points alone exceed the range: still rejected');
+});
+function mapPoints(points, basis) { return mapRequestedAuxEqCurve(requestedPointSamples(points, basis)); }
+
+test('EQ view: dragging a point past the ±15 dB limit stops the handle at the limit and keeps streaming instead of freezing', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  ui.receiver.receive('3:::' + Array.from({ length: 15 }, (_, i) => `SETD^a.0.eq.peak.${i + 16}^${auxEqDbToPosition(14)}\nSETD^a.1.eq.peak.${i + 16}^${auxEqDbToPosition(14)}`).join('\n'));
+  const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg'), handle = ui.find('[data-eq-handle="1"]');
+  const x = 28 + auxEqCentreX(630) * 108;
+  press(handle.children[1], 'pointerdown', { clientX: x, clientY: 94 }); press(svg, 'pointermove', { clientX: x, clientY: 0 });
+  const n = ui.writes().length; assert.ok(n > 0, 'clamped request is sent, not rejected');
+  const dbs = ui.writes().map(message => auxEqPositionToDb(Number(message.split('^')[2])));
+  assert.ok(Math.max(...dbs) <= 15 && Math.max(...dbs) > 14.99, 'the first band reaches the limit');
+  assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /rejected/);
+  ui.advance(200); press(svg, 'pointermove', { clientX: x + 6, clientY: 0 }); ui.advance(200);
+  assert.ok(ui.writes().length > n, 'the handle still follows horizontally at the limit');
+  press(svg, 'pointerup', { clientX: x + 6, clientY: 0 });
+  assert.ok(ui.writes().every(message => GEQ_WRITE.test(message) && Number(message.split('^')[2]) <= 1));
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view: after a cancelled points gesture with no desk echo, points re-enable on their own at the 2.5 s window (no reconnect)', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const gain = ui.find('[data-eq-param="gain"]'), cap = gain.parentElement.querySelector('.mm-fader-hit');
+  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); const n = ui.writes().length; assert.ok(n > 0);
+  ui.find('[data-eq-mode="draw"]').emit('click'); ui.find('[data-eq-mode="points"]').emit('click'); // cancels; the desk never echoes
+  assert.equal(gain.disabled, true); assert.match(ui.find('.mm-live-eq-status').textContent, /for the desk to report the last EQ change/);
+  ui.advance(2500);
+  assert.equal(gain.disabled, false, 'the window expiry renders the view without any other event');
+  assert.match(ui.find('.mm-live-eq-status').textContent, /did not report the last change/);
+  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); assert.ok(ui.writes().length > n, 'the next points gesture streams');
+  press(cap, 'pointerup', { clientY: 60 });
+  ui.eq.destroy(); ui.session.disconnect();
 });

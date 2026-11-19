@@ -1,6 +1,6 @@
 # MixMate implementation backlog
 
-Current plan: 2026-11-18. Nine features contain **39 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The subsequent explicit UI-alignment batch authorizes F04-S03 → F04-S04 → F02-S04 sequentially; F04-S03 is confirmed merged in PR #44; F04-S04 is confirmed merged in PR #45; final F02-S04 is confirmed merged in PR #46. The authorized UI batch is complete and stops with its reviewed closing handoff; no next implementation is authorized. A subsequent user-reported usability fix, F04-S05 (All Mixes group catalog, Delete group, device-local groups without a saved rig), is confirmed merged in [PR #48](https://github.com/johnsherlock/mixmate/pull/48) at `0a387d6` after user-directed independent final-head review (Codex unavailable) and passing CI. The explicitly authorized F06-S04-only batch (AUX GEQ runtime/UI) is confirmed merged in [PR #49](https://github.com/johnsherlock/mixmate/pull/49) at `5c6a3ca` after user-directed independent final-head review (Codex unavailable), passing CI and a targeted post-fix live matrix on firmware 3.0.7865-ui24; the batch stops with its reviewed closing handoff. F07 is not started or authorized. The user-authorized F09-S05 (live throttled control writes, live group preview, full-range group travel; user decision 2026-11-18 reversing release-only commits) is **in review** on `codex/f09-s05-live-fader-writes`. Backlog priority alone does not authorize execution.
+Current plan: 2026-11-18. Nine features contain **40 stories**. The accepted `mockups/iem.html` remains the design reference; vanilla ES modules/Vite remain the architecture. The S04-only batch is complete and merged in PR #42 after final-head review, passing CI and targeted firmware validation. The subsequent explicit UI-alignment batch authorizes F04-S03 → F04-S04 → F02-S04 sequentially; F04-S03 is confirmed merged in PR #44; F04-S04 is confirmed merged in PR #45; final F02-S04 is confirmed merged in PR #46. The authorized UI batch is complete and stops with its reviewed closing handoff; no next implementation is authorized. A subsequent user-reported usability fix, F04-S05 (All Mixes group catalog, Delete group, device-local groups without a saved rig), is confirmed merged in [PR #48](https://github.com/johnsherlock/mixmate/pull/48) at `0a387d6` after user-directed independent final-head review (Codex unavailable) and passing CI. The explicitly authorized F06-S04-only batch (AUX GEQ runtime/UI) is confirmed merged in [PR #49](https://github.com/johnsherlock/mixmate/pull/49) at `5c6a3ca` after user-directed independent final-head review (Codex unavailable), passing CI and a targeted post-fix live matrix on firmware 3.0.7865-ui24; the batch stops with its reviewed closing handoff. F07 is not started or authorized. The user-authorized F09-S05 (live throttled control writes, live group preview, full-range group travel; user decision 2026-11-18 reversing release-only commits) is confirmed merged in [PR #51](https://github.com/johnsherlock/mixmate/pull/51) at `7d8a8cb`. The user-reported F09-S06 (fader feel: stable drag geometry, dB-linear level display scale with a −60 dB group floor per the user decision of 2026-11-19, bounded GEQ/group echo waits and point-gain clamp) is **in review** on `codex/f09-s06-fader-feel-and-eq`. Backlog priority alone does not authorize execution.
 
 ## Feature status
 
@@ -14,7 +14,7 @@ Current plan: 2026-11-18. Nine features contain **39 stories**. The accepted `mo
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S04 merged (S04 GEQ: targeted live evidence on one pair; F08 physical qualification open) |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 5 | S01–S04 merged; S05 live throttled writes in review; physical F08 gate open |
+| [F09](features/F09.md) | Reliable control transport and state | 6 | S01–S05 merged; S06 fader feel/dB scale/echo robustness in review; physical F08 gate open |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -31,7 +31,8 @@ Feature numbers do not determine execution priority. Previously merged implement
 | 7 | [F02-S04](stories/F02-S04.md) | F04-S04 delivery order → discoverable saved-rig setup and persistence feedback |
 | 7a | [F04-S05](stories/F04-S05.md) | F02-S04 → user-reported group editor usability: All Mixes catalog, Delete group, device-local definitions |
 | 8 | [F06-S04](stories/F06-S04.md) | F06-S03 + passed and affirmatively reviewed/merged applicable F09 readiness criteria → separately reviewed GEQ runtime/UI |
-| 8a | [F09-S05](stories/F09-S05.md) | User-reported live-control fix after F06-S04: throttled live writes (level/group/pan/GEQ), group live preview, full-range group travel — **In review** |
+| 8a | [F09-S05](stories/F09-S05.md) | User-reported live-control fix after F06-S04: throttled live writes (level/group/pan/GEQ), group live preview, full-range group travel — merged in PR #51 |
+| 8b | [F09-S06](stories/F09-S06.md) | User-reported fader feel after F09-S05: stable drag geometry, dB-linear level scale and −60 dB group floor (user decision 2026-11-19), bounded echo waits, GEQ point-gain clamp — **In review** |
 | 9 | [F07](features/F07.md) S01 → S02 → S03 → S04 | F06-S04 → exact snapshot contract, operations, recording, native access |
 | 10 | [F08-S01](stories/F08-S01.md) | All release implementation → supported physical devices, both rigs, offline/sleep/control gate |
 | 11 | [F08-S02](stories/F08-S02.md) | F08-S01 → release/recovery documentation |
@@ -71,6 +72,7 @@ Last verified story baseline: `5c6a3ca995c6b56c527823689d9bce3374610dcb` on main
 | [#47](https://github.com/johnsherlock/mixmate/pull/47) | UI batch closing handoff | `7de61b329255242ba81d184b6b3becc561641fde` |
 | [#48](https://github.com/johnsherlock/mixmate/pull/48) | F04-S05 group editor usability | `0a387d64050466b9c138c8b9b584a867a8e85bb9` |
 | [#49](https://github.com/johnsherlock/mixmate/pull/49) | F06-S04 approved AUX GEQ controls | `5c6a3ca995c6b56c527823689d9bce3374610dcb` |
+| [#51](https://github.com/johnsherlock/mixmate/pull/51) | F09-S05 live throttled writes and full-range groups | `7d8a8cbc61974a98847e44c4c1b97c5d36bfcbee` |
 
 Earlier implementation receipts remain in individual stories and Git history (F01–F05; F06-S01/S02). Historical pending/stop wording in evidence reports describes those checkpoints, not current PR state. F08-S03 is not fully validated and no physical support pass follows from these merges.
 

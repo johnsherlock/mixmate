@@ -2,6 +2,11 @@
 
 Date: 2026-11-11. Baseline: F06-S02 [PR #28](https://github.com/johnsherlock/mixmate/pull/28) merged at `0667753` after green CI/236 tests and [affirmative final-head `45ea7a1` review](https://github.com/johnsherlock/mixmate/pull/28#issuecomment-6792056829). This story is pure protocol/schema/mapping/safety only. Runtime/UI EQ belongs to S04; no real-desk actuation or probe, firmware installation or vendor asset reuse.
 
+## Current F09-S06 echo robustness and point clamp — 2026-11-19
+
+- **Dropped/coalesced echoes.** Live probes (3.0.7865-ui24, writer + receive-only socket): an equal re-sent value and a reversal within ~5 ms get no echo; fast bursts echo only the final value. A missing echo now blocks re-arming from received bands only until the 2.5 s observation window after the last write expires; then the received bands are used as actual with a status note. This resolves the F06-S04 review P3 ("a planned value equal to the desk value gets no receipt") and the reconnect requirement of the GEQ basis barrier. Own-echo matching and native cancellation are unchanged; nothing is replayed. See [ADR-0008](adr/0008-control-state-model.md#f09-s06-amendment--2026-11-19).
+- **Point-gain clamp (EQ view).** When a dragged point (or the GAIN slider) would push any band beyond ±15 dB, that point's single gain Δ is clamped to the largest magnitude that keeps every band in range (`clampPointGain`): one common parameter limit, like a group delta stopping at its first member limit, never per-band clipping. The handle stops at the limit and still follows horizontally. The private session still rejects, never clips, an out-of-range requested curve; draw mode is unchanged.
+
 ## Scoped plan before guard implementation
 
 1. Establish actual AUX GEQ fields, indexing, range/normalization and filter distinction from primary sources, inspecting public official firmware text read-only. Do not reuse the pinned SDK's input four-band PEQ or infer wire paths from the prototype.

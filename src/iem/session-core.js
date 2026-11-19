@@ -38,7 +38,23 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   // Only this owner constructs scopes and reducer events from its socket journal.
   // Neither pure scopes nor public snapshots are accepted as transport authority.
   const modelTime = () => { const t = stamp(); return { mono: Math.max(0, t.mono), wall: Math.max(0, t.wall) }; };
-  const step = event => { model = transitionControl(model, { ...event, now: modelTime() }); };
+  let basisTimer, basisTimerAt = null;
+  const step = event => { model = transitionControl(model, { ...event, now: modelTime() }); scheduleBasisExpiry(); };
+  // Re-render when the earliest bounded received-basis or own-echo wait ends,
+  // so a missing desk echo never leaves controls blocked until another event.
+  function scheduleBasisExpiry() {
+    const starts = model?.peer ? [...model.basis.map(b => b.at.mono), ...model.echoes.map(e => e.values[0].at.mono)] : [];
+    const at = starts.length ? Math.min(...starts) + OBSERVATION_WINDOW_MS : null;
+    if (at === basisTimerAt) return;
+    timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = at;
+    if (at === null) return;
+    const owner = generation;
+    basisTimer = timers.setTimeout(() => {
+      basisTimer = undefined; basisTimerAt = null;
+      if (generation !== owner || !model) return;
+      inspectConfirmation(); emit('controls');
+    }, Math.max(0, at - Math.max(0, now())));
+  }
   function bindGroupOwner(value) {
     let next = null;
     try { next = validateDefinitionOwner(value); } catch { /* Invalid owners detach, never grant caller authority. */ }
@@ -122,15 +138,19 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     cancelControl('Local group definition changed; select the current group.', 'membership'); selected = null; selectedGroupSignature = null;
   }
   const activeOperation = () => model?.generation === generation || ['error', 'closed', 'timeout'].includes(phase) ? model?.operation : null;
+  // F09-S06: a bounded received-basis wait expired without the desk reporting
+  // the last written value(s); its reported values are used as actual.
+  const UNCONFIRMED_NOTE = 'The desk did not report the last change within 2.5 s; MixMate is using the desk\u2019s reported values. ';
   function statusText(ready = false) {
     const op = activeOperation();
     if (gestureOwned()) return controlStatus;
+    const note = model?.generation === generation && model.unconfirmed ? UNCONFIRMED_NOTE : '';
     if (model?.status === 'pending') return 'Waiting for fresh observations; application unverified.';
-    if (model?.status === 'sent-unverified') return 'Sent; application unverified. Requested coordinate retained; no retry. Some values may have changed.';
+    if (model?.status === 'sent-unverified') return `${note}Sent; application unverified. Requested coordinate retained; no retry. Some values may have changed.`;
     if (model?.status === 'observed-match') return `${selected?.kind === 'group' ? `Last requested gesture Δ ${model.chain?.delta.toFixed(2)} dB; ` : ''}Observed matching values${op?.rounded ? ' (desk-rounded to 10 significant digits)' : ''}; no correlated acknowledgement.`;
     if (model?.status === 'no-op') return 'Unchanged requested coordinate; no commands sent.';
     if (model && !model.armed) {
-      if (ready) return `Ready to edit current received state. ${op?.authorized ? `Previous adjustment returned ${op.returned}/${op.authorized} authorized${op.authorized < op.expected.length ? ` of ${op.expected.length} planned` : ''}${op.unknownDelivery ? '; throwing send delivery unknown' : ''}; application unverified.${op.live ? ' Values already sent live while dragging stay applied; no rollback.' : ''}` : 'Obsolete preview cancelled.'}`;
+      if (ready) return `${note}Ready to edit current received state. ${op?.authorized ? `Previous adjustment returned ${op.returned}/${op.authorized} authorized${op.authorized < op.expected.length ? ` of ${op.expected.length} planned` : ''}${op.unknownDelivery ? '; throwing send delivery unknown' : ''}; application unverified.${op.live ? ' Values already sent live while dragging stay applied; no rollback.' : ''}` : 'Obsolete preview cancelled.'}`;
       const reasons = {
         'precision-or-native-conflict': 'Received value differs from the request; precision or native change is unknown.',
         'native-invalidated': 'Received control value changed; the next gesture uses current state.',
@@ -163,7 +183,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
         const blocked = model?.generation === generation && model.barriers.some(b => b.generation === generation && b.closure.some(path => currentScope.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor);
         const basisBlocked = basisBlocks(kindOf(selected), currentScope.members, currentScope.identity);
         eligible = socket?.readyState === 1 && receiver?.readyState === 1 && !blocked && !basisBlocked;
-        reason = blocked ? 'Waiting for complete post-interruption received state.' : basisBlocked ? selected.kind === 'geq' ? 'Waiting for the desk to report the last EQ change before editing from received bands; reconnect to refresh.' : 'Waiting for complete received group basis.' : eligible ? '' : 'Both owned connections must be open.';
+        reason = blocked ? 'Waiting for complete post-interruption received state.' : basisBlocked ? selected.kind === 'geq' ? 'Waiting up to 2.5 s for the desk to report the last EQ change before editing from received bands.' : 'Waiting up to 2.5 s for the desk to report the last group change.' : eligible ? '' : 'Both owned connections must be open.';
       } catch (error) { reason = error.message; }
     }
     const owned = model?.generation === generation, op = activeOperation(), chain = owned ? model.chain : null, preview = owned ? model.gesture?.preview : null;
@@ -470,7 +490,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     return { phase, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}) };
   };
   const emit = (kind = 'state') => { for (const listener of listeners) listener(snapshot(), kind); };
-  const clearTimers = () => { timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
+  const clearTimers = () => { timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = null; timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
   function stop(next = 'disconnected', message = 'Disconnected — received state cleared') {
     ++generation;
     cancelControl('Received state cleared; connect explicitly.', 'disconnect'); selected = null; observed.clear(); receipts.clear(); eqObserved.clear(); processingRaw.clear(); sequence = 0;

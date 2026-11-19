@@ -61,6 +61,35 @@ export function requestedPointSamples(input, basisInput) {
     return Object.freeze({ frequencyHz, gainDb: Math.abs(bump) < AUX_EQ_POINT_NEGLIGIBLE_DB ? basis[index] : basis[index] + bump });
   })) });
 }
+// F09-S06 point-gain limit: the largest-magnitude gain for ONE point (index)
+// that keeps every sampled band of basis + bump within the ±15 dB GEQ range,
+// given the other points unchanged. It clamps that point's single parameter
+// (like a group delta stopping at its first member limit); it never clips
+// bands independently. Returns null when no gain can satisfy the range (the
+// other points alone already exceed it), so the caller keeps rejecting.
+export const AUX_EQ_GAIN_LIMIT_DB = 15;
+export function clampPointGain(input, index, requestedGain, basisInput) {
+  const points = eqArray(input, AUX_EQ_POINT_COUNT), basis = eqArray(basisInput, AUX_EQ_DISPLAY_CENTRES.length);
+  if (!Number.isInteger(index) || index < 0 || index >= points.length || typeof requestedGain !== 'number' || !Number.isFinite(requestedGain)) throw Error('Invalid point gain request.');
+  const point = points[index], others = points.filter((_, i) => i !== index);
+  let low = -AUX_EQ_GAIN_LIMIT_DB, high = AUX_EQ_GAIN_LIMIT_DB;
+  for (const [band, frequencyHz] of AUX_EQ_DISPLAY_CENTRES.entries()) {
+    const x = auxEqCentreX(frequencyHz), weight = Math.exp(-0.5 * Math.pow((x - point.x) / auxEqPointWidth(point.q), 2)), rest = basis[band] + auxEqPointGain(others, x);
+    if (weight < 1e-12) {
+      // This point cannot move the band: it must already be in range (a
+      // negligible bump keeps the exact in-range basis value).
+      if (Math.abs(rest) > AUX_EQ_GAIN_LIMIT_DB && Math.abs(rest - basis[band]) >= AUX_EQ_POINT_NEGLIGIBLE_DB) return null;
+      continue;
+    }
+    high = Math.min(high, (AUX_EQ_GAIN_LIMIT_DB - rest) / weight);
+    low = Math.max(low, (-AUX_EQ_GAIN_LIMIT_DB - rest) / weight);
+  }
+  // Move the one bound inward by a tiny margin so floating-point addition can
+  // never land a band a hair outside ±15 dB.
+  high -= 1e-9; low += 1e-9;
+  if (!(low <= high)) return null;
+  return Math.max(low, Math.min(high, requestedGain));
+}
 // Draw intent: one requested gain per native display centre, in index order.
 export function requestedDrawSamples(input) {
   const gains = eqArray(input, AUX_EQ_DISPLAY_CENTRES.length);
