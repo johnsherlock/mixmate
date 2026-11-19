@@ -26,7 +26,7 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
   const labels = make('div', 'mm-pan-labels'); for (const value of ['0', '0.5', '1']) labels.append(make('span', '', value));
   const readbacks = make('div', 'mm-pan-readbacks'), previewLabel = make('div', 'mm-pan-value', 'Preview wire position: —');
   const input = make('input', 'mm-pan-large'); input.type = 'range'; input.min = '0'; input.max = '1'; input.step = 'any'; input.dataset.gestureStep = '0.001'; input.disabled = true;
-  input.setAttribute('aria-label', 'Normalized pan preview; cap drag, double track tap or arrow keys; release to apply');
+  input.setAttribute('aria-label', 'Normalized pan preview; cap drag, double track tap or arrow keys; changes are sent live while you drag');
   const presets = make('div', 'mm-pan-presets'), presetButtons = [0, 0.5, 1].map(value => {
     const button = make('button', '', String(value)); button.type = 'button'; button.setAttribute('aria-label', `Apply normalized pan position ${value}`); presets.append(button); return button;
   });

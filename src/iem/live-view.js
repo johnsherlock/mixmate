@@ -2,7 +2,6 @@ import { landscapeColumns, channelSlots } from './channel-layout.js';
 import { installFaderGestures } from './gestures.js';
 import { observeIemLayout } from './layout.js';
 import { startLocalClock } from './clock.js';
-import { GROUP_DELTA_WINDOW } from './relative-groups.js';
 import { sourceLabel } from './live-provider.js';
 import { outputColour, overviewColour } from './theme.js';
 
@@ -97,8 +96,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     },
     onPreview(input, token, value) {
       const next = onPreviewLevel(token, value);
+      // Group previews return the requested loudest-member reference position;
+      // the common Δ and member previews render from the owned session snapshot.
       const group = groupInputs.get(input);
-      if (group && typeof next === 'number') { group.note.textContent = 'Gesture Δ · release to apply'; group.output.textContent = deltaText(next); group.output.setAttribute('title', `Relative delta ${next} dB; whole-group limit applied.`); }
+      if (group && typeof next === 'number') group.note.textContent = 'Live Δ · sending while you drag';
       if (preview?.input === input) preview.value = next;
       mirrorPreview(input, next);
       return next;
@@ -120,18 +121,21 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (select) { select.type = 'button'; selection.append(select); }
       if (!control) head.append(selection);
       const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
+      // F09-S05: full-range group fader. The cap starts at the loudest member's
+      // received fader position and moves it along the normal fader law; every
+      // member gets the same dB Δ (top: loudest at max; bottom: quietest at floor).
       unavailable.setAttribute('aria-label', 'Relative group level unavailable · read-only');
       const state = element('span', 'mm-live-strip-state'), note = element('span', 'mm-group-control-note', control ? 'REQUESTED Δ · no balance proof' : 'Local definition · no group meter');
       space.append(scale, unavailable);
       let input;
       if (control) {
-        scale.textContent = 'RELATIVE Δ';
-        input = element('input', 'mm-vertical'); input.type = 'range'; input.min = String(-GROUP_DELTA_WINDOW); input.max = String(GROUP_DELTA_WINDOW); input.step = 'any'; input.dataset.gestureStep = '0.1'; input.value = '0'; input.disabled = true; input.dataset.group = '';
+        scale.textContent = 'GROUP · LOUDEST';
+        input = element('input', 'mm-vertical'); input.type = 'range'; input.min = '0'; input.max = '1'; input.step = 'any'; input.dataset.gestureStep = '0.001'; input.value = '0'; input.disabled = true; input.dataset.group = '';
         space.append(input);
       }
       if (control) {
         selection.className = 'mm-group-control-note mm-group-selection';
-        selection.setAttribute('title', 'Group master · relative delta zero per gesture · no aggregate level or VU');
+        selection.setAttribute('title', 'Group master · cap follows the loudest member · one common Δ per gesture · no aggregate level or VU');
         note.textContent = 'Last requested gesture Δ'; note.className = 'mm-pan-button';
         note.setAttribute('title', 'Last requested gesture offset; no proof of hardware balance or application. Each gesture uses current received state and starts at zero.');
         article.append(head, output, space, note, state, selection);
@@ -222,11 +226,12 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           strip.select.setAttribute('aria-label', `Select relative level for group ${model.name}`); strip.select.setAttribute('aria-pressed', String(chosen));
           strip.input.dataset.group = model.groupId;
           strip.input.disabled = !(eligible && !control.dispatching);
-          strip.input.setAttribute('aria-label', `${model.name} relative delta, zero per gesture; cap drag or arrow keys, release to apply`);
-          if (preview?.input !== strip.input) strip.input.value = '0';
+          strip.input.setAttribute('aria-label', `${model.name} group fader at the loudest member; one common Δ to every member; cap drag or arrow keys; changes are sent live while you drag`);
+          const reference = chosen && typeof control?.groupReference === 'number' ? control.groupReference : typeof model.referencePosition === 'number' ? model.referencePosition : 0;
+          if (preview?.input !== strip.input) strip.input.value = String(reference);
           strip.unavailable.hidden = Boolean(eligible);
         }
-        strip.note.textContent = chosen && control?.gestureActive ? 'Gesture Δ · release to apply' : chosen && control?.lastDelta !== null ? 'Last requested gesture Δ' : 'Gesture Δ · starts at zero';
+        strip.note.textContent = chosen && control?.gestureActive ? 'Live Δ · sending while you drag' : chosen && control?.lastDelta !== null ? 'Last requested gesture Δ' : 'Gesture Δ · starts at zero';
         strip.output.textContent = eligible ? deltaText(chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0) : 'Δ —';
         strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         strip.state.textContent = chosen ? control.reason || control.status : model.stateText;
@@ -256,6 +261,15 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.article.dataset.unknown = String(!known);
       strip.input.disabled = !(control && levelTarget && (canEditLevel ? canEditLevel(levelTarget) : isSelected && control.eligible) && !control.dispatching);
       const requested = (isSelected || isCoordinate(model) && control?.eligible) && typeof control?.requestedValue === 'number';
+      // Group live preview: the requested common-delta member value moves this
+      // cap; the received level text stays the last actual (echoes follow).
+      const groupValue = control?.groupRequested?.find(item => item.sourceId === model.sourceId && item.auxIndex === model.auxIndex)?.value;
+      const groupPreview = typeof groupValue === 'number' && !isSelected;
+      strip.article.dataset.groupRequested = String(groupPreview);
+      if (groupPreview) {
+        strip.state.textContent = `Last received ${model.levelText ?? '—'} · Group requested ${groupValue}`;
+        strip.state.setAttribute('title', strip.state.textContent);
+      }
       if (requested) {
         strip.state.textContent = `Last received ${model.levelText ?? '—'} · Requested ${control.requestedValue}`;
         strip.state.setAttribute('title', strip.state.textContent);
@@ -266,8 +280,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       }
       strip.output.setAttribute('aria-label', `${model.name} last received level${model.actualLevelText ? ': ' + model.actualLevelText : ''}`);
       strip.output.setAttribute('title', model.actualLevelText || model.levelText || 'No received level');
-      strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; release to apply'}`);
-      if (preview?.input !== strip.input) strip.input.value = isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested ? String(control.requestedValue) : known ? String(model.position) : '0';
+      strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; changes are sent live while you drag'}`);
+      if (preview?.input !== strip.input) strip.input.value = groupPreview ? String(groupValue) : isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested ? String(control.requestedValue) : known ? String(model.position) : '0';
       strip.article.dataset.actionable = String(strip.input.disabled || isSelected && (control?.pending || !control?.eligible));
       const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
       if ((isSelected || requested) && control?.requestedDiagnostic?.length) strip.requestedSignature = diagnostic;

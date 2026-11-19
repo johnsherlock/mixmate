@@ -62,19 +62,19 @@ test('pan modal has one gesture owner, never begins bank level gesture, and pres
     app.pan.open(target); assert.equal(app.root.querySelector('.mm-pan-enable'), null);
     const input = app.root.querySelector('.mm-pan-large'), cap = input.parentElement.querySelector('.mm-fader-hit'), row = app.root.querySelector('.mm-pan-readbacks').children[0];
     cap.emit('pointerdown', { pointerId: 1, button: 0, clientX: 80, clientY: 100 }); cap.emit('pointermove', { pointerId: 1, clientX: 130, clientY: 100 });
-    assert.deepEqual(app.counts, { panBegins: 1, levelBegins: 0 }); assert.equal(app.writes().length, 0); assert.match(row.textContent, /0.25/);
+    assert.deepEqual(app.counts, { panBegins: 1, levelBegins: 0 }); assert.equal(app.writes().length, 2, 'cap drag streams live'); assert.match(row.textContent, /0.25/);
     const value = input.value; app.socket.receive('3:::SETS^i.0.name^Renamed <svg>');
     assert.equal(app.root.querySelector('.mm-pan-large'), input); assert.equal(input.parentElement.querySelector('.mm-fader-hit'), cap); assert.equal(input.value, value); assert.equal(app.root.querySelector('.mm-pan-readbacks').children[0], row);
-    cap.emit('pointerup', { pointerId: 1, clientX: 130, clientY: 100 }); assert.equal(app.writes().length, 2); assert.deepEqual(app.counts, { panBegins: 1, levelBegins: 0 });
+    cap.emit('pointerup', { pointerId: 1, clientX: 130, clientY: 100 }); assert.equal(app.writes().length, 2, 'unchanged release adds nothing'); assert.deepEqual(app.counts, { panBegins: 1, levelBegins: 0 });
   } finally { app.close(); }
 });
-test('single track/swipe do not write, keyup and double track each commit one operation, generic events cannot bypass', () => {
+test('single track/swipe do not write, key repeat streams live and double track jumps once, generic events cannot bypass', () => {
   const app = fixture();
   try {
     app.pan.open(target); assert.equal(app.root.querySelector('.mm-pan-enable'), null); const input = app.root.querySelector('.mm-pan-large');
     input.emit('pointerdown', { pointerId: 1, button: 0, clientX: 80, clientY: 100 }); input.emit('pointerup', { pointerId: 1, clientX: 80, clientY: 100 }); assert.equal(app.writes().length, 0);
     input.emit('pointerdown', { pointerId: 2, button: 0, clientX: 80, clientY: 100 }); input.emit('pointermove', { pointerId: 2, clientX: 130, clientY: 140 }); input.emit('pointerup', { pointerId: 2, clientX: 130, clientY: 140 }); assert.equal(app.writes().length, 0);
-    input.emit('keydown', { key: 'ArrowRight' }); assert.equal(app.writes().length, 0); input.emit('keyup', { key: 'ArrowRight' }); assert.equal(app.writes().length, 2); for (const message of app.writes()) app.socket.receive(message);
+    input.emit('keydown', { key: 'ArrowRight' }); assert.equal(app.writes().length, 2, 'deliberate key gesture streams'); input.emit('keyup', { key: 'ArrowRight' }); assert.equal(app.writes().length, 2); for (const message of app.writes()) app.socket.receive(message);
     for (let n = 0; n < 2; n++) { input.emit('pointerdown', { pointerId: 3, button: 0, clientX: 200, clientY: 100 }); input.emit('pointerup', { pointerId: 3, clientX: 200, clientY: 100 }); }
     assert.equal(app.writes().length, 4); input.emit('input'); input.emit('change'); assert.equal(app.writes().length, 4);
   } finally { app.close(); }
@@ -106,10 +106,11 @@ test('pan context/hide/native changes cancel or close without writes and unsuppo
   try {
     app.pan.open(target); assert.equal(app.root.querySelector('.mm-pan-enable'), null); const input = app.root.querySelector('.mm-pan-large'), cap = input.parentElement.querySelector('.mm-fader-hit');
     cap.emit('pointerdown', { pointerId: 1, button: 0, clientX: 80, clientY: 100 }); cap.emit('pointermove', { pointerId: 1, clientX: 130, clientY: 100 });
-    app.socket.receive('3:::SETD^i.0.aux.0.pan^0.7'); cap.emit('pointerup', { pointerId: 1, clientX: 130, clientY: 100 }); assert.equal(app.writes().length, 0); assert.equal(input.disabled, true);
+    assert.equal(app.writes().length, 2, 'live step');
+    app.socket.receive('3:::SETD^i.0.aux.0.pan^0.7'); cap.emit('pointerup', { pointerId: 1, clientX: 130, clientY: 100 }); assert.equal(app.writes().length, 2, 'native edit stops the stream; release sends nothing'); assert.equal(input.disabled, true);
     app.changeContext(); assert.equal(app.layer.hidden, true); assert.equal(app.engine.snapshot().control.armed, false);
     app.pan.open({ sourceId: 'f.0', auxIndex: 0 }); assert.match(app.root.querySelector('.mm-pan-readbacks').textContent, /0.5/); assert.equal(app.root.querySelector('.mm-pan-large').disabled, true);
-    app.engine.disconnect(); assert.equal(app.layer.hidden, true); assert.equal(app.writes().length, 0);
+    app.engine.disconnect(); assert.equal(app.layer.hidden, true); assert.equal(app.writes().length, 2);
   } finally { app.close(); }
 });
 

@@ -15,6 +15,10 @@ The user accepts that test edits may remain applied and can restore the desk by 
 
 Prefer an isolated automated browser for a fast feedback loop, direct diagnostic/artifact capture and independence from the user's personal tabs. Use the user's browser when its session is needed; browser tooling must retain its normal security protections. The [decision log](../user-follow-up.md#2026-11-17-peer-editor-direction-and-testing-permission) records the verified isolated Chrome setup and the [handoff](../orchestrator-handoff.md) distinguishes this new direction from the reviewed implementation checkpoint.
 
+## F09-S05 live writes — 2026-11-18
+
+The user explicitly reversed the release-only commit rule: deliberate level, group, pan and GEQ gestures now stream throttled typed writes while dragging, with the final exact value on release. Wire forms, ranges, allowlist and factories are unchanged. The precise rule (throttle, sparse requests, own-echo versus native classification, interruption) is [ADR-0008's F09-S05 decision](0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18); release-only wording below is historical.
+
 ## Context
 
 The F04 implementation checkpoint is merged at `de72fc7` in PR #22 after affirmative final-head review and passing CI. The user explicitly requested orchestration of every F05 story sequentially through PR and affirmative Codex review. Approved feature classes do not replace exact protocol/current-state evidence. Pinned library code establishes level paths and both stereo dimensions. At the original F05 checkpoint, firmware write behavior remained unqualified and real-desk actuation was not authorized during development; the standing permission above now governs story-scoped live testing.

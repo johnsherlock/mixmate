@@ -1,8 +1,25 @@
 # Relative AUX group levels — F05-S03
 
+## Current F09-S05 live-write reconciliation — 2026-11-18
+
+By explicit user decision the release-only rule is reversed: deliberate gestures stream throttled typed writes while dragging and release sends the final exact value only if it differs ([ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18)). Wire forms, allowlist and factories are unchanged; only timing changes. Group steps stream at 50 ms and member strips preview the requested values live; see [full-range travel](#f09-s05-full-range-travel-and-live-preview--2026-11-18).
+
 ## Current F09-S04 peer-editor reconciliation — 2026-11-17
 
 The [current runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17) supersede historical manual arming/rearming, cumulative old-anchor groups, one-socket actual state and observation-window input blocking below. Qualified connected controls accept direct cap/key gestures without Enable/Disable or prior name selection. A private receive-only companion is the sole actual journal; existing typed writer classes remain unchanged. Native/precision changes cancel obsolete intent and update raw actual; the next deliberate gesture automatically uses current compatible state. Groups reanchor per gesture only after complete overlapping local-write basis receipts. Incomplete dispatch still requires full touched-closure post-floor recovery, then a new gesture without manual rearm. No retry/replay/rollback, new fields, generic sender or EQ runtime. Old sections/evidence describe their attributed historical builds; current exact-head delivery and firmware acceptance belong to [F09-S04](stories/F09-S04.md).
+
+## F09-S05 full-range travel and live preview — 2026-11-18
+
+The fixed ±12 dB relative window is removed. The group fader is the **loudest member's fader position**: its cap starts at the loudest member's received position and moves along the normal fader law. For the frozen fresh anchor (member dB values `d[i]`, reference `r = max d[i]`), a requested position `p` gives `delta = dB(p) − r`, clamped to the whole-group travel:
+
+- **upper** `= min(GROUP_MAX_DB − d[i])`: the top of travel puts the loudest member exactly at fader position 1 (within the existing 1e-12 dB inward endpoint guard), everyone else raised by the same dB;
+- **lower** `= min(0, max(GROUP_FLOOR_DB − d[i]))` with `GROUP_FLOOR_DB = −100 dB` (position ≈ 0.00125, visually the bottom of the fader): the bottom of travel puts the quietest member exactly at the floor, everyone else lowered by the same dB. If the quietest is already below the floor there is no downward travel and nothing is forced up.
+
+**Min definition.** The single-fader level guard accepts position 0 (−∞), but a group never writes it: one common dB delta cannot take members to −∞ evenly, and the finite anchor window (`GROUP_MIN_DB = −199 dB`) would reject a near-silent member on the next gesture after desk 10-significant-digit echo format. −100 dB sits far inside that window, so floor values re-anchor normally. Display and live mapping: [relative-groups.js](../src/iem/relative-groups.js) `groupTravel`/`groupReferenceDelta`/`groupReferencePosition`; the private session converts the position to the delta against its own anchor, never a presentation value.
+
+One common delta, deduplicated paths and the exact cached preview are unchanged; the cap stops at the clamp, and further travel sends nothing. The Δ readout shows the requested gesture delta. While a group gesture (or its last step's observation wait) is active, member strips move with the requested common-delta values (dashed cap, "Group requested …"), distinct from their received level text, which follows the companion echoes. Linked stereo member pairs preview together.
+
+Streaming specifics: the gesture keeps its own base delta, so steps never compound with echoes; a group never re-anchors while any member path has an outstanding own echo (≤2.5 s), and the post-cutpoint basis rule still applies. A native member edit stops the stream immediately.
 
 ## Historical contract and evidence
 

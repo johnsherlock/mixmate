@@ -2618,3 +2618,10 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq-mode-note,#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq-legend{display:none}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq-status,#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq-approximation{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq-details{flex:0 0 auto;max-height:40%;overflow:auto}
+/* F09-S05 group live preview: member caps show the requested common-delta
+   value (dashed), distinct from the received level text that echoes update. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-group-requested="true"] .mm-fader-hit {
+  outline: 2px dashed currentColor;
+  outline-offset: -6px;
+  opacity: .85;
+}

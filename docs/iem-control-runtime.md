@@ -1,5 +1,21 @@
 # Owned level, group and pan peer runtime — F09-S04
 
+## Live throttled writes — F09-S05 (2026-11-18)
+
+User decision: [ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18) replaces the release-only clauses below. Summary of the private owner (`session-core.js`, `control-state-model.js`):
+
+| Aspect | Rule |
+| --- | --- |
+| Start | Only an owned deliberate cap/key/preset gesture's preview schedules a step; begin keeps the full scope check. Receipts, selection, settings and track scroll never write. |
+| Rate | Leading step immediately; then ≤1 step per `LIVE_STREAM_INTERVAL_MS` (level/group/pan 50 ms, GEQ 120 ms) with the latest preview; no queue. Release/keyup cancels the pending step and sends the final exact value only if different. |
+| Step | Reducer `stream` event → new operation (`live: true`) → same per-ordinal dispatch guard (writer/receiver open and current, generation, topology/canonical settings, exact post-reducer authorization); synchronous reentrant relevant receipts stop the remainder. In-gesture checks are topology-only. |
+| Budget | Next step waits `max(interval, paths × 1000 / budget)`: 100 SETD/s level/pan, 200 group, 250 GEQ; streamed steps defer while writer `bufferedAmount` > 4096 B; release always sends. Per-step reducer work is bounded by structural sharing. |
+| Cancel | Cancel/Escape/pointercancel/focus loss after live steps leaves streamed values applied; status says so. |
+| Sparse | Paths within 1e-9 of the last requested value are never sent, so the desk echoes every step. |
+| Echo | Authorized values are journaled per path (≤128, 2.5 s). A receipt equal exactly or at the desk's 10-significant-digit format to a journaled, unsuperseded value is an own echo (actual updates, no cancel, consumes older entries); a rounded match of the current expectation counts toward observed-match ("desk-rounded"). Any other changed receipt is native → immediate stop, no rollback/replay. |
+| Failure | Socket close/error/timeout clears state and stops; a throw records unknown delivery and touched-closure recovery; applied steps may remain. |
+| UI | The active gesture's target stays editable while its echoes land; group members preview requested values; statuses say changes are sent live. |
+
 The current policy is [ADR-0008's F09-S04 decision](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17). PR #42's final affirmative review, passing checks and [exact-build firmware matrix](f09-s04-firmware-validation.md) own delivery/acceptance. The former S03 policy below is historical.
 
 An explicit connection owns a private typed writer plus receive-only companion, same validated address/generation. The companion sends only INIT/ALIVE/heartbeat and exclusively populates bounded actual/provider/meter state; writer snapshots never interleave. Both must be open; target-specific model/modes/topology and actual values must be known/compatible. Either failure/close/timeout or lifecycle invalidation closes both and clears state, with no auto-reconnect. The literal read-only factory stays one connection, and level-only cannot gain pan through options. No socket/sender/raw plan escapes.

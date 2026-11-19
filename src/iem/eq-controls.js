@@ -19,7 +19,7 @@ export const EQ_APPROXIMATION_NOTE = 'Approximation: band centres are the native
 // (that requested curve is shown dashed).
 export const EQ_MODE_NOTES = Object.freeze({
   points: 'Points: a relative Δ adjustment on top of the current editable basis (received bands, or your last requested curve if the desk has not echoed it). Bands outside a point\'s influence keep their exact value; points return to 0 dB Δ after each release.',
-  draw: 'Draw: starts from the current editable basis (received bands, or your last requested curve if the desk has not echoed it); drag across the graph to redraw bands. Release applies the drawn bands.',
+  draw: 'Draw: starts from the current editable basis (received bands, or your last requested curve if the desk has not echoed it); drag across the graph to redraw bands. Changed bands are sent live while you draw (throttled); release sends the final drawn bands.',
 });
 export const EQ_SIDE_COLOURS = Object.freeze(['#7fd17f', '#e58ee5']);
 
@@ -72,7 +72,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
   for (const [id, label, min, max, step, aria] of [['freq', 'FREQ', 0, 1, 0.001, 'frequency position'], ['q', 'WIDTH', 0, 1, 0.001, 'shape narrowness (not a hardware filter Q)'], ['gain', 'GAIN', -12, 12, 0.1, 'gain']]) {
     const wrap = make('label', 'mm-eq-param'), output = make('output'), input = make('input', 'mm-vertical');
     input.type = 'range'; input.min = String(min); input.max = String(max); input.step = String(step); input.dataset.gestureStep = String(step); input.dataset.eqParam = id; input.disabled = true; input.value = '0';
-    input.setAttribute('aria-label', `Selected requested point ${aria}; cap drag or arrow keys; release applies`);
+    input.setAttribute('aria-label', `Selected requested point ${aria}; cap drag or arrow keys; changes are sent live while you drag`);
     wrap.append(make('span', '', label), output, input); bank.append(wrap); params.set(id, { input, output });
   }
   const unverified = make('p', 'mm-eq-cut-bank mm-eq-unverified', 'Shelves / cuts: unverified · not available');
@@ -217,7 +217,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
     if (!editable && !confirmRow.hidden) hideConfirm(false);
     confirmText.textContent = `Reset all ${BANDS} GEQ bands of Output ${readback.sides.map(side => side.auxIndex + 1).join(' and ')} to 0 dB? Bypass, filters and other processing are untouched.`;
-    status.textContent = editable && hint ? hint : owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Release applies.' : unavailableReason(readback);
+    status.textContent = editable && hint ? hint : owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Changes are sent live while you drag (throttled).' : unavailableReason(readback);
     modeNote.textContent = EQ_MODE_NOTES[mode]; detailNotes.textContent = `${EQ_MODE_NOTES[mode]} ${legendText}`;
     const sides = new Set(readback.sides.map(side => side.auxIndex));
     for (const [key, row] of readbackNodes) if (!sides.has(key)) { row.remove(); readbackNodes.delete(key); }

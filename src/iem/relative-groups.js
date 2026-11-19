@@ -8,7 +8,12 @@ const amplitude = position => (position < 0.055 ? Math.sin(28.559933214452666 * 
   Math.exp((23.90844819639692 + (-26.23877598214595 + (12.195249692570245 - 0.4878099877028098 * position) * position) * position) * position) * 0.0002676529517952372;
 export const GROUP_MIN_DB = -199;
 export const GROUP_MAX_DB = 20 * Math.log10(amplitude(1));
-export const GROUP_DELTA_WINDOW = 12;
+// F09-S05 full-range group travel (docs/iem-relative-groups.md). Downward travel
+// stops when the QUIETEST member reaches this finite floor (fader position about
+// 0.00125, visually the bottom). It sits far inside the finite anchor window, so
+// a desk-rounded echo still re-anchors the next gesture; a group never writes
+// position 0 / -inf. Upward travel stops when the LOUDEST member reaches 1.
+export const GROUP_FLOOR_DB = -100;
 export function continuousFaderDB(position) {
   if (typeof position !== 'number' || !Number.isFinite(position) || position < 0 || position > 1) throw Error('Invalid received fader position.');
   const value = amplitude(position);
@@ -64,4 +69,31 @@ export function relativeGroupChange(baseline, requestedDelta) {
   if (Math.abs(delta) < 1e-12) delta = 0; // Shared numerical no-op, not member rounding.
   const commands = baseline.members.map(member => Object.freeze({ ...member.target, value: delta === 0 ? member.value : continuousDBToFader(member.db + delta) }));
   return Object.freeze({ delta: delta === 0 ? 0 : delta, limited: delta !== requestedDelta, commands: Object.freeze(commands) });
+}
+
+// One common dB delta range for a fresh immutable anchor: the reference is the
+// loudest member; lower is 0 when the quietest is already below the floor.
+export function groupTravel(baseline) {
+  const members = baseline?.members;
+  if (!Array.isArray(members) || !members.length || members.some(member => typeof member.db !== 'number' || !Number.isFinite(member.db))) throw Error('Finite group anchor required.');
+  const dbs = members.map(member => member.db);
+  return Object.freeze({
+    referenceDb: Math.max(...dbs),
+    lower: Math.min(0, Math.max(...dbs.map(db => GROUP_FLOOR_DB - db))),
+    upper: Math.max(0, Math.min(...dbs.map(db => GROUP_MAX_DB - db))),
+  });
+}
+// The group cap is the loudest member's fader position moved along the normal
+// fader law: requested delta = dB(position) - dB(reference anchor), clamped to
+// the whole-group travel (top: loudest at 1; bottom: quietest at the floor).
+export function groupReferenceDelta(baseline, position) {
+  if (typeof position !== 'number' || !Number.isFinite(position) || position < 0 || position > 1) throw Error('Group reference position must be finite from zero to one.');
+  const { referenceDb, lower, upper } = groupTravel(baseline);
+  if (position === 1) return upper;
+  return Math.max(lower, Math.min(upper, continuousFaderDB(position) - referenceDb));
+}
+export function groupReferencePosition(baseline, delta) {
+  if (typeof delta !== 'number' || !Number.isFinite(delta)) throw Error('Finite group delta required.');
+  const { referenceDb } = groupTravel(baseline);
+  return continuousDBToFader(Math.max(GROUP_MIN_DB, Math.min(GROUP_MAX_DB, referenceDb + delta)));
 }

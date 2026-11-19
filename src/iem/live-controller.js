@@ -19,7 +19,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   for (const value of ['192.168.0.60', '192.168.1.60']) { const option = make('option'); option.value = value; known.append(option); }
   const profileLabel = make('label', 'Saved local rig'), addressLabel = make('label', 'Mixer private IPv4 address');
   profileLabel.append(profile); addressLabel.append(address); connect.type = 'submit';
-  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? pan ? 'Known compatible levels and normalized pan are editable after connecting. Drag or use keys; release applies a change.' : 'Known compatible levels are editable after connecting. Drag or use keys; release applies a change.' : 'Only received state is shown. No mixer parameter writes.');
+  const settings = make('p', 'Loading local rigs; manual Connect is available now.'), note = make('p', levels ? pan ? 'Known compatible levels and normalized pan are editable after connecting. Drag or use keys; changes are sent live while you drag (throttled).' : 'Known compatible levels are editable after connecting. Drag or use keys; changes are sent live while you drag (throttled).' : 'Only received state is shown. No mixer parameter writes.');
   settings.className = note.className = 'mm-caption'; note.setAttribute('role', 'status');
   const name = make('input'), nameLabel = make('label', 'Local rig name');
   name.maxLength = 80; name.autocomplete = 'off'; nameLabel.append(name);
