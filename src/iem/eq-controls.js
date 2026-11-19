@@ -271,7 +271,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
       const key = { freq: 'x', q: 'q', gain: 'gainDb' }[input.dataset.eqParam], previous = points[selectedPoint][key];
       // F09-S06: other bands saturate at ±15 dB in the requested samples; the
       // point's gain itself stops once its own centre reaches the limit.
-      if (key === 'gainDb') value = pointCentreGainLimit(centreRest(selectedPoint, points[selectedPoint].x), value);
+      if (key === 'gainDb') value = pointCentreGainLimit(centreRest(selectedPoint, points[selectedPoint].x), value, previous);
       points[selectedPoint] = { ...points[selectedPoint], [key]: value };
       if (!previewIntent(requestedPointSamples(points, gesture.basis))) { points[selectedPoint] = { ...points[selectedPoint], [key]: previous }; syncParams(); return previous; }
       syncParams(); return value;
@@ -317,7 +317,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     // samples, so x always follows and the gain stops only when the handle's own
     // centre reaches the limit; a band already at ±15 elsewhere never blocks it.
     const rest = centreRest(selectedPoint, p.x);
-    points[selectedPoint] = { ...previous, x: p.x, gainDb: pointCentreGainLimit(rest, clamp(p.db - rest, -12, 12)) };
+    points[selectedPoint] = { ...previous, x: p.x, gainDb: pointCentreGainLimit(rest, clamp(p.db - rest, -12, 12), previous.gainDb) };
     if (previewIntent(requestedPointSamples(points, gesture.basis))) drag.changed = true;
     else points[selectedPoint] = { ...previous, x: p.x }; // keep following horizontally
     syncParams();

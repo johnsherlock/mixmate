@@ -71,9 +71,12 @@ export function requestedPointSamples(input, basisInput) {
 export const AUX_EQ_GAIN_LIMIT_DB = 15;
 // The dragged handle follows vertically only until its OWN centre reaches the
 // limit: the gain that puts basis + other points + gain at ±15 at x = point.x.
-export function pointCentreGainLimit(rest, requestedGain) {
-  if (typeof rest !== 'number' || !Number.isFinite(rest) || typeof requestedGain !== 'number' || !Number.isFinite(requestedGain)) throw Error('Invalid point gain request.');
-  const low = Math.min(0, -AUX_EQ_GAIN_LIMIT_DB - rest), high = Math.max(0, AUX_EQ_GAIN_LIMIT_DB - rest);
+// The range is widened by the point's current gain, so when a neighbour has
+// already pushed the centre past the limit the clamp only stops further
+// outward movement and never pulls the gain inward (re-review P2).
+export function pointCentreGainLimit(rest, requestedGain, currentGain = 0) {
+  if ([rest, requestedGain, currentGain].some(value => typeof value !== 'number' || !Number.isFinite(value))) throw Error('Invalid point gain request.');
+  const low = Math.min(0, currentGain, -AUX_EQ_GAIN_LIMIT_DB - rest), high = Math.max(0, currentGain, AUX_EQ_GAIN_LIMIT_DB - rest);
   return Math.max(low, Math.min(high, requestedGain));
 }
 // Draw intent: one requested gain per native display centre, in index order.

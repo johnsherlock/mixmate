@@ -2627,14 +2627,19 @@ body {
 }
 
 /* F09-S06 stable geometry during gestures: a strip's state line is one fixed
-   single-line overlay (absolute, no layout height, no pointer events) above the
-   Pan/Details row in every live layout, hidden by visibility, never by display,
+   12px single-line overlay (absolute, no layout height, no pointer events,
+   semi-transparent, under the fader caps) directly above the Pan/Details row in
+   every live layout, hidden by visibility, never by display,
    so it neither costs fader travel nor resizes .mm-fader-space mid-drag. Full
    text stays in its title and Details. Header/footer status text is one
    ellipsised line whose length never changes the row wrapping. */
 #mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-live-strip-state,
 #mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,
-#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{display:block;visibility:hidden;position:absolute;left:3px;right:3px;bottom:26px;z-index:1;pointer-events:none;box-sizing:border-box;width:auto;height:16px;min-height:16px;max-height:16px;flex:none;margin:0;padding:2px 6px;font-size:10px;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;clip:auto;clip-path:none;background:#13191be6;border-radius:2px}
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{display:block;visibility:hidden;position:absolute;left:3px;right:3px;bottom:24px;z-index:1;pointer-events:none;box-sizing:border-box;width:auto;height:12px;min-height:12px;max-height:12px;flex:none;margin:0;padding:1px 6px;font-size:9px;line-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;clip:auto;clip-path:none;background:#13191b99;border-radius:2px}
+/* The overlay sits in the fader space's bottom padding band just above the
+   Pan/Details row; caps always paint above it, so a cap at the bottom of travel
+   is never hidden. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip .mm-fader-control{z-index:2}
 #mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{visibility:visible}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip > .mm-live-strip-state,
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,

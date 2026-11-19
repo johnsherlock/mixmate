@@ -558,3 +558,36 @@ test('EQ view: after a cancelled points gesture with no desk echo, points re-ena
   press(cap, 'pointerup', { clientY: 60 });
   ui.eq.destroy(); ui.session.disconnect();
 });
+
+test('point centre limit is widened by the current gain: a step outward stops, never pulls the gain inward (re-review P2)', () => {
+  // Reviewer repro: point 2 at +12 with a neighbour raising its centre to 15.58 dB (rest 3.58).
+  const rest = 15.58 - 12;
+  assert.equal(pointCentreGainLimit(rest, 12.5, 12), 12, 'GAIN up from an over-limit 12 stays at 12 (old code returned 11.42)');
+  assert.equal(pointCentreGainLimit(rest, 11.8, 12), 11.8, 'moving inward still works');
+  assert.equal(pointCentreGainLimit(rest, 13, 0), 15 - rest, 'from inside the range the outward limit applies as before');
+  assert.equal(pointCentreGainLimit(-3.58, -12.5, -12), -12, 'same on the negative side');
+  // Drag: the pointer can request at most +15 dB at the new x, so the widened range only matters for slider/keys.
+  assert.equal(pointCentreGainLimit(10, 15 - 10, 12), 5, 'a drag into a higher-basis region follows the pointer');
+});
+
+test('EQ view: GAIN key steps only move outward until the centre limit and never step back; a drag into a raised region keeps following x', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  ui.receiver.receive('3:::' + Array.from({ length: 31 }, (_, band) => `SETD^a.0.eq.peak.${band}^${auxEqDbToPosition(band >= 17 ? 10 : 0)}\nSETD^a.1.eq.peak.${band}^${auxEqDbToPosition(band >= 17 ? 10 : 0)}`).join('\n'));
+  ui.find('[data-eq-point="2"]').emit('click'); // point 3 sits in the +10 dB region
+  const gain = ui.find('[data-eq-param="gain"]'), key = name => gain.emit('keydown', { key: name, target: gain, preventDefault() {} });
+  gain.focus(); const seen = [];
+  for (let n = 0; n < 12; n++) { key('PageUp'); seen.push(Number(gain.value)); ui.advance(300); }
+  assert.ok(seen.every((value, index) => index === 0 || value >= seen[index - 1]), `monotonic: ${seen}`);
+  assert.ok(Math.abs(seen.at(-1) - 5) < 1e-9, 'stops when its own centre reaches +15 dB');
+  gain.emit('keyup', { key: 'PageUp', target: gain, preventDefault() {} });
+  assert.ok(ui.writes().length > 0 && ui.writes().every(message => Number(message.split('^')[2]) <= 1));
+  // Drag point 1 up over the 0 dB region, then sideways into the +10 dB region: x follows, nothing exceeds +15.
+  const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg'), handle = ui.find('[data-eq-handle="0"]'), x0 = 28 + 0.233 * 108;
+  ui.advance(3000); press(handle.children[1], 'pointerdown', { clientX: x0, clientY: 94 }); press(svg, 'pointermove', { clientX: x0, clientY: 0 }); ui.advance(300);
+  const before = ui.writes().length; press(svg, 'pointermove', { clientX: 28 + 0.8 * 108, clientY: 0 }); ui.advance(300);
+  assert.ok(ui.writes().length > before, 'handle follows horizontally');
+  assert.match(handle.attributes['aria-label'], /Requested point 1, (6|7|8|9)\.?[0-9]* kHz|Requested point 1, [0-9.]+ kHz/);
+  press(svg, 'pointerup', { clientX: 28 + 0.8 * 108, clientY: 0 });
+  assert.ok(ui.writes().every(message => GEQ_WRITE.test(message) && Number(message.split('^')[2]) <= 1));
+  ui.eq.destroy(); ui.session.disconnect();
+});
