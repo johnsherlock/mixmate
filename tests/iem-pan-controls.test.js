@@ -18,7 +18,7 @@ function fixture(withBank = false, debug = true) {
   const dom = domFixture(), owner = createDialogOwner(), window = new Node(dom.document); let socket, next = 0; const sockets = [];
   const jobs = new Map(), timers = { setTimeout(fn) { const id = ++next; jobs.set(id, fn); return id; }, clearTimeout(id) { jobs.delete(id); }, setInterval() { return ++next; }, clearInterval() {} };
   class Socket { readyState = 0; sent = []; constructor() { sockets.push(this); } send(message) { assert.ok(['3:::INIT', '3:::ALIVE', '2::'].includes(message) || parseIemStateFrame(message).length === 1); this.sent.push(message); } close() { this.readyState = 3; } receive(data) { (this.receiver ?? this).onmessage?.({ data }); } }
-  const engine = createAuxControlSession({ WebSocketClass: Socket, timers, now: () => 0, wallNow: () => 0 });
+  let time = 0; const engine = createAuxControlSession({ WebSocketClass: Socket, timers, now: () => time, wallNow: () => time });
   let panBegins = 0, levelBegins = 0;
   const session = { ...engine, beginPanGesture() { panBegins++; return engine.beginPanGesture(); } };
   const contexts = new Set(), context = { profileId: 'rig', revision: 1, selectedAux: 0, sources: [{ sourceId: 'i.0', name: '<img onerror=bad>' }, { sourceId: 'f.0', name: 'FX' }] };
@@ -36,6 +36,7 @@ function fixture(withBank = false, debug = true) {
   engine.connect('192.168.0.60'); socket = sockets[0]; socket.receiver = sockets[1]; for (const connection of sockets) { connection.readyState = 1; connection.onopen(); } socket.receive(FRAME);
   return { ...dom, view, closeButton: dom.close, owner, controller, context, engine, socket, pan, connection, groups,
     get counts() { return { panBegins, levelBegins }; },
+    advance(ms) { time += ms; },
     writes: () => socket.sent.filter(message => message.startsWith('3:::SETD')),
     changeContext() { context.revision++; for (const fn of contexts) fn(context); },
     close() { pan.destroy(); groups.destroy(); connection.destroy(); offBank(); view?.destroy(); engine.disconnect(); for (const [key, value] of Object.entries(oldGlobals)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } } };
@@ -208,5 +209,24 @@ test('F09-S09 strip Pan button shows PAN · L/CENTRE/R from received actual, the
     app.socket.receive('3:::SETD^i.0.aux.0.pan^0.6\nSETD^i.0.aux.1.pan^0.7');
     assert.equal(button('i.0').querySelector('.mm-pan-short').textContent, 'Pan', 'unequal sides: just Pan');
     assert.equal(app.writes().every(message => /^3:::SETD\^i\.0\.aux\.[01]\.pan\^/.test(message)), true);
+  } finally { app.close(); }
+});
+
+test('F09-S09 review P1: after an unechoed preset and the 2.5 s window, the dialog readout, aria-valuetext and slider show the received value, like the strip', () => {
+  const app = fixture(true, false);
+  try {
+    app.pan.open(target);
+    const value = app.root.querySelector('.mm-pan-value'), input = app.root.querySelector('.mm-pan-large');
+    const strip = app.root.querySelectorAll('[data-open-pan]').find(node => node.dataset.openPan === 'i.0');
+    app.root.querySelector('.mm-pan-presets').children[2].emit('click');
+    assert.deepEqual(app.writes(), ['3:::SETD^i.0.aux.0.pan^1', '3:::SETD^i.0.aux.1.pan^1']);
+    assert.equal(value.textContent, 'R 100', 'pending own request is shown while live');
+    app.advance(2600); app.socket.receive('3:::SETS^i.23.name^Unrelated'); // no echo; the observation window expires
+    const control = app.engine.snapshot().control;
+    assert.equal(control.pending, false); assert.equal(control.gestureActive, false); assert.equal(control.requestedValue, 1, 'the session keeps the requested chain');
+    assert.equal(value.textContent, 'L 50'); assert.equal(input.attributes['aria-valuetext'], 'Pan L 50'); assert.equal(input.value, '0.25');
+    assert.equal(strip.querySelector('.mm-pan-short').textContent, 'PAN · L 50');
+    app.socket.receive('3:::SETD^i.0.aux.1.pan^0.3');
+    assert.equal(value.textContent, '—', 'unequal sides: no shared value');
   } finally { app.close(); }
 });

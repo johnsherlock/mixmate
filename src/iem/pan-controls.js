@@ -84,11 +84,15 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     input.disabled = !enabled;
     for (const button of presetButtons) button.disabled = !enabled;
     if (!preview) {
-      const received = actual.values[0], requested = selected && typeof control?.requestedValue === 'number' ? control.requestedValue : null;
-      input.value = requested !== null ? String(requested) : received.known ? String(received.value) : '0';
-      // The large readout: this owner's requested value while it is live, else the
-      // shared received value; unknown or unequal sides show a dash.
-      showValue(requested ?? commonPanWire(actual.values.map(item => item.value)));
+      // Same rule as the strip Pan button (F09-S09 review P1): this owner's
+      // requested value only while its gesture or own echoes are live. After an
+      // unconfirmed send's window the retained chain is not shown as the value:
+      // readout, aria-valuetext and slider show the shared received value, else
+      // a dash (unknown or unequal sides).
+      const live = selected && (control.gestureActive || control.pending) && typeof control.requestedValue === 'number';
+      const shown = live ? control.requestedValue : commonPanWire(actual.values.map(item => item.value));
+      input.value = shown !== undefined ? String(shown) : actual.values[0].known ? String(actual.values[0].value) : '0';
+      showValue(shown);
     }
     const statusText = control?.pending ? control.status : actual.reason || (selected ? control.status : control?.status || 'Pan adjustment unavailable.');
     // A live gesture's own dispatch never flashes a reason into the footer.
