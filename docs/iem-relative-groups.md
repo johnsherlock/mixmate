@@ -1,6 +1,12 @@
 # Relative AUX group levels — F05-S03
 
-## Current F09-S06 dB-linear travel — 2026-11-19
+## Current F09-S08 travel to −∞ in display-scale units — 2026-11-20
+
+**User decision (2026-11-20, F09-S08), supersedes the −70 dB group floor:** "moving the group faders should stop when one hits −∞, not −70 dB." A group applies **one common delta in display-scale units** ([fader-scale.js](../src/iem/fader-scale.js) `positionToScale`/`scaleToPosition`), not raw dB. Above −70 dB a scale unit is a dB (equal dB = equal distance, as before); in the short bottom segment (scale −70…−75 ↔ desk position ≈0.0252…0) members keep moving equal on-screen distance. Limits: up stops when the loudest member reaches the top (scale +10, desk position 1); down stops when the quietest member reaches the bottom (scale −75, desk position 0, −∞). Groups may now write position 0; the endpoint member lands exactly on 1 or 0 (inward 1e-12 guard as before). Anchors are fresh finite received positions; silent members are valid anchors at scale −75, so a group containing one can move up (it rises from the bottom) but allows no further downward travel. The anchor member field is `scale` (was `db`); `GROUP_FLOOR_DB` is replaced by `GROUP_FLOOR_SCALE = −75` / `GROUP_TOP_SCALE = +10`; `groupTravel` returns `referenceScale`. The Δ readout shows the common delta in these dB-equivalent scale units (one decimal). Wire values, guards, allowlist and the peer-editor model are unchanged. The fader law moved to [fader-law.js](../src/iem/fader-law.js) (re-exported) to avoid a module cycle.
+
+**Group strip display (F09-S08).** The cap is the maximum over members of each member's displayed position: received, or this owner's requested value while its own member gesture/live steps are active; position 0 counts. "Level unavailable" shows only when controls are absent or no member has any finite position, never transiently during member gestures or own-echo windows. Presentation grants no authority: a group gesture the session cannot anchor yet (for example, own echoes outstanding) simply gets no token.
+
+## F09-S06 dB-linear travel — 2026-11-19 (floor superseded by F09-S08)
 
 **User decision (2026-11-20, F09-S07):** `GROUP_FLOOR_DB` is **−70 dB** and the dB-linear display span is +10…−70 dB: the bottom of group travel puts the quietest member exactly at −70 dB (desk position ≈0.0252, never 0); a member already below −70 dB gives zero downward travel; the top is unchanged (loudest at desk position 1, +10 dB). The −60 dB figures in the 2026-11-19 paragraph are superseded.
 

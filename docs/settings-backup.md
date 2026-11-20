@@ -1,5 +1,7 @@
 # Settings backup and recovery
 
+> **Historical — removed by F09-S08 (user decision 2026-11-20).** MixMate no longer offers settings export or import anywhere (live dialogs or Settings / test). Only **Reset local settings** and storage protection remain in Settings / test. The rest of this page describes the removed F02-S03 feature.
+
 F02-S03 provides local files for moving settings between devices or restoring them. It does not upload files, create an account or back up the mixer's current state.
 
 ## Export

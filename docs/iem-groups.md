@@ -2,6 +2,8 @@
 
 Date: 2026-11-09. Baseline: F03-S04 merged in [PR #19](https://github.com/johnsherlock/mixmate/pull/19), main `14cf968`, after green checks and affirmative Codex review of final head `c3fb9c4`. This story edits local definitions only; no mixer writer or active allowlist changes.
 
+> **F09-S08 (2026-11-20):** the Edit Groups dialog no longer has an **Export settings** button (user decision: not in the design). Temporary saves/deletes say the definition will be lost when the page closes. The live group strip now travels to −∞ and tracks member gestures; see [relative groups](iem-relative-groups.md#current-f09-s08-travel-to--in-display-scale-units--2026-11-20).
+
 ## Scoped plan and dependency
 
 Use the accepted editor layout to create/edit ordered group definitions in the F02 repository. Bind the editor to a stable local profile, discover candidate source IDs only from observed sends on the selected AUX, and retain unresolved existing IDs. Save/Cancel/Clear operate on a draft, with storage outcomes visible. Keep group browsing/expanded strips/navigation persistence with F04-S02 and relative level controls with F05.

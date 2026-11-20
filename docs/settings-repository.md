@@ -2,6 +2,8 @@
 
 Story: [F02-S01](stories/F02-S01.md). Date: 2026-11-09. F02-S02 wires this repository into the connection test through `src/rig-settings.js`, with visible status and validated legacy address migration. The old `mixmate-address` key is no longer written. No automatic mixer connection or new mixer message is introduced.
 
+> **F09-S08 (user decision 2026-11-20): settings export/import removed.** The **Export settings** buttons in the live connection dialog and Edit Groups dialog, and the Export/Import backup controls in Settings / test (`connection-test.html`), are removed: they were not in the design and exported little. `parseSettingsBackup`, `settingsBackupText`, `exportSettingsBackup` and the file-import preview are deleted. **Reset local settings** and storage protection remain in Settings / test, and `replace(document)` remains for that reset. The repository schema, `validateSettings` and the version-1 → version-2 read migration are unchanged (covered by `tests/settings.test.js`). Temporary (memory-only) definitions now say they will be lost when the page closes. Text below that mentions export, import or backups is historical.
+
 ## Storage contract
 
 `src/settings.js` uses IndexedDB database `mixmate-settings`, database version 1, object store `settings`, key `current`. The entire canonical settings document is committed in one readwrite transaction, atomically comparing the latest durable document with this instance's last durable baseline before writing. A stale instance cannot overwrite a different committed document. Initial schema upgrade creates this store; initialization with no record returns empty definitions without saving mock rigs/groups.
