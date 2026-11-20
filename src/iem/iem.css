@@ -2581,6 +2581,12 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-native{flex:1 1 auto;min-height:230px;border:1px solid var(--mm-mix-color);border-radius:4px}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg{width:100%;height:100%;display:block}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle{touch-action:none;cursor:grab}
+/* F09-S08: no text selection/native drag/callout in the graph; the whole halo is the handle's hit target (also when its fill is faint). */
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle circle,#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle text{pointer-events:visible}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle:active{cursor:grabbing}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq-hint{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#e5c97a}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq-hint[hidden]{display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-requested{fill:none;stroke:#ecd3a7;stroke-width:2;stroke-dasharray:6 4}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-shape{fill:none;stroke:#9fb0b8;stroke-width:1.5;stroke-dasharray:2 3}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-unverified{margin:0;font-size:10px;color:#b5c0c8;align-self:stretch}

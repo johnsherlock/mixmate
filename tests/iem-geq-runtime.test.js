@@ -430,7 +430,7 @@ test('EQ view (F09-S07): a draw commit or confirmed reset re-anchors the points 
   const gain = stepGain(ui, 3); ui.deskEcho();
   const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg');
   ui.find('[data-eq-mode="draw"]').emit('click');
-  press(svg, 'pointerdown', { clientX: 30, clientY: 20 }); press(svg, 'pointermove', { clientX: 130, clientY: 20 }); ui.advance(300); press(svg, 'pointerup', { clientX: 130, clientY: 20 }); ui.advance(300); ui.deskEcho();
+  press(svg, 'pointerdown', { clientX: 30, clientY: 40 }); press(svg, 'pointermove', { clientX: 130, clientY: 40 }); ui.advance(300); press(svg, 'pointerup', { clientX: 130, clientY: 40 }); ui.advance(300); ui.deskEcho();
   ui.find('[data-eq-mode="points"]').emit('click');
   assert.equal(Number(gain.value), 0, 'points restart at 0 dB after a draw');
   const coordinate = control(ui).eqCoordinate.map(auxEqPositionToDb), count = ui.writes().length;
@@ -645,7 +645,7 @@ test('EQ view (live repro 2026-11-19): with 100 Hz bands at +15, dragging point 
   const centre = AUX_EQ_CENTRES.indexOf(100);
   ui.receiver.receive('3:::' + [centre - 1, centre, centre + 1].map(band => `SETD^a.0.eq.peak.${band}^1\nSETD^a.1.eq.peak.${band}^1`).join('\n'));
   const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg'), handle = ui.find('[data-eq-handle="1"]');
-  const x = 28 + 0.566 * 108;
+  const x = 28 + 0.566 * 100;
   press(handle.children[1], 'pointerdown', { clientX: x, clientY: 94 }); press(svg, 'pointermove', { clientX: x, clientY: 54 });
   const n = ui.writes().length; assert.ok(n > 0, 'point 2 moves although other bands sit at +15');
   assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /Unchanged requested coordinate|rejected/);
@@ -700,12 +700,87 @@ test('EQ view: GAIN key steps rise monotonically to the centre limit; a drag int
   gain.emit('keyup', { key: 'PageUp', target: gain, preventDefault() {} });
   assert.ok(ui.writes().length > 0 && ui.writes().every(message => Number(message.split('^')[2]) <= 1));
   // Drag point 1 up over the 0 dB region, then sideways into the +10 dB region: x follows, nothing exceeds +15.
-  const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg'), handle = ui.find('[data-eq-handle="0"]'), x0 = 28 + 0.233 * 108;
+  const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg'), handle = ui.find('[data-eq-handle="0"]'), x0 = 28 + 0.233 * 100;
   ui.advance(3000); press(handle.children[1], 'pointerdown', { clientX: x0, clientY: 94 }); press(svg, 'pointermove', { clientX: x0, clientY: 0 }); ui.advance(300);
-  const before = ui.writes().length; press(svg, 'pointermove', { clientX: 28 + 0.8 * 108, clientY: 0 }); ui.advance(300);
+  const before = ui.writes().length; press(svg, 'pointermove', { clientX: 28 + 0.8 * 100, clientY: 0 }); ui.advance(300);
   assert.ok(ui.writes().length > before, 'handle follows horizontally');
   assert.match(handle.attributes['aria-label'], /Requested point 1, (6|7|8|9)\.?[0-9]* kHz|Requested point 1, [0-9.]+ kHz/);
-  press(svg, 'pointerup', { clientX: 28 + 0.8 * 108, clientY: 0 });
+  press(svg, 'pointerup', { clientX: 28 + 0.8 * 100, clientY: 0 });
   assert.ok(ui.writes().every(message => GEQ_WRITE.test(message) && Number(message.split('^')[2]) <= 1));
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+// F09-S08: handle press selects/focuses; arrow keys move the selected point as
+// a deliberate keyboard gesture; near-handle presses grab; edge handles stay grabbable.
+const handleKey = (handle, type, key, extra = {}) => handle.emit(type, { key, target: handle, preventDefault() {}, ...extra });
+const svgOf = ui => ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg');
+const xOf = handle => Number(/([0-9.]+) (?:Hz|kHz)/.exec(handle.attributes['aria-label'])[1]) * (/kHz/.test(handle.attributes['aria-label']) ? 1000 : 1);
+test('EQ graph (F09-S08): pressing a handle selects and focuses it; arrow keys move the point (x ±1/62, gain ±0.5 dB, Shift 4×) and commit on keyup', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const handle = ui.find('[data-eq-handle="2"]'), gain = ui.find('[data-eq-param="gain"]'), freq = ui.find('[data-eq-param="freq"]');
+  press(handle.children[0], 'pointerdown', { clientX: 0, clientY: 0 }); press(svgOf(ui), 'pointerup', { clientX: 0, clientY: 0 });
+  assert.equal(ui.document.activeElement, handle, 'the pressed handle takes focus'); assert.equal(ui.find('[data-eq-point="2"]').attributes['aria-pressed'], 'true', 'and is selected');
+  assert.equal(ui.writes().length, 0, 'a press without movement writes nothing');
+  const x0 = Number(freq.value);
+  handleKey(handle, 'keydown', 'ArrowRight'); assert.ok(Math.abs(Number(freq.value) - (x0 + 1 / 62)) < 1e-12, 'Right moves x by 1/62');
+  assert.equal(control(ui).gestureActive, true, 'a deliberate keyboard gesture'); assert.equal(ui.writes().length, 0, 'gain 0: no bump to move yet');
+  handleKey(handle, 'keydown', 'ArrowUp'); assert.equal(Number(gain.value), 0.5); assert.ok(ui.writes().length > 0, 'Up streams the 0.5 dB bump live');
+  ui.advance(300); handleKey(handle, 'keydown', 'ArrowUp', { shiftKey: true }); assert.equal(Number(gain.value), 2.5, 'Shift steps 4×');
+  handleKey(handle, 'keydown', 'ArrowLeft', { shiftKey: true }); assert.ok(Math.abs(Number(freq.value) - (x0 + 1 / 62 - 4 / 62)) < 1e-12);
+  handleKey(handle, 'keyup', 'ArrowLeft'); assert.equal(control(ui).gestureActive, false, 'keyup commits');
+  const sent = ui.writes(); ui.deskEcho(); ui.advance(300);
+  assert.ok(sent.every(message => GEQ_WRITE.test(message))); assert.equal(Number(gain.value), 2.5, 'the point keeps its gain');
+  handleKey(handle, 'keydown', 'ArrowDown'); assert.equal(Number(gain.value), 2); handleKey(handle, 'keydown', 'Escape');
+  assert.equal(control(ui).gestureActive, false, 'Escape cancels'); assert.equal(ui.eq.section.hidden, false, 'without closing the view');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ graph (F09-S08): a press within 24 px of a handle grabs the nearest one; farther presses still never begin', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const svg = svgOf(ui), handle = ui.find('[data-eq-handle="1"]'), cx = Number(handle.children[0].attributes.cx), cy = Number(handle.children[0].attributes.cy);
+  assert.equal(handle.children[0].attributes.r, '20', 'the halo is the hit target');
+  press(svg, 'pointerdown', { clientX: cx, clientY: cy - 30 }); assert.equal(control(ui).gestureActive, false, '30 px away: background, no gesture');
+  press(svg, 'pointerup', { clientX: cx, clientY: cy - 30 });
+  press(svg, 'pointerdown', { clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, true, '≈21 px away grabs point 2');
+  assert.equal(ui.find('[data-eq-point="1"]').attributes['aria-pressed'], 'true'); assert.equal(ui.document.activeElement, handle);
+  press(svg, 'pointermove', { clientX: cx - 5, clientY: cy - 40 }); assert.ok(ui.writes().length > 0, 'and drags it');
+  press(svg, 'pointerup', { clientX: cx - 5, clientY: cy - 40 }); assert.equal(control(ui).gestureActive, false);
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ graph (F09-S08): point 1 pinned at +15 dB still moves horizontally, and its whole halo stays inside the viewBox', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  ui.receiver.receive('3:::' + Array.from({ length: 31 }, (_, band) => `SETD^a.0.eq.peak.${band}^${auxEqDbToPosition(5)}\nSETD^a.1.eq.peak.${band}^${auxEqDbToPosition(5)}`).join('\n'));
+  const handle = ui.find('[data-eq-handle="0"]'), gain = ui.find('[data-eq-param="gain"]'); handle.focus();
+  for (let n = 0; n < 6; n++) { handleKey(handle, 'keydown', 'ArrowUp', { shiftKey: true }); ui.advance(300); }
+  assert.ok(Math.abs(Number(gain.value) - 10) < 1e-9, 'own centre stops at +15 dB (base +5)');
+  const svg = svgOf(ui), [, , w, h] = svg.attributes.viewBox.split(' ').map(Number), halo = handle.children[0];
+  assert.ok(Number(halo.attributes.cy) - 20 >= 0, `halo top inside (${halo.attributes.cy})`);
+  const before = ui.writes().length, x = xOf(handle);
+  handleKey(handle, 'keydown', 'ArrowRight', { shiftKey: true }); ui.advance(300);
+  assert.ok(xOf(handle) > x, 'x follows at the limit'); assert.ok(ui.writes().length > before, 'the bump moves');
+  assert.ok(Math.abs(Number(gain.value) - 10) < 1e-9);
+  handleKey(handle, 'keyup', 'ArrowRight'); ui.deskEcho(); ui.advance(300);
+  for (let n = 0; n < 70; n++) handleKey(handle, 'keydown', 'ArrowRight', { shiftKey: true });
+  handleKey(handle, 'keyup', 'ArrowRight');
+  assert.ok(Number(halo.attributes.cx) + 20 <= w && Number(halo.attributes.cy) + 20 <= h, 'at 20 kHz the halo stays inside on the right');
+  assert.ok(ui.writes().every(message => GEQ_WRITE.test(message) && Number(message.split('^')[2]) <= 1));
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07 follow-ups): a no-move release or Escape never leaves the anchor "interrupted"; the restart hint is visible in the status line and the head', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  stepGain(ui, 2); ui.deskEcho(); ui.advance(300);
+  const handle = ui.find('[data-eq-handle="0"]'), svg = svgOf(ui);
+  press(handle.children[1], 'pointerdown', { clientX: 0, clientY: 0 }); press(svg, 'pointerup', { clientX: 0, clientY: 0 }); // no-move release
+  handle.focus(); handleKey(handle, 'keydown', 'ArrowUp'); handleKey(handle, 'keydown', 'Escape'); ui.deskEcho(); ui.advance(300); // leading step streamed, then Escape: the desk holds it
+  assert.equal(ui.eq.section.hidden, false);
+  const gain = ui.find('[data-eq-param="gain"]'); gain.focus(); keyOn(ui, gain, 'PageUp'); ui.advance(300); keyOn(ui, gain, 'Escape'); ui.deskEcho(); ui.advance(300); // same with a slider
+  ui.receiver.receive('3:::SETD^a.0.eq.peak.27^0.3\nSETD^a.1.eq.peak.27^0.3');
+  const status = ui.find('.mm-live-eq-status').textContent, hint = ui.find('.mm-live-eq-hint');
+  assert.match(status, /^Curve changed on the desk; points restarted from the current curve\./, 'hint leads the status line');
+  assert.doesNotMatch(status, /interrupted/);
+  assert.equal(hint.hidden, false); assert.equal(hint.textContent, 'Curve changed on the desk; points restarted from the current curve.');
+  stepGain(ui, 1); assert.equal(ui.find('.mm-live-eq-hint').hidden, true, 'a new deliberate gesture clears the hint');
   ui.eq.destroy(); ui.session.disconnect();
 });
