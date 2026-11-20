@@ -2468,7 +2468,10 @@ body {
 
 /* Local group navigation wraps without replacing the accepted source bank. */
 #mixmate-iem-concept[data-mode="live"] .mm-navigation{flex-wrap:wrap}
-#mixmate-iem-concept[data-mode="live"] .mm-group-switches{display:flex;flex:1 1 auto;min-width:0;flex-wrap:wrap;gap:4px;overflow:visible}
+/* F09-S08: like the Demo/mockup, group buttons and All Channels sit at the right
+   of the toolbar, immediately left of Mix EQ / Edit Groups; wrapped rows stay
+   right-aligned (justify-content, not an auto margin, so every row aligns). */
+#mixmate-iem-concept[data-mode="live"] .mm-group-switches{display:flex;flex:1 1 auto;min-width:0;flex-wrap:wrap;gap:4px;overflow:visible;justify-content:flex-end;align-items:center}
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches>button:first-child{margin-inline-start:0}
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches>button{flex:0 0 auto;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 /* A zero flex basis prevents long labels forcing another compact nav row. */

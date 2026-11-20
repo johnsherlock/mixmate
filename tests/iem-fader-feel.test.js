@@ -193,3 +193,8 @@ test('stable strip/header geometry rules (F09-S07): no per-strip state line, Pan
   assert.match(block, /\.mm-preview \.mm-feedback\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
   assert.match(block, /\.mm-bottom \.mm-dirty\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
 });
+
+test('F09-S08: live group buttons and All Channels are right-aligned next to Mix EQ / Edit Groups, like the Demo', async () => {
+  const css = await readFile(new URL('../src/iem/iem.css', import.meta.url), 'utf8');
+  assert.match(css, /\[data-mode="live"\] \.mm-group-switches\{display:flex;flex:1 1 auto;min-width:0;flex-wrap:wrap;gap:4px;overflow:visible;justify-content:flex-end;align-items:center\}/);
+});
