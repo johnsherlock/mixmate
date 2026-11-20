@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { mountLiveController } from '../src/iem/live-controller.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
-import { continuousFaderDB, continuousDBToFader, GROUP_FLOOR_DB, GROUP_MAX_DB } from '../src/iem/relative-groups.js';
+import { continuousFaderDB, continuousDBToFader, GROUP_MAX_DB } from '../src/iem/relative-groups.js';
+import { FADER_SCALE_MIN, positionToScale, scaleToPosition } from '../src/iem/fader-scale.js';
 import { SettingsRepository, emptySettings } from '../src/settings.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 const master = { kind: 'master', auxIndex: 0 }, send = { kind: 'send', auxIndex: 0, sourceId: 'i.0' };
@@ -189,21 +190,20 @@ test('groups bind stable controller profile instead of saved selected-profile/IP
   assert.equal(app.session.selectGroupTarget(['i.0'], 0), false); assert.equal(app.session.commitLevelGesture({}, [0.5, 0.5]), false);
   app.session.disconnect(); await app.repository.close();
 });
-test('full-range group endpoints commit the exact cached common preview: loudest at max on top, quietest at the floor at the bottom', async () => {
+test('full-range group endpoints commit the exact cached common preview: loudest at max on top, quietest at -inf at the bottom', async () => {
   for (const endpoint of ['upper', 'lower']) {
     const app = await groupFixture();
-    const baseline = endpoint === 'upper' ? continuousDBToFader(GROUP_MAX_DB - 0.523456) : continuousDBToFader(GROUP_FLOOR_DB + 0.523456);
+    const baseline = endpoint === 'upper' ? continuousDBToFader(GROUP_MAX_DB - 0.523456) : scaleToPosition(FADER_SCALE_MIN + 0.523456);
     app.socket.receive(`3:::SETD^i.0.aux.0.value^${baseline}`);
     const token = app.beginGroup(), position = app.session.previewLevelGesture(token, endpoint === 'upper' ? 1 : 0), delta = app.session.snapshot().control.previewDelta;
     assert.ok(Math.abs(Math.abs(delta) - 0.523456) < 1e-9, String(delta));
-    if (endpoint === 'upper') assert.ok(position > 1 - 1e-9); else assert.ok(Math.abs(continuousFaderDB(position) - (continuousFaderDB(0.65) + delta)) < 1e-9);
+    if (endpoint === 'upper') assert.ok(position > 1 - 1e-9); else assert.ok(Math.abs(positionToScale(position) - (positionToScale(0.65) + delta)) < 1e-9);
     app.session.commitLevelGesture(token, Math.round(position * 10) / 10);
     const changes = writes(app.socket).map(message => parseIemStateFrame(message)[0]);
     assert.equal(changes.length, 2, 'one live step; the unchanged release sends nothing more');
-    const expected = endpoint === 'upper' ? GROUP_MAX_DB : GROUP_FLOOR_DB;
-    assert.ok(Math.abs(continuousFaderDB(changes[0].value) - expected) < 1e-9);
-    assert.ok(Math.abs(continuousFaderDB(changes[0].value) - continuousFaderDB(baseline) - delta) < 1e-9);
-    assert.ok(Math.abs(continuousFaderDB(changes[1].value) - continuousFaderDB(0.65) - delta) < 1e-9);
+    assert.equal(changes[0].value, endpoint === 'upper' ? 1 : 0);
+    assert.ok(Math.abs(positionToScale(changes[0].value) - positionToScale(baseline) - delta) < 1e-9);
+    assert.ok(Math.abs(positionToScale(changes[1].value) - positionToScale(0.65) - delta) < 1e-9);
     assert.equal(app.session.snapshot().control.lastDelta, delta);
     app.session.disconnect(); await app.repository.close();
   }
@@ -228,10 +228,11 @@ test('group identity/membership/order/profile/native away-back changes invalidat
     app.session.disconnect(); await app.repository.close();
   }
 });
-test('group zero delta is a no-op, while silent/unresolved/empty groups cannot arm', async () => {
+test('group zero delta is a no-op; a silent member still arms (F09-S08) while unresolved/empty groups cannot', async () => {
   const app = await groupFixture(), token = app.beginGroup(); app.session.previewLevelGesture(token, 0.65); // the loudest member's own position
   assert.equal(app.session.commitLevelGesture(token, 0), false); assert.equal(writes(app.socket).length, 0); assert.match(app.session.snapshot().control.status, /no commands/);
-  app.socket.receive('3:::SETD^f.0.aux.0.value^0'); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
+  app.socket.receive('3:::SETD^f.0.aux.0.value^0'); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), true, 'a member at -inf is a finite anchor');
+  app.session.disarmLevel();
   await app.repository.update(settings => { settings.profiles[0].groups[0].members = ['i.20']; }); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
   await app.repository.update(settings => { settings.profiles[0].groups[0].members = []; }); app.session.selectGroupTarget('band', 0); assert.equal(app.session.armLevel(), false);
   assert.equal(writes(app.socket).length, 0); app.session.disconnect(); await app.repository.close();

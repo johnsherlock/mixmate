@@ -17,6 +17,11 @@ const dbText = value => `${value > 0 ? '+' : ''}${value.toFixed(1)} dB`;
 // digits and a band within 1e-9 of its last request is not re-sent.
 const ANCHOR_EPSILON = 1e-9;
 const deskFormat = value => (value === 0 ? 0 : Number(value.toPrecision(10)));
+// F09-S08 point handles: the r=20 halo is the hit target; a press on the empty
+// graph within 24 px of a handle grabs the nearest one; arrow keys move the
+// selected point (Left/Right ±1/62 of the x range, Up/Down ±0.5 dB, Shift 4×).
+const HANDLE_RADIUS = 20, HANDLE_MARGIN = 22, HANDLE_GRAB_PX = 24, KEY_X_STEP = 1 / 62, KEY_GAIN_STEP = 0.5, KEY_SHIFT = 4;
+const ARROWS = Object.freeze({ ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['gainDb', 1], ArrowDown: ['gainDb', -1] });
 const flatPoints = () => [0.233, 0.566, 0.85].map(x => ({ x, gainDb: 0, q: 0.5 }));
 export const EQ_APPROXIMATION_NOTE = 'Approximation: band centres are the native display labels (20 Hz–20 kHz), not verified DSP centres. Lines join band values; they are not a measured response. No shelves, cuts, filters or parametric bands.';
 // Editable basis: the session coordinate — received band values, or the last
@@ -62,7 +67,10 @@ export function mountEqControls({ root, session, controller, window = globalThis
   const button = (text, label) => { const node = make('button', '', text); node.type = 'button'; if (label) node.setAttribute('aria-label', label); return node; };
   const section = make('section', 'mm-live-eq'); section.hidden = true; section.setAttribute('aria-label', 'AUX graphic EQ');
   const head = make('div', 'mm-live-eq-head'), back = button('← Mix', 'Close EQ and return to the mix'), title = make('strong', 'mm-live-eq-title'), bypassBadge = make('span', 'mm-live-eq-bypass');
-  head.append(back, title, bypassBadge);
+  // F09-S08: local restart/no-op hints also show in the head, so they stay
+  // visible even where the status line below the graph is clipped or scrolled.
+  const hintBadge = make('span', 'mm-live-eq-hint'); hintBadge.setAttribute('aria-hidden', 'true');
+  head.append(back, title, hintBadge, bypassBadge);
   const shell = make('div', 'mm-eq-shell mm-eq-native'), plot = make('div', 'mm-eq-plot'), svg = svgNode('svg', 'mm-eq-svg');
   svg.setAttribute('role', 'img');
   const grid = svgNode('g', 'mm-eq-grid'), actualGroup = svgNode('g', 'mm-eq-actual'), shapePath = svgNode('path', 'mm-eq-shape'), requestedPath = svgNode('path', 'mm-eq-requested'), handleGroup = svgNode('g', 'mm-eq-handles');
@@ -110,9 +118,12 @@ export function mountEqControls({ root, session, controller, window = globalThis
     group.dataset.eqSide = String(index); actualGroup.append(group); return { group, path, label, dots };
   });
   const handles = Array.from({ length: AUX_EQ_POINT_COUNT }, (_, index) => {
-    const group = svgNode('g', 'mm-eq-handle'), halo = svgNode('circle'), dot = svgNode('circle'), label = svgNode('text');
-    halo.setAttribute('r', '20'); halo.setAttribute('fill-opacity', '.18'); dot.setAttribute('r', '12'); label.setAttribute('text-anchor', 'middle'); label.textContent = String(index + 1);
-    group.dataset.eqHandle = String(index); group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.append(halo, dot, label); handleGroup.append(group); return { group, halo, dot, label };
+    // F09-S08 review: a transparent r=24 hit circle belongs to the handle itself
+    // (touch-action:none), so a touch near the handle is a grab, never a pan.
+    const group = svgNode('g', 'mm-eq-handle'), hit = svgNode('circle'), halo = svgNode('circle'), dot = svgNode('circle'), label = svgNode('text');
+    hit.setAttribute('r', String(HANDLE_GRAB_PX)); hit.setAttribute('class', 'mm-eq-handle-hit'); hit.setAttribute('fill', 'transparent');
+    halo.setAttribute('r', String(HANDLE_RADIUS)); halo.setAttribute('class', 'mm-eq-handle-halo'); halo.setAttribute('fill-opacity', '.18'); dot.setAttribute('r', '12'); label.setAttribute('text-anchor', 'middle'); label.textContent = String(index + 1);
+    group.dataset.eqHandle = String(index); group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.append(hit, halo, dot, label); handleGroup.append(group); return { group, hit, halo, dot, label, cx: NaN, cy: NaN };
   });
   const readbackNodes = new Map();
 
@@ -158,7 +169,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
   }
   function geometry() {
     const rect = svg.getBoundingClientRect?.() || { width: 0, height: 0 }, w = Math.max(150, rect.width || 0), h = Math.max(80, rect.height || 0);
-    return { rect, w, h, left: w < 260 ? 28 : 35, right: w - 14, top: 14, bottom: h - 25, range: h - 39 };
+    // F09-S08: top/right margins keep a handle's whole r=20 halo inside the
+    // viewBox even when its centre sits at +15 dB or 20 kHz, so it stays grabbable.
+    return { rect, w, h, left: w < 260 ? 28 : 35, right: w - HANDLE_MARGIN, top: HANDLE_MARGIN, bottom: h - 25, range: h - 25 - HANDLE_MARGIN };
   }
   const xPixel = (g, x) => g.left + x * (g.right - g.left);
   const yPixel = (g, db) => g.top + (15 - clamp(db, -15, 15)) / 30 * g.range;
@@ -205,10 +218,11 @@ export function mountEqControls({ root, session, controller, window = globalThis
     handles.forEach((handle, index) => {
       const point = points[index], x = xPixel(g, point.x), y = yPixel(g, (basis ? basisAt(basis, point.x) : 0) + auxEqPointGain(points, point.x));
       handle.group.setAttribute('visibility', mode === 'points' ? 'visible' : 'hidden');
-      for (const circle of [handle.halo, handle.dot]) { circle.setAttribute('cx', x.toFixed(2)); circle.setAttribute('cy', y.toFixed(2)); }
+      for (const circle of [handle.hit, handle.halo, handle.dot]) { circle.setAttribute('cx', x.toFixed(2)); circle.setAttribute('cy', y.toFixed(2)); }
+      handle.cx = x; handle.cy = y;
       handle.halo.setAttribute('fill', '#abbea0'); handle.dot.setAttribute('fill', index === selectedPoint ? '#ecd3a7' : '#bcc7a8'); handle.dot.setAttribute('stroke', '#879b80');
       handle.label.setAttribute('x', x.toFixed(2)); handle.label.setAttribute('y', (y + 4).toFixed(2));
-      handle.group.setAttribute('aria-label', `Requested point ${index + 1}, ${hzText(20 * Math.pow(1000, point.x))}, Δ ${dbText(point.gainDb)}; Enter or Space selects it for the sliders`);
+      handle.group.setAttribute('aria-label', `Requested point ${index + 1}, ${hzText(20 * Math.pow(1000, point.x))}, Δ ${dbText(point.gainDb)}; Enter or Space selects it for the sliders; arrow keys move it (Shift for larger steps)`);
     });
     svg.setAttribute('aria-label', `AUX GEQ graph. ${readback ? readback.sides.map(eqSideText).join('. ') : 'No received bands.'} ${requested ? 'Requested curve shown dashed.' : 'No requested curve.'}`);
     svg.dataset.draw = String(mode === 'draw' && editable);
@@ -249,13 +263,18 @@ export function mountEqControls({ root, session, controller, window = globalThis
       const coordinate = owned(control) && control.eqCoordinate ? control.eqCoordinate
         : readback.complete && readback.equal ? readback.sides[0].bands : null;
       if (coordinate && !anchorMatches(coordinate)) { hint = anchor.interrupted ? RESTART_INTERRUPTED : RESTART_OUTSIDE; reanchor(coordinate); }
+      // The desk holds base + bumps: an earlier cancel/no-move release left
+      // nothing interrupted, so a later desk change is labelled as such.
+      else if (coordinate) anchor.interrupted = false;
     }
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
     if (!editable && !confirmRow.hidden) hideConfirm(false);
     confirmText.textContent = `Reset all ${BANDS} GEQ bands of Output ${readback.sides.map(side => side.auxIndex + 1).join(' and ')} to 0 dB? Bypass, filters and other processing are untouched.`;
     // A local hint is shown alongside the owner's status, never in place of it.
     const ownerText = owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Changes are sent live while you drag (throttled).' : unavailableReason(readback);
-    status.textContent = hint && (editable || owned(control)) ? `${hint} ${ownerText}` : ownerText;
+    const showHint = Boolean(hint) && (editable || owned(control));
+    status.textContent = showHint ? `${hint} ${ownerText}` : ownerText;
+    hintBadge.textContent = showHint ? hint : ''; hintBadge.hidden = !showHint; hintBadge.setAttribute('title', showHint ? hint : '');
     modeNote.textContent = EQ_MODE_NOTES[mode]; detailNotes.textContent = `${EQ_MODE_NOTES[mode]} ${legendText}`;
     const sides = new Set(readback.sides.map(side => side.auxIndex));
     for (const [key, row] of readbackNodes) if (!sides.has(key)) { row.remove(); readbackNodes.delete(key); }
@@ -286,12 +305,13 @@ export function mountEqControls({ root, session, controller, window = globalThis
       else anchor.interrupted = false;
       syncParams(); // Sliders show the (possibly restarted) values before the gesture reads its start.
     }
-    gesture = { token, input, draw: coordinate.map(auxEqPositionToDb), lastDraw: null };
+    gesture = { token, input, draw: coordinate.map(auxEqPositionToDb), lastDraw: null, touched: false, keyboard: null, changed: false };
     previewValues = null;
     return token;
   }
   function previewIntent(intent) {
     if (!gesture) return null;
+    gesture.touched = true;
     const values = session.previewEqGesture(gesture.token, intent);
     if (values) previewValues = values;
     paint(projectEqReadback(snapshot, auxIndex));
@@ -309,7 +329,8 @@ export function mountEqControls({ root, session, controller, window = globalThis
         // A failed or partial release is our interruption, not a desk change.
         else if (mode === 'points' && anchor && !sent) anchor.interrupted = true;
       } else {
-        if (mode === 'points' && anchor) anchor.interrupted = true;
+        // Only a gesture that moved points can leave the desk short of them.
+        if (mode === 'points' && anchor && active.touched) anchor.interrupted = true;
         session.cancelEqGesture();
       }
     } finally { settling = false; }
@@ -352,13 +373,27 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function onPointerDown(event) {
     if (event.button !== 0 || !open || !editable || gesture) return;
     const handle = event.target.closest?.('[data-eq-handle]');
-    if (mode === 'points' && !handle) return; // Background touches scroll; no write.
-    if (handle) { selectedPoint = Number(handle.dataset.eqHandle); syncParams(); }
+    // The background keeps touch panning: only a mouse press there may grab a
+    // nearby handle; touch/pen grabs come from the handle's own hit circle.
+    const index = handle ? Number(handle.dataset.eqHandle) : mode === 'points' && event.pointerType === 'mouse' ? nearHandle(event) : -1;
+    if (mode === 'points' && index < 0) return; // Background touches scroll; no write.
+    if (mode === 'points') { selectedPoint = index; syncParams(); handles[index].group.focus?.({ preventScroll: true }); }
     if (!begin()) return;
     if (mode === 'draw' && !gesture.draw) { finish(false); return; }
     drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, changed: false };
     svg.setPointerCapture?.(event.pointerId); event.preventDefault?.();
     if (mode === 'draw') drawAt(event);
+  }
+  // Nearest visible handle within HANDLE_GRAB_PX of the press (viewBox units are
+  // CSS pixels: the viewBox matches the rendered size).
+  function nearHandle(event) {
+    const rect = geometry().rect, x = event.clientX - (rect.left || 0), y = event.clientY - (rect.top || 0);
+    let best = -1, distance = HANDLE_GRAB_PX;
+    handles.forEach((handle, index) => {
+      const d = Math.hypot(handle.cx - x, handle.cy - y);
+      if (Number.isFinite(d) && d <= distance) { best = index; distance = d; }
+    });
+    return best;
   }
   function onPointerMove(event) {
     if (!drag || drag.id !== event.pointerId || !gesture) return;
@@ -387,6 +422,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
   const onPointerCancel = () => { if (drag) finish(false); };
   svg.addEventListener('pointerdown', onPointerDown); svg.addEventListener('pointermove', onPointerMove); svg.addEventListener('pointerup', onPointerUp);
   svg.addEventListener('pointercancel', onPointerCancel); svg.addEventListener('lostpointercapture', onPointerCancel);
+  // No text selection or native drag inside the graph (it would steal the press).
+  const suppress = event => event.preventDefault?.();
+  svg.addEventListener('dragstart', suppress); svg.addEventListener('selectstart', suppress);
   function setMode(next) {
     if (mode === next) return;
     if (gesture) { gestures.cancel(); finish(false); }
@@ -412,9 +450,43 @@ export function mountEqControls({ root, session, controller, window = globalThis
   }
   function hideConfirm(focusReset) { confirmRow.hidden = true; if (focusReset) resetButton.focus?.(); }
   section.addEventListener('click', onClick);
+  // Deliberate keyboard gesture on a focused handle: the first arrow keydown
+  // begins, each press previews through the same private path, keyup commits
+  // (like faders); Escape or leaving the handle cancels.
+  function keyMove(handle, event) {
+    const index = Number(handle.dataset.eqHandle), [key, sign] = ARROWS[event.key];
+    if (gesture && gesture.keyboard !== index) return;
+    if (!gesture) {
+      if (!editable) return;
+      if (selectedPoint !== index) { selectedPoint = index; syncParams(); }
+      if (!begin()) return;
+      gesture.keyboard = index;
+    }
+    if (!anchor) return;
+    const previous = points[index], factor = event.shiftKey ? KEY_SHIFT : 1;
+    const x = key === 'x' ? clamp(previous.x + sign * KEY_X_STEP * factor, 0, 1) : previous.x;
+    const rest = centreRest(index, x);
+    const gainDb = key === 'gainDb' ? pointCentreGainLimit(rest, clamp(previous.gainDb + sign * KEY_GAIN_STEP * factor, -12, 12), previous.gainDb) : previous.gainDb;
+    points[index] = { ...previous, x, gainDb };
+    if (previewIntent(requestedPointSamples(points, anchor.base))) gesture.changed = true;
+    else points[index] = { ...previous, x }; // x still follows; the gain stays.
+    syncParams(); paint(projectEqReadback(snapshot, auxIndex));
+  }
+  function onKeyUp(event) {
+    if (!gesture || gesture.keyboard === null || !ARROWS[event.key]) return;
+    const handle = event.target?.closest?.('[data-eq-handle]');
+    if (!handle || Number(handle.dataset.eqHandle) !== gesture.keyboard) return;
+    event.preventDefault?.(); finish(gesture.changed);
+  }
+  function onFocusOut(event) {
+    const handle = event.target?.closest?.('[data-eq-handle]');
+    if (handle && gesture && gesture.keyboard === Number(handle.dataset.eqHandle)) finish(false);
+  }
   function onKey(event) {
     if (!open) return;
     const handle = event.target?.closest?.('[data-eq-handle]');
+    if (handle && mode === 'points' && ARROWS[event.key]) { event.preventDefault?.(); keyMove(handle, event); return; }
+    if (handle && event.key === 'Escape' && gesture && gesture.keyboard !== null) { event.preventDefault?.(); finish(false); return; }
     if (handle && (event.key === 'Enter' || event.key === ' ') && mode === 'points') {
       event.preventDefault?.(); if (gesture) { gestures.cancel(); finish(false); }
       selectedPoint = Number(handle.dataset.eqHandle); render(); return;
@@ -423,7 +495,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (!confirmRow.hidden) { event.preventDefault?.(); hideConfirm(true); return; }
     close();
   }
-  section.addEventListener('keydown', onKey);
+  section.addEventListener('keydown', onKey); section.addEventListener('keyup', onKeyUp); section.addEventListener('focusout', onFocusOut);
   function show(index) {
     if (destroyed) return false;
     const context = controller.context();
@@ -459,6 +531,6 @@ export function mountEqControls({ root, session, controller, window = globalThis
   return {
     open: show, close, section,
     get mode() { return mode; },
-    destroy() { close(); destroyed = true; unsubscribe(); unsubscribeContext(); gestures.destroy(); section.removeEventListener('click', onClick); section.removeEventListener('keydown', onKey); mixButton?.removeEventListener('click', onMixButton); window?.removeEventListener?.('resize', resize); section.remove(); },
+    destroy() { close(); destroyed = true; unsubscribe(); unsubscribeContext(); gestures.destroy(); section.removeEventListener('click', onClick); section.removeEventListener('keydown', onKey); section.removeEventListener('keyup', onKeyUp); section.removeEventListener('focusout', onFocusOut); svg.removeEventListener('dragstart', suppress); svg.removeEventListener('selectstart', suppress); mixButton?.removeEventListener('click', onMixButton); window?.removeEventListener?.('resize', resize); section.remove(); },
   };
 }

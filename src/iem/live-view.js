@@ -133,6 +133,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     onMasterEQ(_, input) { const target = levelTargets.get(input); if (onOpenEq && target?.kind === 'master') onOpenEq(target.auxIndex); },
     onBegin(input) {
       const target = levelTargets.get(input);
+      // F09-S08 review: a visible-but-not-yet-editable group cap (member echoes
+      // outstanding, another target dispatching) never steals the selection;
+      // it says why and starts nothing.
+      if (target?.kind === 'group' && canEditLevel && !canEditLevel(target)) {
+        $('.mm-feedback').textContent = 'Group not editable yet: waiting for the desk to report the last member change. Try again in a moment.';
+        $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
+        return null;
+      }
       if (target && !selectedTarget(target)) {
         if (target.kind === 'group') onSelectGroupLevel(target.groupId);
         else onSelectLevel(target);
@@ -178,11 +186,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (!control) head.append(selection);
       const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
       const deltaPrefix = element('span', 'mm-delta-prefix', 'Δ '), delta = element('span', 'mm-delta-amount', '—'); output.append(deltaPrefix, delta);
-      // Full-range group fader on the dB-linear scale (F09-S06): the cap starts
-      // at the loudest member's received level; every member gets the same dB Δ,
+      // Full-range group fader on the display scale (F09-S06): the cap starts at
+      // the loudest member's displayed level; every member gets the same scale Δ,
       // so all move the same distance (top: loudest at max; bottom: quietest at
-      // -70 dB since F09-S07; a member already below -70 dB allows no downward
-      // travel).
+      // −∞ since F09-S08; a member already at −∞ allows no downward travel).
       unavailable.setAttribute('aria-label', 'Relative group level unavailable · read-only');
       space.append(scale, unavailable);
       let input;
@@ -272,26 +279,35 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         strip.name.setAttribute('title', `${model.name} · group master`);
         const target = { kind: 'group', groupId: model.groupId, auxIndex: selectedAux };
         const chosen = Boolean(selectedTarget(target)), eligible = Boolean(control && (canEditLevel ? canEditLevel(target) : chosen && control.eligible));
+        // F09-S08: "Level unavailable" only when controls are genuinely absent or
+        // no member has any finite displayed position, never transiently while a
+        // member gesture, live step or own-echo window makes the group briefly
+        // non-editable. The session still refuses a group gesture it cannot
+        // anchor (begin returns no token), so presentation grants no authority.
+        const available = Boolean(control) && unitPosition(model.referencePosition);
         if (strip.input) levelTargets.set(strip.input, target);
         strip.article.dataset.levelSelected = String(chosen);
-        strip.article.dataset.unknown = String(!eligible);
+        strip.article.dataset.unknown = String(!available);
+        strip.article.dataset.editable = String(eligible);
         if (strip.select) {
           strip.select.dataset.selectGroupLevel = model.groupId; strip.select.disabled = false;
           strip.select.setAttribute('aria-label', `Select relative level for group ${model.name}`); strip.select.setAttribute('aria-pressed', String(chosen));
           strip.input.dataset.group = model.groupId;
-          strip.input.disabled = !(eligible && !control.dispatching);
+          strip.input.disabled = !(available && !(chosen && control.dispatching));
           strip.input.setAttribute('aria-label', `${model.name} group fader at the loudest member; one common Δ to every member; cap drag or arrow keys; changes are sent live while you drag`);
           const reference = chosen && unitPosition(control?.groupReference) ? control.groupReference : unitPosition(model.referencePosition) ? model.referencePosition : 0;
           if (preview?.input !== strip.input) strip.input.value = scaleText(reference);
-          strip.unavailable.hidden = Boolean(eligible);
+          strip.unavailable.hidden = available;
         }
+        // The common Δ is in display-scale units: dB above −70 dB; within the
+        // short bottom segment it is the same on-screen distance (F09-S08).
         const delta = chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0;
-        const amount = eligible ? deltaAmount(delta) : '—';
+        const amount = available ? deltaAmount(delta) : '—';
         if (strip.delta.textContent !== amount) strip.delta.textContent = amount;
-        strip.output.setAttribute('title', eligible ? deltaText(delta, 2) : 'Group adjustment unavailable');
-        strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
+        strip.output.setAttribute('title', available ? `${deltaText(delta, 2)} (scale units: dB above −70 dB, equal distance below)` : 'Group adjustment unavailable');
+        strip.output.setAttribute('aria-label', available ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         setState(strip, chosen ? control.reason || control.status : model.stateText);
-        strip.article.dataset.actionable = String(!eligible || chosen && (control?.pending || !control?.eligible));
+        strip.article.dataset.actionable = String(!available || chosen && (control?.pending || !control?.eligible));
         const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
         if (chosen && control?.requestedDiagnostic?.length) strip.requestedSignature = diagnostic;
         const inactive = !chosen && control?.requestedDiagnostic?.length && strip.requestedSignature === diagnostic;

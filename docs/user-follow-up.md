@@ -367,3 +367,30 @@ Implementation on `codex/f09-s07-points-floor-cleanup` (from main `50e24d5`, F09
 Live checks outstanding: listed in [F09-S07](stories/F09-S07.md#live-acceptance-pending-root). F08-S01 remains parked.
 
 F09-S07 review fixes on `6de49dc` (2026-11-20, story agent): local GEQ hints are shown next to the owner status; points restart at render time when the editable coordinate (requested values while echoes are pending, else received bands once editable) stops matching; a failed/partial release counts as interrupted; `?debug=0/false/no/off` stays off; strip status is exposed through `aria-describedby`; ruler labels and the group Δ readout use CSS container queries (drop −∞ then −70; drop "Δ " below 104 px, then shrink the font). The group strip keeps its 24 px footer so its fader travel and ruler stay aligned with member strips. Container-query rendering is not browser-verified by the agent.
+
+## F09-S08 groups to −∞, group strip tracking, GEQ handle keyboard, export removal, nav placement — 2026-11-20
+
+Implementation on `codex/f09-s08-group-silence-nav` (from main `dc371cb`, F09-S07 merged in PR #53). User feedback after F09-S07.
+
+- **User decisions (2026-11-20, recorded by root):**
+  - Group faders stop when the quietest member hits −∞, not −70 dB. This supersedes the S07 group floor; the display scale is unchanged.
+  - Remove the Export settings feature.
+  - Match the Demo's right-aligned group navigation.
+- **Story-agent routine decisions, for review:**
+  - The group delta is in display-scale units, so the bottom segment (−70 dB…−∞) is position-linear for every member, not dB. Members moving through it keep equal on-screen distance, but not equal dB.
+  - The fader law moved to `src/iem/fader-law.js` (re-exported) to break a module cycle with `fader-scale.js`.
+  - The group strip's availability follows "some member has a finite displayed position", not `canEditLevel`. While the session cannot anchor (own echoes or a basis wait), the cap stays visible and enabled, and a press simply gets no gesture token. The reason stays in the tooltip.
+  - Export removal also covers Settings / test: export and file import are gone, while reset and storage protection stay. `docs/settings-backup.md` is marked historical.
+  - GEQ graph margins are top/right 22 px (was 14) so edge halos stay inside the viewBox. The plot is about 8 px narrower and shorter.
+  - The near-handle grab radius is 24 px. On touch it still competes with the plot's pan gesture (`touch-action: pan-x pan-y` in points mode), so a near-miss touch may become a pan, which sends nothing.
+  - The keyboard GEQ gesture commits on keyup and cancels on Escape or when the handle loses focus.
+- **Accepted F09-S07 text follow-ups, fixed:**
+  - The restart hint is mirrored into a head badge. In the fake reproduction the hint was present in the status text, so the live invisibility is presumed to be layout (status line below the graph). This is not browser-verified with a real desk change.
+  - `anchor.interrupted` is set only when a cancelled gesture moved points, and it is cleared when the render-time check finds the curve matching.
+- **Tests.** Intentional expectation updates:
+  - group floor tests now expect position 0;
+  - silent members now arm/resolve;
+  - GEQ pointer coordinates follow the new geometry (x span 100 instead of 108 in the fake);
+  - removed import/export lifecycle tests, with reset variants kept.
+
+Live checks outstanding: listed in [F09-S08](stories/F09-S08.md#live-acceptance-pending-root). F08-S01 remains parked.

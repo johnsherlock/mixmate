@@ -8,7 +8,7 @@ import { FaderIntent } from '../src/fader-intent.js';
 import { observeOfflineUpdates, currentEntryRequirements } from '../src/offline.js';
 import { SettingsRepository, emptySettings } from '../src/settings.js';
 import { mountRigSettings } from '../src/rig-settings.js';
-import { mountSettingsRecovery, parseSettingsBackup, settingsBackupText, MAX_SETTINGS_BYTES } from '../src/settings-recovery.js';
+import { mountSettingsRecovery } from '../src/settings-recovery.js';
 import { IDBFactory } from 'fake-indexeddb';
 import { faderValueToDB } from 'soundcraft-ui-connection';
 
@@ -33,7 +33,7 @@ class Element extends Events {
   reportValidity() {}
 }
 function app({ offline, storage = new Map(), storageAccess, indexedDB, repository, confirmDelete = true, storageManager } = {}) {
-  const elements = new Map(), sockets = [], intervals = new Map(), downloads = [], cacheOperations = [];
+  const elements = new Map(), sockets = [], intervals = new Map(), cacheOperations = [];
   const element = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   element('address').value = '192.168.0.60';
   element('offline-version').textContent = 'Offline version: not verified';
@@ -61,13 +61,13 @@ function app({ offline, storage = new Map(), storageAccess, indexedDB, repositor
     Option: function(text, value) { this.textContent = text; this.value = String(value); },
     MixerConnection: FakeConnection, FaderIntent, faderValueToDB, verifyOfflineCopy: offline, observeOfflineUpdates, currentEntryRequirements, SettingsRepository: FakeSettingsRepository,
     mountRigSettings: options => { settingsController = mountRigSettings(options); return settingsController; },
-    mountSettingsRecovery: options => { recoveryController = mountSettingsRecovery({ ...options, download: text => downloads.push(text) }); return recoveryController; },
+    mountSettingsRecovery: options => { recoveryController = mountSettingsRecovery(options); return recoveryController; },
     caches: { delete: key => cacheOperations.push(key), keys: () => [] },
     setInterval: (callback, delay) => { const key = intervals.size; intervals.set(key, { callback, delay }); return key; },
     clearTimeout, setTimeout, URL, requestAnimationFrame: callback => callback(),
   });
   return { document, window, serviceWorker: navigator.serviceWorker, element, sockets, storage, intervals, settingsReady: () => settingsController.ready, settingsIdle: () => settingsController.whenIdle(),
-    downloads, cacheOperations, recoveryIdle: () => recoveryController.whenIdle(), protectionIdle: () => recoveryController.protectionIdle(),
+    cacheOperations, recoveryIdle: () => recoveryController.whenIdle(), protectionIdle: () => recoveryController.protectionIdle(),
     repository: () => settingsRepository, close: () => { client.disconnect(); return settingsRepository.close(); } };
 }
 
@@ -611,21 +611,6 @@ test('an untouched startup address replacement clears stale custom validity with
   await view.close();
 });
 
-function chooseBackup(view, text, options = {}) {
-  view.element('import-settings-file').files = [{ size: new Blob([text]).size, text: async () => text, ...options }];
-  view.element('import-settings-file').emit('change');
-}
-function backupFixture() {
-  const data = rigFixture();
-  data.profiles[0].groups = [
-    { id: 'guitars', name: '<b>Guitars</b>', members: ['i.9', 'i.4', 'f.0'] },
-    { id: 'keys', name: 'Keys', members: ['p.1', 'l.0', 'i.2'] },
-  ];
-  data.profiles[0].navigation = { mixId: 'a.2', view: 'channels', expandedGroupId: 'guitars' };
-  data.profiles[1].name = '<img src=x onerror=alert(1)> Venue';
-  data.selectedProfileId = 'second-rig';
-  return data;
-}
 function armFake(view) {
   view.element('connect-form').emit('submit');
   const socket = view.sockets.at(-1); socket.open();
@@ -634,70 +619,11 @@ function armFake(view) {
   return socket;
 }
 
-test('export/import roundtrip preserves ordered local definitions and confirms before disconnecting or replacing', async () => {
-  const factory = new IDBFactory(), data = backupFixture(); await seedRigs(factory, data);
-  const view = app({ indexedDB: factory }); await view.settingsReady();
-  const socket = armFake(view);
-  view.element('export-settings').emit('click');
-  assert.equal(view.downloads.length, 1);
-  const backup = view.downloads[0];
-  assert.deepEqual(parseSettingsBackup(backup), data);
-  assert.ok(!backup.includes('Desk secret name'));
-  assert.ok(!backup.includes('armed') && !backup.includes('mix^') && !backup.includes('channelState'));
-  const replacement = backupFixture(); replacement.profiles[1].address = '10.1.2.60';
-  chooseBackup(view, settingsBackupText(replacement)); await view.recoveryIdle();
-  assert.equal(socket.readyState, 1); assert.equal(view.element('enable-fader').checked, true);
-  assert.deepEqual(view.repository().snapshot().settings, data);
-  assert.equal(view.element('settings-preview').hidden, false);
-  assert.match(view.element('settings-preview-text').textContent, /2 rigs · 2 groups/);
-  assert.match(view.element('settings-preview-text').textContent, /<img src=x/);
-  assert.equal(view.element('settings-preview-text').innerHTML, undefined);
-  view.element('confirm-settings').emit('click');
-  assert.equal(socket.readyState, 3); assert.equal(view.element('enable-fader').checked, false);
-  assert.equal(view.element('fader').textContent, '—');
-  assert.equal(view.element('address').value, '10.1.2.60');
-  assert.equal(view.element('rig-profile').value, 'second-rig');
-  assert.equal(view.element('preferred-orientation').value, 'portrait');
-  await view.recoveryIdle();
-  assert.deepEqual(view.repository().snapshot().settings, replacement);
-  assert.match(view.element('recovery-feedback').textContent, /imported and saved/);
-  assert.deepEqual(socket.sent, [OUTBOUND.init]); assert.equal(view.sockets.length, 1);
-  await view.close();
-  const reopened = app({ indexedDB: factory }); await reopened.settingsReady();
-  assert.deepEqual(reopened.repository().snapshot().settings, replacement);
-  assert.equal(reopened.element('address').value, '10.1.2.60');
-  assert.equal(reopened.sockets.length, 0); await reopened.close();
-});
-
-test('F04-S05 version-1 backups import as version 2; exports carry device-local groups and roundtrip exactly', async () => {
-  const factory = new IDBFactory(); await seedRigs(factory);
-  const view = app({ indexedDB: factory }); await view.settingsReady();
-  const { localDefinitions, ...legacy } = { ...backupFixture(), version: 1 };
-  assert.equal(localDefinitions, null);
-  chooseBackup(view, JSON.stringify(legacy)); await view.recoveryIdle();
-  assert.equal(view.element('settings-preview').hidden, false);
-  assert.match(view.element('settings-preview-text').textContent, /2 rigs · 2 groups\nSelected rig: .*\nDevice-local groups: 0/);
-  view.element('confirm-settings').emit('click'); await view.recoveryIdle();
-  assert.deepEqual(view.repository().snapshot().settings, backupFixture());
-  assert.match(view.element('recovery-feedback').textContent, /imported and saved/);
-  const withLocal = backupFixture();
-  withLocal.localDefinitions = { id: 'device-set', groups: [{ id: 'local-band', name: 'Band', members: ['i.3', 'i.1'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: 'local-band' } };
-  chooseBackup(view, settingsBackupText(withLocal)); await view.recoveryIdle();
-  assert.match(view.element('settings-preview-text').textContent, /2 rigs · 3 groups[\s\S]*Device-local groups: 1/);
-  view.element('confirm-settings').emit('click'); await view.recoveryIdle();
-  view.element('export-settings').emit('click');
-  const exported = JSON.parse(view.downloads.at(-1));
-  assert.equal(exported.version, 2); assert.deepEqual(exported, withLocal);
-  assert.deepEqual(parseSettingsBackup(view.downloads.at(-1)), withLocal);
-  assert.equal(view.sockets.length, 0); await view.close();
-});
-
-test('cancelled import/reset previews leave local settings and a live fake mixer untouched', async () => {
+test('a cancelled reset preview leaves local settings and a live fake mixer untouched', async () => {
   const factory = new IDBFactory(); await seedRigs(factory);
   const view = app({ indexedDB: factory }); await view.settingsReady(); const socket = armFake(view);
-  for (const kind of ['import', 'reset']) {
-    if (kind === 'import') { chooseBackup(view, settingsBackupText(backupFixture())); await view.recoveryIdle(); }
-    else view.element('reset-settings').emit('click');
+  {
+    view.element('reset-settings').emit('click');
     view.element('cancel-settings').emit('click');
     view.element('confirm-settings').emit('click');
     assert.deepEqual(view.repository().snapshot().settings, rigFixture());
@@ -705,50 +631,6 @@ test('cancelled import/reset previews leave local settings and a live fake mixer
     assert.equal(socket.readyState, 1); assert.equal(view.element('enable-fader').checked, true);
     assert.match(view.element('recovery-feedback').textContent, /cancelled/);
   }
-  await view.close();
-});
-
-test('invalid/unknown/newer/oversize backup files cannot change settings or produce an import preview', async () => {
-  const factory = new IDBFactory(); await seedRigs(factory);
-  const view = app({ indexedDB: factory }); await view.settingsReady();
-  const unknown = { ...rigFixture(), liveState: { 'i.0.mix': 0.5 } };
-  for (const text of ['{not JSON', JSON.stringify({ ...rigFixture(), version: 9 }), JSON.stringify(unknown), JSON.stringify({ ...rigFixture(), profiles: 'bad' })]) {
-    chooseBackup(view, text); await view.recoveryIdle();
-    assert.equal(view.element('settings-preview').hidden, true);
-    assert.match(view.element('recovery-feedback').textContent, /Nothing was changed/);
-    assert.deepEqual(view.repository().snapshot().settings, rigFixture());
-  }
-  let reads = 0;
-  chooseBackup(view, '{}', { size: MAX_SETTINGS_BYTES + 1, text: async () => { reads++; return '{}'; } });
-  await view.recoveryIdle(); assert.equal(reads, 0);
-  assert.match(view.element('recovery-feedback').textContent, /8 MiB/);
-  chooseBackup(view, '{}', { size: 1, text: async () => ' '.repeat(MAX_SETTINGS_BYTES + 1) });
-  await view.recoveryIdle(); assert.equal(view.element('settings-preview').hidden, true);
-  const unicodeOversize = 'é'.repeat(MAX_SETTINGS_BYTES / 2 + 1);
-  assert.throws(() => parseSettingsBackup(unicodeOversize), /8 MiB/);
-  assert.equal(view.sockets.length, 0); await view.close();
-});
-
-test('late file reads cannot preview or apply after newer edits, Connect or another file selection', async () => {
-  const view = app({ indexedDB: new IDBFactory() }); await view.settingsReady();
-  let release;
-  chooseBackup(view, '{}', { text: () => new Promise(resolve => { release = resolve; }) });
-  view.element('address').value = '10.0.0.90'; view.element('address').emit('input');
-  view.element('connect-form').emit('submit'); const socket = view.sockets[0]; socket.open();
-  release(settingsBackupText(backupFixture())); await view.recoveryIdle();
-  assert.equal(view.element('settings-preview').hidden, true);
-  assert.equal(view.element('address').value, '10.0.0.90'); assert.equal(socket.readyState, 1);
-  let oldRelease;
-  chooseBackup(view, '{}', { text: () => new Promise(resolve => { oldRelease = resolve; }) });
-  const chosen = rigFixture(); chosen.profiles[0].name = 'Newer file';
-  chooseBackup(view, settingsBackupText(chosen)); await view.recoveryIdle();
-  oldRelease(settingsBackupText(backupFixture())); await settle();
-  assert.match(view.element('settings-preview-text').textContent, /Newer file/);
-  assert.ok(!view.element('settings-preview-text').textContent.includes('<img'));
-  view.element('rig-name').value = 'Fresh edit'; view.element('rig-name').emit('input');
-  view.element('confirm-settings').emit('click');
-  assert.equal(view.element('rig-name').value, 'Fresh edit');
-  assert.equal(socket.readyState, 1); assert.equal(view.sockets.length, 1);
   await view.close();
 });
 
@@ -760,7 +642,7 @@ test('late replacement completion cannot retarget a new draft, preferences or an
     replace(value) { return super.replace(value).then(result => gate.then(() => result)); }
   }
   const view = app({ repository: new DelayedRepository({ indexedDB: factory }) }); await view.settingsReady();
-  chooseBackup(view, settingsBackupText(backupFixture())); await view.recoveryIdle();
+  view.element('reset-settings').emit('click');
   view.element('confirm-settings').emit('click');
   view.element('new-rig').emit('click');
   view.element('rig-name').value = 'New draft'; view.element('rig-name').emit('input');
@@ -777,18 +659,11 @@ test('late replacement completion cannot retarget a new draft, preferences or an
   await view.close();
 });
 
-test('temporary imports/exports/reset stay usable and never claim a durable replacement', async () => {
+test('a temporary reset stays usable and never claims a durable replacement; no export/import controls (F09-S08)', async () => {
   const view = app(); await view.settingsReady();
-  const backup = backupFixture(); chooseBackup(view, settingsBackupText(backup)); await view.recoveryIdle();
+  view.element('reset-settings').emit('click');
   assert.match(view.element('settings-preview-text').textContent, /temporary settings only/);
   view.element('confirm-settings').emit('click'); await view.recoveryIdle();
-  assert.deepEqual(view.repository().snapshot().settings, backup);
-  assert.equal(view.element('rig-profile').value, 'second-rig');
-  assert.match(view.element('recovery-feedback').textContent, /applied temporarily/);
-  view.element('export-settings').emit('click');
-  assert.deepEqual(parseSettingsBackup(view.downloads[0]), backup);
-  assert.match(view.element('recovery-feedback').textContent, /Includes temporary settings/);
-  view.element('reset-settings').emit('click'); view.element('confirm-settings').emit('click'); await view.recoveryIdle();
   assert.deepEqual(view.repository().snapshot().settings, emptySettings());
   assert.match(view.element('recovery-feedback').textContent, /Temporary defaults.*not replaced/);
   assert.equal(view.element('rig-profile').value, '');
@@ -818,22 +693,6 @@ test('confirmed reset preserves app cache/sibling keys/offline marker and cannot
   assert.equal(reopened.element('address').value, '192.168.0.60');
   assert.equal(reopened.element('rig-profile').value, '');
   assert.equal(reopened.sockets.length, 0); await reopened.close();
-});
-
-test('cross-window imports preserve the newer durable record and expose the local imported draft as temporary', async () => {
-  const factory = new IDBFactory(); await seedRigs(factory);
-  const a = app({ indexedDB: factory }), b = app({ indexedDB: factory });
-  await Promise.all([a.settingsReady(), b.settingsReady()]);
-  chooseBackup(b, settingsBackupText(backupFixture())); await b.recoveryIdle();
-  a.element('rig-name').value = 'New durable name'; a.element('save-rig').emit('click'); await a.settingsIdle();
-  b.element('confirm-settings').emit('click'); await b.recoveryIdle();
-  assert.match(b.element('settings-status').textContent, /another window.*temporary/);
-  assert.match(b.element('recovery-feedback').textContent, /applied temporarily/);
-  assert.deepEqual(b.repository().snapshot().settings, backupFixture());
-  b.element('export-settings').emit('click'); assert.deepEqual(parseSettingsBackup(b.downloads[0]), backupFixture());
-  await a.close(); await b.close();
-  const reopened = app({ indexedDB: factory }); await reopened.settingsReady();
-  assert.equal(reopened.element('rig-name').value, 'New durable name'); await reopened.close();
 });
 
 async function rawSettings(factory, value, version = 1) {
@@ -876,10 +735,10 @@ test('storage protection is requested only by explicit action and denial/error/u
     };
     const view = app({ indexedDB: new IDBFactory(), storageManager }); await view.settingsReady(); await view.protectionIdle();
     assert.equal(calls, 0);
-    assert.equal(view.element('export-settings').disabled, false);
+    assert.equal(view.element('reset-settings').disabled, false);
     if (behavior === 'unavailable') assert.equal(view.element('protect-storage').disabled, true);
     else { view.element('protect-storage').emit('click'); await view.protectionIdle(); assert.equal(calls, 1); }
-    assert.match(view.element('storage-protection-status').textContent, behavior === 'granted' ? /granted.*Clearing site data/ : /usable.*backup/);
+    assert.match(view.element('storage-protection-status').textContent, behavior === 'granted' ? /granted.*Clearing site data/ : /usable\./);
     assert.equal(view.sockets.length, 0); await view.close();
   }
 });
@@ -892,23 +751,6 @@ test('late startup protection status cannot override an explicit granted request
   release(false); await view.protectionIdle();
   assert.match(view.element('storage-protection-status').textContent, /granted/);
   assert.equal(calls, 1); await view.close();
-});
-
-
-test('an imported null selection remains unbound after preferences and reload despite matching saved addresses', async () => {
-  const factory = new IDBFactory(), view = app({ indexedDB: factory }); await view.settingsReady();
-  const backup = backupFixture(); backup.selectedProfileId = null;
-  chooseBackup(view, settingsBackupText(backup)); await view.recoveryIdle();
-  view.element('confirm-settings').emit('click'); await view.recoveryIdle();
-  assert.equal(view.element('rig-profile').value, '');
-  view.element('preferred-orientation').value = 'landscape'; view.element('preferred-orientation').emit('change'); await view.settingsIdle();
-  assert.equal(view.element('rig-profile').value, '');
-  await view.close();
-  const reopened = app({ indexedDB: factory }); await reopened.settingsReady();
-  assert.equal(reopened.element('rig-profile').value, '');
-  assert.equal(reopened.element('rig-name').value, '');
-  assert.equal(reopened.repository().snapshot().settings.selectedProfileId, null);
-  assert.equal(reopened.sockets.length, 0); await reopened.close();
 });
 
 

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { createControlScope, createControlState, createPeerControlState, transitionControl, OBSERVATION_WINDOW_MS } from '../src/iem/control-state-model.js';
 import { continuousFaderDB, GROUP_MAX_DB } from '../src/iem/relative-groups.js';
+import { positionToScale } from '../src/iem/fader-scale.js';
 
 function fixture(kind = 'level', linked = false, levels = [0.4, 0.6], peer = false) {
   const received = new Map([['model', 'ui24'], ['a.0.stereoIndex', linked ? 0 : -1], ['a.0.matrix', false], ['i.0.stereoIndex', -1], ['i.1.stereoIndex', -1]]);
@@ -52,13 +53,13 @@ test('repeated linked and relative gestures preserve requested offsets against o
     a.gesture(3); a.dispatch(); a.step('tick', {}, 2500); a.gesture(4); a.dispatch();
     assert.equal(a.state.chain.anchor, anchor); assert.equal(a.state.chain.delta, 7);
     assert.equal(a.state.operation.expected.length, linked ? 4 : 2);
-    for (const [i, requested] of a.state.chain.requested.entries()) assert.ok(Math.abs(continuousFaderDB(requested.value) - anchor[i].db - 7) < 1e-10);
+    for (const [i, requested] of a.state.chain.requested.entries()) assert.ok(Math.abs(positionToScale(requested.value) - anchor[i].scale - 7) < 1e-9);
     assert.deepEqual(a.state.actual.map(x => x.value), anchor.map(x => x.value));
     // These are target-vector properties. Silent partial hardware application
     // cannot be detected or certified by send returns and is not simulated as fact.
     a.step('tick', {}, 2500); a.gesture(100);
     const p = a.state.operation;
-    assert.equal(p.delta, Math.min(...anchor.map(x => GROUP_MAX_DB - x.db)));
+    assert.ok(Math.abs(p.delta - Math.min(...anchor.map(x => 10 - x.scale))) < 1e-9);
     assert.ok(p.expected.every(x => x.value > 0 && x.value <= 1));
   }
 });
@@ -186,14 +187,16 @@ test('malformed events, wrong paths, generation, counts and sequences cannot con
   assert.throws(() => a.step('select', { scope: { ...a.state.scope }, revision: 2 }));
 });
 
-test('typed construction rejects missing metadata/readbacks/receipts, silent groups and unequal actual links', () => {
+test('typed construction rejects missing metadata/readbacks/receipts, non-finite groups and unequal actual links', () => {
   for (const kind of ['level', 'pan', 'group', 'geq']) {
     const a = fixture(kind, true); a.received.delete(a.state.scope.members[0].path); assert.throws(a.scope);
     const b = fixture(kind, true); b.receipts.set(b.state.scope.members[0].path, NaN); assert.throws(b.scope);
     const c = fixture(kind, true); c.received.set(c.state.scope.members[0].path, 0.2); assert.throws(c.scope);
     const d = fixture(kind, true); d.received.delete('a.0.stereoIndex'); assert.throws(d.scope);
   }
-  for (const levels of [[0, 0.4], [1e-12, 0.4], [NaN, 0.4]]) assert.throws(() => fixture('group', false, levels));
+  for (const levels of [[NaN, 0.4], [-0.1, 0.4], [1.5, 0.4]]) assert.throws(() => fixture('group', false, levels));
+  // F09-S08: silent received members are finite scale anchors (-75).
+  for (const levels of [[0, 0.4], [1e-12, 0.4]]) assert.ok(fixture('group', false, levels).state.scope.members.every(x => Number.isFinite(x.scale)));
 });
 
 test('group deduplication uses canonical member closures and never averages unequal actuals', () => {

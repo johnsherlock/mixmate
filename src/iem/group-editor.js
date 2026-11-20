@@ -274,7 +274,7 @@ export function mountGroupEditor({
         }
         ui.message.textContent = durable(result)
           ? settingsStatusText(result.status)
-          : "Group definition is temporary; it was not saved on this device. Choose Export settings here before closing or leaving this page. Check the storage message below; reopen after resolving storage or another-window edits.";
+          : "Group definition is temporary; it was not saved on this device and will be lost when this page closes. Check the storage message below; reopen after resolving storage or another-window edits.";
         if (durable(result)) {
           close();
           ui.saved(settingsStatusText(result.status));
@@ -358,7 +358,7 @@ export function mountGroupEditor({
         ui.name.focus?.();
         ui.cancel.textContent = "Close";
         ui.message.textContent =
-          "Group deletion is temporary; it was not saved on this device. Choose Export settings here before closing or leaving this page. Check the storage message below; reopen after resolving storage or another-window edits.";
+          "Group deletion is temporary; it was not saved on this device and will be lost when this page closes. Check the storage message below; reopen after resolving storage or another-window edits.";
       })
       .catch((error) => {
         if (currentFor(token)) {
@@ -404,7 +404,7 @@ export function mountGroupEditor({
     if (draft && (!available() || !validBinding())) close();
     else paintMembers();
   });
-  ui.bind({ open, close, selectGroup, toggle, clear, save, requestDelete, cancelDelete, confirmDelete, exportSettings() { ui.message.textContent = controller.exportSettings(); } });
+  ui.bind({ open, close, selectGroup, toggle, clear, save, requestDelete, cancelDelete, confirmDelete });
   return {
     open,
     close,

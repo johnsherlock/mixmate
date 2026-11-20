@@ -9,15 +9,27 @@ export function resolveGroupNavigation(groups, requested) {
     : view === 'groups' && requested?.expandedGroupId && !group ? 'Saved group is unavailable; showing group masters.' : '';
   return { view, expandedGroupId: group?.id || null, notice };
 }
-// Display-only start of the full-range group fader: the loudest member's received
-// position. The private session freezes its own anchor at each gesture.
-function referencePosition(group, sources) {
+// Display-only start of the full-range group fader: the loudest member's
+// currently displayed position (F09-S08). That is the received position, or this
+// owner's requested value while its own member gesture/live steps are active (so
+// the cap tracks a member drag instead of flickering). Position 0 (-inf) counts.
+// null only when no member has any finite position. Presentation only: the
+// private session freezes its own anchor at each group gesture.
+const unit = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+export function displayedMemberPosition(source, control) {
+  const selected = control?.selected;
+  if (selected?.kind === 'send' && (control.gestureActive || control.pending) && unit(control.requestedValue) && selected.auxIndex === source?.auxIndex &&
+      (selected.sourceId === source.sourceId || source.levelPeerIds?.includes(selected.sourceId))) return control.requestedValue;
+  return unit(source?.position) ? source.position : null;
+}
+export function groupReferencePosition(group, sources, control) {
   const byId = new Map((sources || []).map(source => [source.sourceId, source]));
-  const values = group.members.map(id => byId.get(id)?.position).filter(value => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1);
+  const values = group.members.map(id => byId.has(id) ? displayedMemberPosition(byId.get(id), control) : null).filter(unit);
   return values.length ? Math.max(...values) : null;
 }
-function master(group, profileId, aux, controls, sources) {
-  return { referencePosition: referencePosition(group, sources), id: `group:${profileId}:${group.id}@${aux}`, renderKey: `group:${profileId}:${group.id}`, kind: 'group', groupId: group.id, name: group.name,
+function master(group, profileId, aux, control, sources) {
+  const controls = Boolean(control);
+  return { referencePosition: groupReferencePosition(group, sources, control), id: `group:${profileId}:${group.id}@${aux}`, renderKey: `group:${profileId}:${group.id}`, kind: 'group', groupId: group.id, name: group.name,
     detail: `${group.members.length} member${group.members.length === 1 ? '' : 's'} · ${controls ? 'common Δ · no group VU' : 'relative level unavailable'}`,
     levelText: 'Unavailable', stateText: controls ? 'Drag or use keys · cap at loudest member · live common Δ' : 'Group level unavailable · read-only', panText: '', browsable: false };
 }
@@ -27,9 +39,9 @@ export function projectGroupNavigation(base, profile, requested) {
   const result = { ...base, groups: groups.map(group => ({ id: group.id, name: group.name })), ...navigation, showAuxMaster: !navigation.expandedGroupId };
   if (navigation.view === 'channels') return result;
   const group = groups.find(group => group.id === navigation.expandedGroupId);
-  if (!group) return { ...result, sources: groups.map(group => master(group, profile.id, base.selectedAux, Boolean(base.control), base.sources)) };
+  if (!group) return { ...result, sources: groups.map(group => master(group, profile.id, base.selectedAux, base.control, base.sources)) };
   const byId = new Map(base.sources.map(source => [source.sourceId, source]));
-  return { ...result, sources: [master(group, profile.id, base.selectedAux, Boolean(base.control), base.sources), ...group.members.map(id => byId.get(id) || {
+  return { ...result, sources: [master(group, profile.id, base.selectedAux, base.control, base.sources), ...group.members.map(id => byId.get(id) || {
     id: `${id}@${base.selectedAux}`, sourceId: id, unresolved: true,
     name: `${sourceLabel(id)} · Unresolved`, detail: 'Not observed for this AUX; retained group member',
     panText: 'Pan unavailable', stateText: 'No received send state',

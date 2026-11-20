@@ -5,7 +5,8 @@ import { createAuxLevelSession } from '../src/iem/aux-level-session.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
 import { LIVE_STREAM_INTERVAL_MS, OBSERVATION_WINDOW_MS, deskFormat, createControlScope, createPeerControlState, transitionControl } from '../src/iem/control-state-model.js';
-import { continuousFaderDB, continuousDBToFader, GROUP_FLOOR_DB, GROUP_MAX_DB, groupTravel, groupReferenceDelta, groupReferencePosition } from '../src/iem/relative-groups.js';
+import { continuousFaderDB, continuousDBToFader, GROUP_FLOOR_SCALE, GROUP_TOP_SCALE, GROUP_MAX_DB, groupTravel, groupReferenceDelta, groupReferencePosition } from '../src/iem/relative-groups.js';
+import { positionToScale } from '../src/iem/fader-scale.js';
 import { auxEqPositionToDb } from '../src/iem/aux-eq-protocol.js';
 import { requestedDrawSamples } from '../src/iem/aux-eq-curve.js';
 import { SettingsRepository, emptySettings } from '../src/settings.js';
@@ -144,14 +145,15 @@ async function groups(members = ['i.0', 'f.0']) {
 }
 const db = message => continuousFaderDB(parseIemStateFrame(message)[0].value);
 
-test('full-range group travel: top puts the loudest member at max, bottom the quietest at the floor, one even delta; never position 0', async () => {
+test('full-range group travel: top puts the loudest member at max, bottom the quietest at -inf (F09-S08), one even scale delta', async () => {
   const app = await groups();
   try {
-    const anchor = { members: [0.35, 0.65].map(value => ({ db: continuousFaderDB(value) })) }, travel = groupTravel(anchor);
-    assert.equal(travel.referenceDb, continuousFaderDB(0.65)); assert.equal(travel.upper, GROUP_MAX_DB - continuousFaderDB(0.65)); assert.equal(travel.lower, GROUP_FLOOR_DB - continuousFaderDB(0.35));
+    const anchor = { members: [0.35, 0.65].map(value => ({ scale: positionToScale(value) })) }, travel = groupTravel(anchor);
+    assert.equal(travel.referenceScale, positionToScale(0.65)); assert.equal(travel.upper, GROUP_TOP_SCALE - positionToScale(0.65)); assert.equal(travel.lower, GROUP_FLOOR_SCALE - positionToScale(0.35));
     assert.equal(groupReferenceDelta(anchor, 0.65), 0); assert.equal(groupReferenceDelta(anchor, 0), travel.lower); assert.equal(groupReferenceDelta(anchor, 1), travel.upper);
     assert.equal(groupReferencePosition(anchor, travel.upper), 1);
-    assert.equal(groupTravel({ members: [{ db: -150 }, { db: -10 }] }).lower, 0, 'quietest already below the floor: no downward travel, never forced up');
+    assert.equal(groupTravel({ members: [{ scale: GROUP_FLOOR_SCALE }, { scale: -10 }] }).lower, 0, 'quietest already at -inf: no downward travel, never forced up');
+    assert.equal(groupTravel({ members: [{ scale: GROUP_FLOOR_SCALE }, { scale: -10 }] }).upper, 20, 'it can still rise');
     assert.equal(app.session.selectGroupTarget('band', 0), true);
     let token = app.session.beginLevelGesture(); assert.equal(app.session.snapshot().control.groupReference, groupReferencePosition(anchor, 0), 'cap starts at the loudest member');
     assert.ok(app.session.previewLevelGesture(token, 1) > 1 - 1e-9);
@@ -163,12 +165,17 @@ test('full-range group travel: top puts the loudest member at max, bottom the qu
     app.session.commitLevelGesture(token, 1); app.echo();
     token = app.session.beginLevelGesture(); assert.ok(token, 'echoed basis re-anchors without Enable');
     app.session.previewLevelGesture(token, 0); top = app.writes().slice(4);
-    assert.ok(Math.abs(Math.min(...top.map(db)) - GROUP_FLOOR_DB) < 1e-9, 'quietest at the floor'); assert.ok(top.every(message => parseIemStateFrame(message)[0].value > 0), 'never silent');
-    const down = top.map((message, index) => db(message) - db(app.writes()[index]));
+    const value = message => parseIemStateFrame(message)[0].value, scale = message => positionToScale(value(message));
+    assert.equal(Math.min(...top.map(value)), 0, 'quietest at -inf (position 0)'); assert.ok(top.some(message => value(message) > 0), 'the louder member keeps its on-screen gap');
+    const down = top.map((message, index) => scale(message) - scale(app.writes()[index]));
     assert.ok(down.every(delta => Math.abs(delta - down[0]) < 1e-9 && delta < 0));
     app.session.previewLevelGesture(token, 0); app.advance(100); assert.equal(app.writes().length, 8, 'clamped further travel sends nothing');
     app.session.commitLevelGesture(token, 0); app.echo(4);
-    assert.ok(app.session.beginLevelGesture(), 'floor values stay finite anchors for the next gesture');
+    const next = app.session.beginLevelGesture(); assert.ok(next, 'a silent member stays a finite anchor for the next gesture');
+    assert.equal(app.session.previewLevelGesture(next, 0), app.session.snapshot().control.groupReference, 'no further downward travel');
+    app.advance(100); assert.equal(app.writes().length, 8);
+    app.session.previewLevelGesture(next, 1); app.advance(100); assert.equal(app.writes().length, 12, 'the group can rise from -inf');
+    assert.ok(app.writes().slice(8).every(message => value(message) > 0)); app.session.commitLevelGesture(next, 1);
   } finally { app.session.disconnect(); await app.repository.close(); }
 });
 

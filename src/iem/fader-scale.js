@@ -1,4 +1,4 @@
-import { continuousFaderDB, continuousDBToFader, GROUP_MAX_DB, GROUP_MIN_DB } from './relative-groups.js';
+import { continuousFaderDB, continuousDBToFader, GROUP_MAX_DB, GROUP_MIN_DB } from './fader-law.js';
 
 // F09-S06 display scale for live level faders (user decision 2026-11-19,
 // docs/iem-aux-level-controls.md); floor lowered to -70 dB by F09-S07 (user
@@ -10,9 +10,11 @@ import { continuousFaderDB, continuousDBToFader, GROUP_MAX_DB, GROUP_MIN_DB } fr
 // short "off" segment (5 scale units, about 6% of travel) maps desk position
 // linearly from the -70 dB position (desk position ~0.025, still > 0) down to
 // 0 (-inf), so an individual fader can still reach silence and received levels
-// below -70 dB display near the bottom without being rewritten. Groups never
-// use that segment for writes: their downward travel stops when the quietest
-// member reaches -70 dB.
+// below -70 dB display near the bottom without being rewritten. Groups (F09-S08,
+// user decision 2026-11-20) move all members by one common delta in these scale
+// units, so in the bottom segment members keep moving equal on-screen distance
+// and downward travel stops when the quietest member reaches scale -75
+// (position 0, -inf).
 export const FADER_SCALE_TOP_DB = 10;
 export const FADER_SCALE_FLOOR_DB = -70;
 export const FADER_SCALE_MIN = -75;
