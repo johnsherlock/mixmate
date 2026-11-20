@@ -1,5 +1,9 @@
 # Relative AUX group levels — F05-S03
 
+## Current F09-S06 dB-linear travel — 2026-11-19
+
+**User decision (2026-11-19):** live level faders use a Demo-style dB-linear display scale ([fader-scale.js](../src/iem/fader-scale.js)): +10…−60 dB linear in dB, then a short bottom segment that maps desk position linearly from the −60 dB position to 0 (−∞). The group cap starts at the loudest member's received level on that scale; a scale move of N dB is one common delta of N dB, so every member above −60 dB moves the same distance (the previous raw-position display made equal dB look like a "ratio"). `GROUP_FLOOR_DB` is now **−60 dB**: the bottom of travel puts the quietest member exactly at −60 dB (the bottom of the dB-linear span); the top still puts the loudest at desk position 1 (+10 dB); a member already below −60 dB gives zero downward travel; a group never writes position 0. The session API, anchor, clamp and wire values are unchanged: the view converts scale ↔ desk position at its boundary. Since F09-S06 a group's received-basis/own-echo wait is bounded by the 2.5 s window ([ADR-0008 amendment](adr/0008-control-state-model.md#f09-s06-amendment--2026-11-19)). The F09-S05 floor text below is superseded.
+
 ## Current F09-S05 live-write reconciliation — 2026-11-18
 
 By explicit user decision the release-only rule is reversed: deliberate gestures stream throttled typed writes while dragging and release sends the final exact value only if it differs ([ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18)). Wire forms, allowlist and factories are unchanged; only timing changes. Group steps stream at 50 ms and member strips preview the requested values live; see [full-range travel](#f09-s05-full-range-travel-and-live-preview--2026-11-18).

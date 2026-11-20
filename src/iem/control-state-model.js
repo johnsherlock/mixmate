@@ -94,7 +94,7 @@ export function createControlState({ scope, generation, revision, now }) {
 // The historical pure constructor remains available to compatibility fixtures.
 // Only the private owner chooses peer policy; this data object grants no sender.
 export function createPeerControlState(input) {
-  return freeze({ ...createControlState(input), peer: true, basis: [], echoes: [] });
+  return freeze({ ...createControlState(input), peer: true, basis: [], echoes: [], unconfirmed: false });
 }
 const row = (s, path) => s.actual.find(x => x.path === path);
 const owns = (s, op) => op && op.generation === s.generation && op.revision === s.revision && op.scope === s.scope;
@@ -149,9 +149,26 @@ function barrier(s) {
   }
 }
 
-function rememberBasis(s, op) {
+const basisResolved = (s, b) => b.members.every(m => (row(s, m.path)?.receipt ?? 0) > m.floor);
+// F09-S06 dropped/coalesced echoes (live 2026-11-19 probes: a re-sent equal
+// value and a reversal within ~5 ms produce no echo; bursts coalesce). The desk
+// broadcasts every change of its stored value, so when no receipt for a written
+// path arrives within the observation window after that write completed, its
+// last received value is the desk's actual value. The received-basis wait is
+// therefore bounded: an unresolved record expires at the window and the next
+// gesture builds on received actual. Nothing is invented, replayed or treated
+// as actual; `unconfirmed` only drives the status text.
+function pruneBasis(s, now) {
+  if (!s.peer || !s.basis.some(b => elapsed(now, b.at) >= OBSERVATION_WINDOW_MS)) return;
+  s.basis = s.basis.filter(b => {
+    if (elapsed(now, b.at) < OBSERVATION_WINDOW_MS) return true;
+    if (!basisResolved(s, b)) s.unconfirmed = true;
+    return false;
+  });
+}
+function rememberBasis(s, op, now) {
   if (!s.peer) return;
-  s.basis = s.basis.filter(b => !b.members.every(m => (row(s, m.path)?.receipt ?? 0) > m.floor));
+  s.basis = s.basis.filter(b => !basisResolved(s, b));
   const members = new Map(op.expected.map(x => [x.path, { path: x.path, floor: x.cutpoint }]));
   let changed;
   do {
@@ -166,7 +183,8 @@ function rememberBasis(s, op) {
     });
   } while (changed);
   if (members.size > 1024 || s.basis.length >= 1024) throw Error('Bounded received-basis capacity exhausted.');
-  s.basis.push({ members: [...members.values()] });
+  // A merged record waits for the newest overlapping write's window.
+  s.basis = [...s.basis, { members: [...members.values()], at: now }];
 }
 // Bounded own-echo journal (peer only): values authorized per path, pruned
 // after the observation window. A match consumes it and every older entry.
@@ -286,7 +304,7 @@ function settleOutcome(s, event, now, allowProgress) {
     op.returned++;
     if (allowProgress && op === s.operation && owns(s, op) && op.status === 'dispatching' && op.returned === op.expected.length) {
       op.status = 'pending'; op.completed = now; s.status = 'pending';
-      rememberBasis(s, op);
+      rememberBasis(s, op, now);
       const sent = new Map(op.expected.map(({ path, target, value }) => [path, { path, target, value }]));
       // Sparse dispatch (every kind since F09-S05): merge sent paths into the
       // full retained coordinate, which is also the next step's sparse basis.
@@ -308,7 +326,7 @@ export function transitionControl(state, input) {
     return freeze(s);
   }
   s.now = now;
-  pruneEchoes(s, now);
+  pruneEchoes(s, now); pruneBasis(s, now);
   if (owns(s, s.operation) && s.operation.status === 'dispatching' && elapsed(now, s.operation.started) >= OBSERVATION_WINDOW_MS) stop(s, 'dispatch-expired');
   if (owns(s, s.operation) && s.operation.status === 'pending' && elapsed(now, s.operation.completed) >= OBSERVATION_WINDOW_MS) {
     s.operation.status = 'sent-unverified'; s.status = 'sent-unverified';
@@ -327,7 +345,9 @@ export function transitionControl(state, input) {
       }
       if (!s.armed || active(s) || s.gesture || !eligible(s)) throw Error('Owned eligible gesture required.');
       // baseDelta/origin freeze the gesture start; streamed steps update chain.
-      s.gesture = { token: freeze({ id: s.nextId++ }), preview: null, baseDelta: s.chain.delta, origin: s.chain.requested, streamed: false }; s.status = 'gesture'; break;
+      s.gesture = { token: freeze({ id: s.nextId++ }), preview: null, baseDelta: s.chain.delta, origin: s.chain.requested, streamed: false }; s.status = 'gesture';
+      if (s.peer) s.unconfirmed = false;
+      break;
     case 'preview': {
       const { token, value } = fields(['token', 'value']);
       if (token !== s.gesture?.token || !s.armed) throw Error('Foreign gesture.');
@@ -422,7 +442,7 @@ export function transitionControl(state, input) {
     case 'new-generation': {
       const { generation, revision, scope } = fields(['generation', 'revision', 'scope']); requireScope(scope);
       if (!uint(generation) || generation <= s.generation || !uint(revision) || revision <= s.revision) throw Error('Explicit new owned generation required.');
-      stop(s, 'generation-invalidated'); retire(s); s.barriers = []; if (s.peer) { s.basis = []; s.echoes = []; } s.generation = generation; s.revision = revision; s.scope = scope; s.scopeCurrent = true;
+      stop(s, 'generation-invalidated'); retire(s); s.barriers = []; if (s.peer) { s.basis = []; s.echoes = []; s.unconfirmed = false; } s.generation = generation; s.revision = revision; s.scope = scope; s.scopeCurrent = true;
       s.actual = scope.members.map(x => ({ path: x.path, value: x.value, receipt: x.receipt })); s.lastReceipt = Math.max(...scope.members.map(x => x.receipt));
       break;
     }

@@ -1,5 +1,13 @@
 # Owned level, group and pan peer runtime — F09-S04
 
+## Bounded basis wait and gesture rendering — F09-S06 (2026-11-19)
+
+| Aspect | Rule |
+| --- | --- |
+| Basis wait | A group/GEQ received-basis record expires at the 2.5 s observation window from its newest write; the model flags `unconfirmed` when a member had no newer receipt and the status says the desk did not report the change and MixMate is using its reported values. The session schedules one timer at the earliest basis/own-echo expiry so the UI re-renders on its own. Incomplete-dispatch barriers are unchanged. |
+| Rendering | During an owned gesture the live controller coalesces session redraws (steps, echoes, meters) to one per animation frame; the gesture end renders immediately. |
+| Display | Level previews/commits stay desk positions; the view converts its dB-linear scale at the boundary. |
+
 ## Live throttled writes — F09-S05 (2026-11-18)
 
 User decision: [ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18) replaces the release-only clauses below. Summary of the private owner (`session-core.js`, `control-state-model.js`):

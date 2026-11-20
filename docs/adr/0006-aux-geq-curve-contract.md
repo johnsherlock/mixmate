@@ -3,6 +3,10 @@
 Date: 2026-11-11
 Status: Accepted; pure implementation merged in [PR #29](https://github.com/johnsherlock/mixmate/pull/29) at `af4f230`. Runtime integration merged in F06-S04 ([PR #49](https://github.com/johnsherlock/mixmate/pull/49) at `5c6a3ca`) through the ADR-0008 peer owner; see [contract § F06-S04](../iem-aux-eq-contract.md#f06-s04-runtimeui-integration--2026-11-18-merged). Targeted live evidence on firmware 3.0.7865-ui24 (one reciprocal pair) is in the [F06-S04 story](../stories/F06-S04.md); broader/physical qualification remains F08-S01.
 
+## F09-S06 note — 2026-11-19
+
+Decision 3 (reject, never clip) still governs the session and draw intents. **2026-11-19 change from the live finding: points saturate at ±15 per band; never reject whole.** The point-intent builder saturates each band the summed bump would push past ±15 dB at exactly ±15 (one-sided; inward moves still work), so a band already at the limit never blocks another point; untouched bands keep exact basis values and the session's range check always passes. Missing echoes bound the received-basis wait to the 2.5 s observation window ([ADR-0008 amendment](0008-control-state-model.md#f09-s06-amendment--2026-11-19)).
+
 ## Context
 
 F06-S02 is merged/published in PR #28 at `0667753`, app 0.5.0/worker `f5c4f38ebcaec5d2`. Official manual and read-only inspection of the publicly linked firmware establish output GEQ rather than input PEQ. The [evidence contract](../iem-aux-eq-contract.md) pins the archive/image/resource hashes, Qt resource provenance and native functions. Native labels include 32 Hz; actual DSP centres/inter-band response and dedicated shelves remain unverified. The user resumed S03 only after the budget checkpoint; S04 is not authorized to start in this run.

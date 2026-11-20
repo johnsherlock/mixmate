@@ -17,24 +17,20 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onP
     if (active?.cap) active.wrap.releasePointerCapture?.(active.id);
     if (active?.token) onCancel(active.input, active.token);
   }
+  // Cap placement reads every fader rect first, then writes every cap, so one
+  // sync forces at most one layout instead of one per fader (F09-S06).
   function sync() {
-    for (const wrap of all(".mm-fader-control")) {
-      const input = wrap.querySelector("input"),
-        cap = wrap.querySelector(".mm-fader-hit");
+    const items = all(".mm-fader-control").map(wrap => {
+      const input = wrap.querySelector("input"), horizontal = input.classList.contains("mm-pan-large"), rect = input.getBoundingClientRect();
+      return { input, horizontal, cap: wrap.querySelector(".mm-fader-hit"), size: horizontal ? rect.width : rect.height };
+    });
+    for (const { input, horizontal, cap, size } of items) {
       const ratio =
         (+input.value - +input.min) / (+input.max - +input.min || 1);
-      if (input.classList.contains("mm-pan-large"))
-        cap.style.left =
-          8 +
-          ratio * Math.max(0, input.getBoundingClientRect().width - 16) +
-          "px";
+      if (horizontal) cap.style.left = 8 + ratio * Math.max(0, size - 16) + "px";
       else {
         const thumb = input.dataset.eqParam ? 24 : 29;
-        cap.style.top =
-          thumb / 2 +
-          (1 - ratio) *
-            Math.max(0, input.getBoundingClientRect().height - thumb) +
-          "px";
+        cap.style.top = thumb / 2 + (1 - ratio) * Math.max(0, size - thumb) + "px";
       }
     }
   }
@@ -65,8 +61,8 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onP
     const preview = onPreview ? onPreview(input, active.token, requested) : requested;
     if (typeof preview !== 'number' || !Number.isFinite(preview)) { cancel(); return; }
     input.value = clamp(preview, +input.min, +input.max);
+    // The bubbling input event repositions caps (root listener) once.
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    sync();
   }
   listen("input", sync);
   listen("click", (event) => {
@@ -114,13 +110,14 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onP
     active.moved = true;
     lastTap = null;
     if (!active.cap) return;
-    const horizontal = active.input.classList.contains("mm-pan-large"),
-      rect = active.input.getBoundingClientRect();
-    const thumb = horizontal ? 16 : active.input.dataset.eqParam ? 24 : 29;
-    const travel = Math.max(
-      20,
-      (horizontal ? rect.width : rect.height) - thumb,
-    );
+    const horizontal = active.input.classList.contains("mm-pan-large");
+    // Travel is measured once per gesture: a redraw mid-drag cannot change the
+    // pointer-to-value mapping (F09-S06).
+    if (active.travel === undefined) {
+      const rect = active.input.getBoundingClientRect(), thumb = horizontal ? 16 : active.input.dataset.eqParam ? 24 : 29;
+      active.travel = Math.max(20, (horizontal ? rect.width : rect.height) - thumb);
+    }
+    const travel = active.travel;
     setValue(
       active,
       active.start +
@@ -212,7 +209,8 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onP
         gesture = { input, token, keyboard: true, cap: false };
       }
       if (!gesture.keyboard || gesture.input !== input) return;
-      const value = event.key === 'Home' ? +input.min : event.key === 'End' ? +input.max : +input.value + direction[event.key] * (+input.dataset.gestureStep || +input.step || 0.001);
+      // data-key-step lets dB-scale faders step 0.5 dB while pointer moves keep finer resolution.
+      const value = event.key === 'Home' ? +input.min : event.key === 'End' ? +input.max : +input.value + direction[event.key] * (+input.dataset.keyStep || +input.dataset.gestureStep || +input.step || 0.001);
       setValue(gesture, value);
       return;
     }

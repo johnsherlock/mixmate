@@ -2563,7 +2563,7 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-strip-detail,
 #mixmate-iem-concept[data-mode="live"] .mm-live-meter-caption,
 #mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state {display:none}
-#mixmate-iem-concept[data-mode="live"] .mm-strip {position:relative;padding-bottom:24px}
+#mixmate-iem-concept[data-mode="live"] .mm-strip {position:relative;padding-bottom:24px;isolation:isolate}
 #mixmate-iem-concept[data-mode="live"] .mm-detail-button {position:absolute;bottom:2px;right:3px;min-height:22px;height:22px;padding:1px 4px;font-size:10px;z-index:2}
 #mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-pan-button {position:absolute;inset:auto auto 2px 3px;width:calc(100% - 58px);min-height:22px;height:22px;max-height:22px;margin:0;padding:1px 3px;clip:auto;clip-path:none;line-height:18px}
 #mixmate-iem-concept[data-mode="live"] .mm-pan-readout {display:none}
@@ -2625,3 +2625,32 @@ body {
   outline-offset: -6px;
   opacity: .85;
 }
+
+/* F09-S06 stable geometry during gestures: a strip's state line is one fixed
+   12px single-line overlay (absolute, no layout height, no pointer events,
+   semi-transparent, under the fader caps) directly above the Pan/Details row in
+   every live layout, hidden by visibility, never by display,
+   so it neither costs fader travel nor resizes .mm-fader-space mid-drag. Full
+   text stays in its title and Details. Header/footer status text is one
+   ellipsised line whose length never changes the row wrapping. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-live-strip-state,
+#mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{display:block;visibility:hidden;position:absolute;left:3px;right:3px;bottom:24px;z-index:1;pointer-events:none;box-sizing:border-box;width:auto;height:12px;min-height:12px;max-height:12px;flex:none;margin:0;padding:1px 6px;font-size:9px;line-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;clip:auto;clip-path:none;background:#13191b99;border-radius:2px}
+/* The overlay sits in the fader space's bottom padding band just above the
+   Pan/Details row; caps always paint above it, so a cap at the bottom of travel
+   is never hidden. Live strips are isolated stacking contexts, so this z-index
+   (and the overlay/Details z-indexes) never leak above the sticky group strip
+   of an expanded group. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip .mm-fader-control{z-index:2}
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{visibility:visible}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip > .mm-live-strip-state,
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{position:absolute;width:1px;height:1px;min-height:0;max-height:1px;flex-basis:auto;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;visibility:visible}
+#mixmate-iem-concept[data-mode="live"] .mm-preview .mm-feedback{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mixmate-iem-concept[data-mode="live"][data-orientation="portrait"] .mm-preview .mm-feedback{flex:1 1 100%;white-space:nowrap}
+#mixmate-iem-concept[data-mode="live"] .mm-mode-label{white-space:nowrap;flex-shrink:0;min-width:27ch}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-mode-label{min-width:0}
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-dirty{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state{display:none}
+/* One line, sized so "-14.7 dB" fits a landscape bank strip; a wrap would resize the fader mid-drag. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-value{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px;line-height:20px;padding-inline:0}

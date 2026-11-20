@@ -2,6 +2,10 @@
 
 Date: 2026-11-09. Story: [F03-S02](stories/F03-S02.md). Baseline: reviewed `main` at `c721b9f` (F03-S01 / PR #16). No mixer connection, writer, meter decoder or active wire-permission change is part of this story.
 
+## Current F09-S06 gesture geometry — 2026-11-19
+
+Live strips must not change geometry during a gesture: the strip state line is one fixed 16px single-line absolute overlay above the Pan/Details row (no layout height or pointer events, ellipsis, visibility toggled by `data-actionable`, full text in title/Details; ultra-compact keeps it visually hidden), the value readout is one line, header feedback and footer status are single-line flex-basis-0 items and the mode label has a fixed minimum width. `gestures.js` measures travel once per drag, batches cap sync reads before writes and supports `data-key-step`; the live controller coalesces session redraws to one per animation frame while an owned gesture is active. Live level faders use the dB-linear display scale with dB ticks ([level controls](iem-aux-level-controls.md#current-f09-s06-display-scale-and-drag-geometry--2026-11-19)). Keyed nodes, cap/double-track/scroll touch rules, phone portrait three-column banks and compact landscape travel are unchanged.
+
 ## Scoped implementation plan
 
 1. Preserve the accepted standalone reference and root connection/input-fader test.
