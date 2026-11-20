@@ -347,3 +347,21 @@ Implementation on `codex/f09-s06-fader-feel-and-eq` (from main `7d8a8cb`). User 
 - **Tests.** Intentional expectation updates: presentation tests (dB-scale input values/ticks, formatted strip text with raw value in title/Details), the S05 group basis test (checks the wait before the window), the GEQ unechoed-write test (blocking within the window) and status regexes for the new copy.
 
 Live checks outstanding: listed in [F09-S06](stories/F09-S06.md#needs-live-acceptance-root-story-scoped-standing-permission). F08-S01 remains parked.
+
+## F09-S07 −70 dB floor, strip cleanup and persistent GEQ points — 2026-11-20
+
+Implementation on `codex/f09-s07-points-floor-cleanup` (from main `50e24d5`, F09-S06 merged in PR #52). User desk feedback on F09-S06 (fw 3.0.7865-ui24) plus root's live GEQ finding: FREQ/WIDTH sent nothing ("Unchanged requested coordinate; no commands sent") because point gains reset to 0 after every release.
+
+- **User decisions (2026-11-20, recorded by root):** the fader/group floor is −70 dB; the per-strip state line and the Details button are not in the design (Details only behind `?debug`); GEQ points behave like the Demo's persistent parametric points.
+- **Story-agent routine decisions, for review:**
+  - Scale: `FADER_SCALE_MIN = −75` keeps a 5-unit bottom segment (about 6% of travel instead of 7%); −70 dB is desk position ≈0.0252.
+  - Ruler: compact layouts drop the −∞ label (−70 and −∞ are 5/85 of travel apart). Portrait and wide landscape show both labels.
+  - The group strip's bottom note ("Last requested gesture Δ" / "Live Δ · sending while you drag") is removed with the state line. The hidden group selection/"Select level" element stays (it was already `display:none` in live mode).
+  - Strip status text moves to the fader space's `title` tooltip, which is attribute-only and set only when it changes. Requested raw values stay in that tooltip and in the debug-only Details.
+  - Compact group readout: the "Δ " prefix is a separate span that compact landscape hides. Font and fader geometry are unchanged.
+  - Anchor match: the view duplicates the owner's request-side rules locally, 10-significant-digit desk formatting and a 1e-9 epsilon, because only `session-core.js` may import `control-state-model.js`.
+  - A cancelled points gesture (mode switch, point change, pointer cancel) keeps the moved points and marks the anchor interrupted. At the next begin it restarts only if the curve no longer matches, with the neutral status "The last point change was interrupted; points restarted from the current curve." Any draw gesture, committed or cancelled, drops the anchor.
+  - Re-anchoring happens only at gesture begin (and silently on open/draw/reset). Between gestures, handles may show over a stale base until the next gesture after a native edit.
+- **Tests.** Intentional expectation updates: −70 floor/scale tests (the member-below-floor fixture moves from 0.03 ≈ −67.9 dB to 0.02 ≈ −72.7 dB), ruler ticks, group strip text (now tooltip and Δ spans), CSS geometry rule test (overlay removed), channel-detail mount with `debug: true`. The "points return to 0 dB Δ" UI test is replaced by five persistent-point tests.
+
+Live checks outstanding: listed in [F09-S07](stories/F09-S07.md#live-acceptance-pending-root). F08-S01 remains parked.
