@@ -1,5 +1,10 @@
 // Device-local definitions only. No mixer state or transport capability belongs here.
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
+// F02-S05 (user decision 2026-11-20): rigs are named by the desk's current
+// snapshot and created automatically, so the cap is larger than the old 32
+// hand-made rigs. Known private addresses are a bounded most-recent-first list.
+export const RIG_LIMIT = 128;
+export const KNOWN_ADDRESS_LIMIT = 8;
 export const SETTINGS_DB = 'mixmate-settings';
 const STORE = 'settings';
 const KEY = 'current';
@@ -53,35 +58,72 @@ function address(value) {
   return value;
 }
 export function emptySettings() {
-  return { version: SETTINGS_VERSION, profiles: [], selectedProfileId: null, localDefinitions: null, preferences: { orientation: 'auto', showMeters: true } };
+  return { version: SETTINGS_VERSION, profiles: [], selectedProfileId: null, knownAddresses: [], preferences: { orientation: 'auto', showMeters: true } };
+}
+export const emptyNavigation = () => ({ mixId: null, view: 'groups', expandedGroupId: null });
+// A rig name is the desk's received current-snapshot name, trimmed: 1–80
+// characters, no control characters. Anything else is no rig (null), never a
+// mangled, truncated or fabricated name.
+export function snapshotRigName(value) {
+  if (typeof value !== 'string' || value.length > 1024) return null;
+  try { return name(value); } catch { return null; }
+}
+const rigName = value => { const result = name(value); if (result !== value) invalid('Rig names must be trimmed.'); return result; };
+export function validPrivateAddress(value) {
+  try { return address(value); } catch { return null; }
+}
+// Most recent first, deduplicated and capped; returns a new list.
+export function promoteKnownAddress(list, value) {
+  const accepted = address(value);
+  return [accepted, ...list.filter(item => item !== accepted)].slice(0, KNOWN_ADDRESS_LIMIT);
 }
 
-// Strictly validate either known document format before pure v1 → v2 migration.
+// Strictly validate the current or a known legacy document format. Legacy v1/v2
+// documents migrate purely on read to v3: their address-identified profiles,
+// groups and device-local definitions are discarded (F02-S05 user decision
+// 2026-11-20); their private addresses seed the known-address list.
 // Reading never writes; the store/database layout remains version 1.
 export function validateSettings(value) {
   // Recognize an unsupported envelope before checking fields from this version.
   const version = value && typeof value === 'object' ? Object.getOwnPropertyDescriptor(value, 'version') : null;
-  if (version && 'value' in version && Number.isInteger(version.value) && ![1, SETTINGS_VERSION].includes(version.value)) throw new SettingsVersionError('Unsupported settings version.');
-  const legacy = version?.value === 1;
-  const data = record(value, ['version', 'profiles', 'selectedProfileId', 'preferences', ...legacy ? [] : ['localDefinitions']]);
-  if (![1, SETTINGS_VERSION].includes(data.version)) throw new SettingsVersionError('Unsupported settings version.');
+  if (version && 'value' in version && Number.isInteger(version.value) && ![1, 2, SETTINGS_VERSION].includes(version.value)) throw new SettingsVersionError('Unsupported settings version.');
+  if (version && 'value' in version && (version.value === 1 || version.value === 2)) return migrateLegacy(value, version.value);
+  const data = record(value, ['version', 'profiles', 'selectedProfileId', 'knownAddresses', 'preferences']);
+  if (data.version !== SETTINGS_VERSION) throw new SettingsVersionError('Unsupported settings version.');
+  const profiles = unique(unique(list(data.profiles, RIG_LIMIT, raw => {
+    const profile = record(raw, ['id', 'name', 'groups', 'navigation']);
+    const { groups, navigation } = groupDefinitions(profile);
+    return { id: id(profile.id), name: rigName(profile.name), groups, navigation };
+  }), profile => profile.id), profile => profile.name);
+  const selectedProfileId = data.selectedProfileId === null ? null : id(data.selectedProfileId);
+  if (selectedProfileId !== null && !profiles.some(profile => profile.id === selectedProfileId)) invalid('Selected profile does not exist.');
+  const knownAddresses = unique(list(data.knownAddresses, KNOWN_ADDRESS_LIMIT, address));
+  return { version: SETTINGS_VERSION, profiles, selectedProfileId, knownAddresses, preferences: validatePreferences(data.preferences) };
+}
+function validatePreferences(value) {
+  const preferences = record(value, ['orientation', 'showMeters']);
+  if (typeof preferences.showMeters !== 'boolean') invalid('Invalid meter preference.');
+  return { orientation: choice(preferences.orientation, ['auto', 'portrait', 'landscape']), showMeters: preferences.showMeters };
+}
+// A legacy record is still validated strictly (a malformed old record stays
+// corrupt-data and untouched); only then are its definitions discarded.
+function migrateLegacy(value, legacyVersion) {
+  const data = record(value, ['version', 'profiles', 'selectedProfileId', 'preferences', ...legacyVersion === 1 ? [] : ['localDefinitions']]);
   const profiles = unique(list(data.profiles, 32, raw => {
     const profile = record(raw, ['id', 'name', 'address', 'groups', 'navigation']);
-    const { groups, navigation } = groupDefinitions(profile);
-    return { id: id(profile.id), name: name(profile.name), address: address(profile.address), groups,
-      navigation };
+    groupDefinitions(profile);
+    return { id: id(profile.id), name: name(profile.name), address: address(profile.address) };
   }), profile => profile.id);
   const selectedProfileId = data.selectedProfileId === null ? null : id(data.selectedProfileId);
   if (selectedProfileId !== null && !profiles.some(profile => profile.id === selectedProfileId)) invalid('Selected profile does not exist.');
-  const preferences = record(data.preferences, ['orientation', 'showMeters']);
-  if (typeof preferences.showMeters !== 'boolean') invalid('Invalid meter preference.');
-  const local = legacy ? null : data.localDefinitions;
-  const localDefinitions = local === null ? null : (() => {
-    const definition = record(local, ['id', 'groups', 'navigation']);
-    return { id: id(definition.id), ...groupDefinitions(definition) };
-  })();
-  return { version: SETTINGS_VERSION, profiles, selectedProfileId, localDefinitions,
-    preferences: { orientation: choice(preferences.orientation, ['auto', 'portrait', 'landscape']), showMeters: preferences.showMeters } };
+  if (legacyVersion === 2 && data.localDefinitions !== null) {
+    const definition = record(data.localDefinitions, ['id', 'groups', 'navigation']);
+    id(definition.id); groupDefinitions(definition);
+  }
+  // The previously selected rig's address is the most likely current desk.
+  const ordered = [...profiles.filter(profile => profile.id === selectedProfileId), ...profiles.filter(profile => profile.id !== selectedProfileId)];
+  const knownAddresses = [...new Set(ordered.map(profile => profile.address))].slice(0, KNOWN_ADDRESS_LIMIT);
+  return { version: SETTINGS_VERSION, profiles: [], selectedProfileId: null, knownAddresses, preferences: validatePreferences(data.preferences) };
 }
 
 function groupDefinitions(definition) {
@@ -100,13 +142,12 @@ function groupDefinitions(definition) {
 export function validateDefinitionOwner(value) {
   if (value === null) return null;
   const owner = record(value, ['kind', 'id']);
-  return { kind: choice(owner.kind, ['profile', 'local']), id: id(owner.id) };
+  return { kind: choice(owner.kind, ['profile']), id: id(owner.id) };
 }
 export function definitionOwner(settings, value) {
   const owner = validateDefinitionOwner(value);
   if (!owner) return null;
-  return owner.kind === 'profile' ? settings.profiles.find(profile => profile.id === owner.id) || null
-    : settings.localDefinitions?.id === owner.id ? settings.localDefinitions : null;
+  return settings.profiles.find(profile => profile.id === owner.id) || null;
 }
 
 function openDatabase(factory, timeoutMs) {

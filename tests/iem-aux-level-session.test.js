@@ -126,22 +126,22 @@ class Events {
   setCustomValidity() {} reportValidity() {}
 }
 test('controller selection/profile/group/editor/dialog/hide/navigation contexts cancel and never restore arming', async () => {
-  for (const action of ['group', 'all', 'overview', 'address', 'profile', 'hide', 'pagehide', 'navigate', 'dialog-editor', 'definitions']) {
+  for (const action of ['group', 'all', 'overview', 'snapshot', 'hide', 'pagehide', 'navigate', 'dialog-editor', 'definitions']) {
     const app = setup(), settings = emptySettings(); let publish;
-    settings.profiles = ['one', 'two'].map(id => ({ id, name: id, address: '192.168.0.60', groups: [{ id: 'band', name: 'Band', members: ['i.0'] }], navigation: { mixId: null, view: 'channels', expandedGroupId: null } })); settings.selectedProfileId = 'one';
+    settings.profiles = ['one', 'two'].map(id => ({ id, name: id, groups: [{ id: 'band', name: 'Band', members: ['i.0'] }], navigation: { mixId: null, view: 'channels', expandedGroupId: null } })); settings.selectedProfileId = 'one';
     const repository = { initialize: async () => ({ settings, status: { mode: 'persistent' } }), snapshot: () => ({ settings, status: { mode: 'persistent' } }), subscribe(fn) { publish = fn; return () => {}; } };
     const field = value => Object.assign(new Events(), { value });
     const ui = { address: field('192.168.0.60'), profile: field(''), connect: field(''), disconnect: field(''), note: field(''), settings: field(''), form: new Events(), navigation: [new Events()], close() {}, profiles(rows, id = '') { this.profile.value = id; } };
     const view = { render() {}, renderMeters() {}, preferences() {}, destroy() {} }, document = Object.assign(new Events(), { hidden: false }), window = new Events();
     const controller = mountLiveController({ session: app.session, repository, view, ui, document, window });
-    await controller.ready; app.connect(); controller.selectAux(0);
+    await controller.ready; const socket = app.connect(LIVE + '\nSETS^var.currentSnapshot^one'); controller.selectAux(0);
     if (action === 'all') controller.toggleGroup('band');
     controller.selectLevel(send); app.session.armLevel(); const token = app.session.beginLevelGesture(); assert.ok(token);
     if (action === 'group') controller.toggleGroup('band');
     if (action === 'all') controller.allChannels();
     if (action === 'overview') controller.overview();
-    if (action === 'address') { ui.address.value = '192.168.1.60'; ui.address.emit('input'); }
-    if (action === 'profile') { ui.profile.value = 'two'; ui.profile.emit('change'); }
+    // F02-S05: a desk snapshot recall switches the rig and cancels; the socket stays.
+    if (action === 'snapshot') { socket.receive('3:::SETS^var.currentSnapshot^two'); assert.equal(controller.context().profileId, 'two'); assert.equal(app.session.snapshot().phase, 'live'); }
     if (action === 'hide') { document.hidden = true; document.emit('visibilitychange'); }
     if (action === 'pagehide') window.emit('pagehide');
     if (action === 'navigate') ui.navigation[0].emit('click');
@@ -167,7 +167,7 @@ test('closed socket or hidden document discovered before callbacks clears author
 
 async function groupFixture(members = ['i.0', 'f.0']) {
   const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
-  settings.profiles = ['one', 'two'].map((id, n) => ({ id, name: id, address: '192.168.0.60', groups: [{ id: 'band', name: '<Band>', members: n ? ['p.0'] : members }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }));
+  settings.profiles = ['one', 'two'].map((id, n) => ({ id, name: id, groups: [{ id: 'band', name: '<Band>', members: n ? ['p.0'] : members }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }));
   settings.selectedProfileId = 'two'; await repository.replace(settings);
   const app = setup(createAuxLevelSession, { settingsRepository: repository }), socket = app.connect();
   socket.receive('3:::SETD^i.0.aux.0.value^0.35\nSETD^f.0.aux.0.value^0.65\nSETD^p.0.stereoIndex^-1\nSETD^p.0.aux.0.value^0.3');
@@ -453,22 +453,22 @@ test('peer group outstanding basis survives subset selection, recovers from hist
   } finally { app.session.disconnect(); await app.repository.close(); }
 });
 
-test('F04-S05 device-local group owners drive relative groups and any owner change cancels obsolete control intent', async () => {
+test('F02-S05 snapshot-rig group owners drive relative groups and any owner change cancels obsolete control intent', async () => {
   const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
-  settings.profiles = [{ id: 'rig', name: 'rig', address: '192.168.0.60', groups: [{ id: 'band', name: 'Rig band', members: ['p.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }];
-  settings.localDefinitions = { id: 'local-set', groups: [{ id: 'band', name: 'Local band', members: ['i.0', 'f.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
+  settings.profiles = [{ id: 'rig', name: 'rig', groups: [{ id: 'band', name: 'Rig band', members: ['p.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }];
+  settings.profiles.push({ id: 'local-set', name: 'Snapshot A', groups: [{ id: 'band', name: 'Local band', members: ['i.0', 'f.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } });
   await repository.replace(settings);
   const app = setup(createAuxLevelSession, { settingsRepository: repository }), socket = app.connect();
   socket.receive('3:::SETD^i.0.aux.0.value^0.35\nSETD^f.0.aux.0.value^0.65\nSETD^p.0.stereoIndex^-1\nSETD^p.0.aux.0.value^0.3');
   try {
-    app.session.bindGroupOwner({ kind: 'local', id: 'local-set' });
+    app.session.bindGroupOwner({ kind: 'profile', id: 'local-set' });
     assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
     let token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, ref(app, 2)); app.session.commitLevelGesture(token, 2);
     assert.deepEqual(writes(socket).map(message => parseIemStateFrame(message)[0].sourceId), ['i.0', 'f.0']);
     for (const message of writes(socket)) socket.receive(message);
     let sent = writes(socket).length;
-    for (const next of [{ kind: 'profile', id: 'rig' }, null, { kind: 'local', id: 'other-local' }, { kind: 'mixer', id: 'rig' }, { kind: 'local', id: 'local-set', members: ['i.0'] }]) {
-      app.session.bindGroupOwner({ kind: 'local', id: 'local-set' });
+    for (const next of [{ kind: 'profile', id: 'rig' }, null, { kind: 'profile', id: 'other-local' }, { kind: 'mixer', id: 'rig' }, { kind: 'profile', id: 'local-set', members: ['i.0'] }]) {
+      app.session.bindGroupOwner({ kind: 'profile', id: 'local-set' });
       assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
       token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, ref(app, 1));
       // Live steps already applied stay (no rollback); their echoes are own echoes.
@@ -479,7 +479,8 @@ test('F04-S05 device-local group owners drive relative groups and any owner chan
       assert.equal(app.session.snapshot().control.armed, false); assert.equal(writes(socket).length, sent);
     }
     // Invalid or unknown owners address nothing; an unchanged owner is not a change.
-    app.session.bindGroupOwner({ kind: 'local', id: 'other-local' }); assert.equal(app.session.selectGroupTarget('band', 0), false);
+    app.session.bindGroupOwner({ kind: 'profile', id: 'other-local' }); assert.equal(app.session.selectGroupTarget('band', 0), false);
+    app.session.bindGroupOwner({ kind: 'local', id: 'local-set' }); assert.equal(app.session.selectGroupTarget('band', 0), false, 'device-local owners no longer exist (F02-S05)');
     app.session.bindGroupOwner({ kind: 'profile', id: 'rig' }); assert.equal(app.session.selectGroupTarget('band', 0), true); assert.equal(app.session.armLevel(), true);
     const before = JSON.stringify(app.session.snapshot().control); app.session.bindGroupOwner({ kind: 'profile', id: 'rig' }); assert.equal(JSON.stringify(app.session.snapshot().control), before);
     token = app.session.beginLevelGesture(); app.session.previewLevelGesture(token, 1); app.session.commitLevelGesture(token, 1);

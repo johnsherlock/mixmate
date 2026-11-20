@@ -134,29 +134,34 @@ function controllerFixture(repository, transportOptions = {}) {
     address: field('192.168.0.60'), profile: field(''), connect: field(''), disconnect: field(''), note: field(''), settings: field(''), form: new Events(), navigation: [new Events()],
     close() { this.closed = true; }, profiles(profiles, selected = '') { this.profileOptions = structuredClone(profiles); this.profile.value = selected; },
   };
-  const view = { renders: [], render(model) { this.renders.push(model); }, preferences(value) { this.preferred = value; }, destroy() { this.destroyed = true; } };
+  const view = { renders: [], render(model) { this.renders.push(model); }, preferences(value) { this.preferred = value; }, snapshotName(text) { this.snapshot = text; }, destroy() { this.destroyed = true; } };
   const document = Object.assign(new Events(), { hidden: false }), window = new Events();
   const controller = mountLiveController({ session: transport.session, repository, view, ui, document, window });
   return { ...transport, ui, view, document, window, controller };
 }
 function localSettings() {
   const settings = emptySettings();
-  settings.profiles = [{ id: 'rigA', name: '<img src=x>', address: '192.168.1.60', groups: [], navigation: { mixId: null, view: 'channels', expandedGroupId: null } }, { id: 'rigB', name: 'Other rig', address: '10.0.0.2', groups: [], navigation: { mixId: null, view: 'channels', expandedGroupId: null } }];
+  settings.profiles = [{ id: 'rigA', name: '<img src=x>', groups: [], navigation: { mixId: null, view: 'channels', expandedGroupId: null } }, { id: 'rigB', name: 'Other rig', groups: [], navigation: { mixId: null, view: 'channels', expandedGroupId: null } }];
   settings.selectedProfileId = 'rigA'; settings.preferences.orientation = 'portrait';
   return { settings, status: { mode: 'persistent' } };
 }
-test('saved rigs/preferences fill untouched controls without connecting; profile or address edits clear synchronously', async () => {
-  const app = controllerFixture({ initialize: async () => localSettings(), update() { throw Error('IEM must not persist mixer/profile changes'); } });
+test('F02-S05 offline last-used rig and known address fill untouched controls without connecting; the received snapshot name selects the rig live', async () => {
+  const repository = new SettingsRepository({ indexedDB: undefined }), seeded = localSettings().settings;
+  seeded.knownAddresses = ['192.168.1.60', '10.0.0.2']; await repository.replace(seeded);
+  const app = controllerFixture(repository);
   await app.controller.ready;
-  assert.equal(app.ui.address.value, '192.168.1.60'); assert.equal(app.sockets.length, 0); assert.equal(app.ui.profileOptions[0].name, '<img src=x>'); assert.equal(app.view.preferred.orientation, 'portrait');
-  app.ui.form.emit('submit'); const first = app.sockets[0]; first.open(); first.receive(LIVE); app.controller.selectAux(0);
+  assert.equal(app.ui.address.value, '192.168.1.60'); assert.equal(app.sockets.length, 0); assert.equal(app.view.preferred.orientation, 'portrait');
+  assert.equal(app.controller.context().profileId, 'rigA', 'offline Edit Groups uses the last-used rig');
+  app.ui.form.emit('submit'); const first = app.sockets[0]; assert.equal(first.url, 'ws://192.168.1.60/'); first.open(); first.receive(LIVE + '\nSETS^var.currentSnapshot^Other rig'); app.controller.selectAux(0);
+  assert.equal(app.controller.context().profileId, 'rigB'); assert.equal(app.view.snapshot, 'Other rig');
   assert.equal(app.view.renders.at(-1).selectedAux, 0);
-  app.ui.profile.value = 'rigB'; app.ui.profile.emit('change');
-  assert.equal(first.readyState, 3); assert.equal(app.session.snapshot().observations.size, 0); assert.equal(app.ui.address.value, '10.0.0.2'); assert.equal(app.sockets.length, 1);
-  app.ui.form.emit('submit'); app.sockets[1].open(); app.sockets[1].receive(LIVE);
+  // Address edits are no longer rig identity and never interrupt the session.
   app.ui.address.value = '192.168.0.61'; app.ui.address.emit('input');
-  assert.equal(app.sockets[1].readyState, 3); assert.equal(app.ui.profile.value, ''); assert.equal(app.view.renders.at(-1).mixes.length, 0); assert.equal(app.sockets.length, 2);
-  app.controller.destroy();
+  assert.equal(first.readyState, 1); assert.equal(app.controller.context().profileId, 'rigB');
+  first.receive('3:::SETS^var.currentSnapshot^<img src=x>');
+  assert.equal(app.controller.context().profileId, 'rigA'); assert.equal(first.readyState, 1); assert.equal(app.view.snapshot, '<img src=x>');
+  await app.controller.whenRigIdle(); assert.equal(repository.snapshot().settings.selectedProfileId, 'rigA');
+  app.controller.destroy(); await repository.close();
 });
 test('manual Connect remains available while settings load, and late settings cannot retarget/repopulate a session', async () => {
   let finish;
@@ -164,7 +169,7 @@ test('manual Connect remains available while settings load, and late settings ca
   assert.equal(app.ui.connect.disabled, false);
   app.ui.address.value = '10.10.1.2'; app.ui.address.emit('input'); app.ui.form.emit('submit'); app.sockets[0].open(); app.sockets[0].receive(LIVE);
   finish(localSettings()); await app.controller.ready;
-  assert.equal(app.ui.address.value, '10.10.1.2'); assert.equal(app.ui.profile.value, ''); assert.equal(app.sockets[0].url, 'ws://10.10.1.2/'); assert.equal(app.sockets.length, 1);
+  assert.equal(app.ui.address.value, '10.10.1.2'); assert.equal(app.sockets[0].url, 'ws://10.10.1.2/'); assert.equal(app.sockets.length, 1);
   app.controller.destroy(); assert.equal(app.timers.jobs.size, 0);
 });
 test('hide, pagehide and mode navigation clear current state and never reconnect on return or late settings', async () => {
@@ -348,28 +353,41 @@ test('an already-queued old flush cannot discard the new generation pending hand
 });
 
 
-test('group binding uses only selected stable rig identity and detaches on manual or early-touched targets', async () => {
-  const settings = localSettings(); settings.settings.profiles[1].address = settings.settings.profiles[0].address;
-  const app = controllerFixture({ initialize: async () => settings }); await app.controller.ready;
-  assert.equal(app.controller.context().profileId, 'rigA');
-  app.ui.profile.value = 'rigB'; app.ui.profile.emit('change');
-  assert.equal(app.controller.context().profileId, 'rigB'); // Same address, different explicit identity.
-  app.ui.address.emit('input'); assert.equal(app.controller.context().profileId, null);
-  app.controller.destroy();
-  let finish;
-  const early = controllerFixture({ initialize: () => new Promise(resolve => { finish = resolve; }) });
-  early.ui.address.value = '192.168.1.60'; early.ui.address.emit('input'); early.ui.form.emit('submit');
-  finish(settings); await early.controller.ready;
-  assert.equal(early.controller.context().profileId, null);
-  assert.equal(early.ui.profile.value, '');
-  early.controller.destroy();
+test('F02-S05 empty, invalid or missing snapshot names mean no rig with a reason; disconnect clears the received name', async () => {
+  for (const [frame, reason] of [
+    ['\nSETS^var.currentSnapshot^', /no usable snapshot name/],
+    ['\nSETS^var.currentSnapshot^   ', /no usable snapshot name/],
+    [`\nSETS^var.currentSnapshot^${'x'.repeat(81)}`, /no usable snapshot name/],
+    ['\nSETS^var.currentSnapshot^bad\tname', /no usable snapshot name/],
+    ['\nSETD^var.currentSnapshot^1', /has not reported a current snapshot name/],
+    ['', /has not reported a current snapshot name/],
+  ]) {
+    const repository = new SettingsRepository({ indexedDB: undefined }); await repository.replace(localSettings().settings);
+    const app = controllerFixture(repository); await app.controller.ready;
+    app.ui.form.emit('submit'); const socket = app.sockets[0]; socket.open(); socket.receive(LIVE + frame);
+    const context = app.controller.context();
+    assert.equal(context.profileId, null, JSON.stringify(frame)); assert.equal(context.owner, null); assert.match(context.unavailableReason, reason);
+    assert.match(app.view.renders.at(-1).status, reason); assert.equal(app.view.snapshot, 'Unavailable');
+    await app.controller.whenRigIdle();
+    assert.equal(repository.snapshot().settings.profiles.length, 2, 'no fabricated rig');
+    app.controller.destroy(); await repository.close();
+  }
+  const repository = new SettingsRepository({ indexedDB: undefined }); await repository.replace(localSettings().settings);
+  const app = controllerFixture(repository); await app.controller.ready;
+  app.ui.form.emit('submit'); app.sockets[0].open(); app.sockets[0].receive(LIVE + '\nSETS^var.currentSnapshot^Other rig');
+  assert.equal(app.view.snapshot, 'Other rig'); assert.equal(app.controller.context().profileId, 'rigB');
+  await app.controller.whenRigIdle();
+  app.ui.disconnect.emit('click');
+  assert.equal(app.session.snapshot().observations.has('var.currentSnapshot'), false); assert.equal(app.view.snapshot, 'Unavailable');
+  assert.equal(app.controller.context().profileId, 'rigB', 'the last-used rig stays available offline');
+  app.controller.destroy(); await repository.close();
 });
 
 test('live group draft survives names/meters but closes when incoming output mode invalidates its AUX', async () => {
   const repository = new SettingsRepository({ indexedDB: undefined }); await repository.replace(localSettings().settings);
   const app = controllerFixture({ initialize: async () => repository.snapshot() }); await app.controller.ready;
   app.ui.form.emit('submit'); const socket = app.sockets[0]; socket.open();
-  socket.receive(LIVE + '\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.4\nSETD^i.0.aux.0.value^0.3\nSETD^l.0.aux.0.value^0.2\nSETD^p.1.aux.0.value^0.1\nSETD^f.0.aux.0.value^0.5');
+  socket.receive(LIVE + '\nSETS^var.currentSnapshot^<img src=x>\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.4\nSETD^i.0.aux.0.value^0.3\nSETD^l.0.aux.0.value^0.2\nSETD^p.1.aux.0.value^0.1\nSETD^f.0.aux.0.value^0.5');
   app.controller.selectAux(0);
   const ui = { name: {}, cancel: {}, save: {}, message: {}, status: {}, bind(actions) { this.actions = actions; },
     show() { this.visible = true; }, hide() { this.visible = false; }, choices() {}, members(catalog, selected) { this.catalog = catalog; this.selected = [...selected]; this.paints = (this.paints || 0) + 1; }, busy() {}, saved() {}, destroy() {} };
@@ -395,10 +413,10 @@ test('live group draft survives names/meters but closes when incoming output mod
 
 
 test('lifecycle/target changes cancel queued group Save before it can persist or retarget', async () => {
-  for (const action of ['hide', 'pagehide', 'navigation', 'disconnect', 'profile', 'address', 'aux']) {
+  for (const action of ['hide', 'pagehide', 'navigation', 'disconnect', 'snapshot', 'aux']) {
     const repository = new SettingsRepository({ indexedDB: undefined }); await repository.replace(localSettings().settings);
     const app = controllerFixture({ initialize: async () => repository.snapshot() }); await app.controller.ready;
-    app.ui.form.emit('submit'); const socket = app.sockets[0]; socket.open(); socket.receive(LIVE + '\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.5'); app.controller.selectAux(0);
+    app.ui.form.emit('submit'); const socket = app.sockets[0]; socket.open(); socket.receive(LIVE + '\nSETS^var.currentSnapshot^<img src=x>\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.5'); app.controller.selectAux(0);
     const ui = { name: {}, cancel: {}, save: {}, message: {}, status: {}, bind(value) { this.actions = value; }, show() {}, hide() {}, choices() {}, members() {}, busy() {}, saved() {}, destroy() {} };
     const editor = mountGroupEditor({ repository, controller: app.controller, ui }); editor.open(); ui.name.value = 'Queued group';
     let release; const gate = new Promise(resolve => { release = resolve; }), update = repository.update.bind(repository);
@@ -408,8 +426,7 @@ test('lifecycle/target changes cancel queued group Save before it can persist or
     if (action === 'pagehide') app.window.emit('pagehide');
     if (action === 'navigation') app.ui.navigation[0].emit('click');
     if (action === 'disconnect') app.ui.disconnect.emit('click');
-    if (action === 'profile') { app.ui.profile.value = 'rigB'; app.ui.profile.emit('change'); }
-    if (action === 'address') { app.ui.address.value = '10.0.0.2'; app.ui.address.emit('input'); }
+    if (action === 'snapshot') socket.receive('3:::SETS^var.currentSnapshot^Other rig');
     if (action === 'aux') app.controller.selectAux(1);
     assert.equal(editor.snapshot(), null, action);
     release(); await pending;

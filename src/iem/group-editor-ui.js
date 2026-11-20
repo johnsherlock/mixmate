@@ -222,6 +222,11 @@ export function createGroupEditorUI(root, connectionUI) {
         );
       }
     },
+    // F02-S05: one-line reason when no snapshot rig is available.
+    unavailable(text) {
+      const status = $(".mm-feedback");
+      if (status) { status.textContent = text; status.setAttribute?.("aria-label", text); }
+    },
     destroy() {
       for (const [target, type, callback] of listeners)
         target.removeEventListener(type, callback);

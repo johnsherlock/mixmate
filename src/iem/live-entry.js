@@ -21,8 +21,10 @@ const view = mountReadOnlyView(root, { debug, onOpenPan: target => panControls.o
   canEditLevel: target => session.canEditLevelTarget(target), onSelectGroupLevel: id => controller.selectGroupLevel(id), onSelectLevel: target => controller.selectLevel(target), onToggleLevel: () => controller.toggleLevel(),
   onBeginLevel: () => session.beginLevelGesture(), onPreviewLevel: (token, value) => session.previewLevelGesture(token, value), onCommitLevel: (token, value) => session.commitLevelGesture(token, value), onCancelLevel: () => session.cancelLevelGesture() });
 const connectionUI = createLiveConnectionUI(root, { levels: true, pan: true, dialogOwner });
-controller = mountLiveController({ session, repository, view, ui: connectionUI });
-mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connectionUI), setEnabled: value => view.groupEditing(value),
+// F02-S05 (user decision 2026-11-20): only this live IEM entry connects
+// automatically to known addresses; demo.html and connection-test.html do not.
+controller = mountLiveController({ session, repository, view, ui: connectionUI, autoConnect: true });
+mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connectionUI), setEnabled: value => view.groupEditing(value, controller.context().unavailableReason),
   confirmClear: () => window.confirm('Clear all source selections from this group draft? Save group to apply the change.') });
 channelDetail = mountChannelDetail({ root, dialogOwner, onOpen: model => { controller.clearLevelContext(); return view.detailModel(model.id); } });
 panControls = mountPanControls({ root, session, controller, dialogOwner, debug });

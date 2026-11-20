@@ -1,4 +1,32 @@
-# Local settings repository: version 2
+# Local settings repository: version 3
+
+## F02-S05: version 3, snapshot-named rigs and known addresses — 2026-11-20
+
+Source: user decisions of 2026-11-20 in the orchestrator conversation ([F02-S05](stories/F02-S05.md)). This section supersedes conflicting text below, which is historical.
+
+```json
+{
+  "version": 3,
+  "profiles": [
+    { "id": "local-id", "name": "IMGL FIBBERS", "groups": [{ "id": "group-id", "name": "Band", "members": ["i.5", "i.3"] }],
+      "navigation": { "mixId": "a.0", "view": "groups", "expandedGroupId": "group-id" } }
+  ],
+  "selectedProfileId": "local-id",
+  "knownAddresses": ["192.168.0.60", "10.0.0.2"],
+  "preferences": { "orientation": "auto", "showMeters": true }
+}
+```
+
+- **Rig identity is the desk's current snapshot name.** A profile's `name` is the received `var.currentSnapshot` string, trimmed (`snapshotRigName`): 1–80 characters, no control characters, stored already trimmed; names are unique and compared exactly (case-sensitive). An invalid received name means no rig, never a truncated or altered one. Profiles have no address. `selectedProfileId` is the last-used rig, which Edit Groups uses offline.
+- **Rigs are created automatically** by the live app (empty groups, default navigation) the first time a snapshot name is received. **Cap 128** (`RIG_LIMIT`). On overflow the live app removes the first stored rig that has no groups and is not the last-used rig; if every rig has groups nothing is removed and the new snapshot has no rig, with the reason shown. Groups are never dropped silently.
+- **`knownAddresses`**: up to 8 (`KNOWN_ADDRESS_LIMIT`) unique canonical private IPv4 addresses, most recently successful first (`promoteKnownAddress`). The live app adds or promotes an address only after full readiness (session phase `live` with, for control sessions, the writer open as well as the companion qualified), never on socket-open, and skips the write when it is already first. Addresses are suggestions and automatic-connection candidates, not rig identity. The connection test reads them as suggestions and seeds them once from the legacy `mixmate-address` key on first use; it never records addresses.
+- **`localDefinitions` is removed**; definition owners are only `{ kind: 'profile', id }`.
+- Unchanged: one atomic baseline-guarded transaction per save, strict whitelist validation of plain data, group/member limits (64 groups, 128 members), source/mix ID forms, preferences, and the rule that received values, arming, baselines, gestures and pending operations are never persisted.
+
+**Migration.** `validateSettings` accepts v1, v2 and v3 and always returns canonical v3. A v1/v2 record is first validated strictly against its own format (a malformed legacy record stays `corrupt-data`, untouched); then its profiles, groups and `localDefinitions` are **discarded** (user decision) and its profile addresses seed `knownAddresses` (the previously selected profile's address first, then profile order, deduplicated, capped at 8). Preferences are kept. Reading never writes: the legacy record stays on disk until the next accepted save, which in the live app happens at the first successful connection (address promotion and rig creation). Database version stays 1. Version 4+ is `unsupported-version`, untouched and memory-only.
+
+**Rollback consequences.** Once a v3 document is committed, the v2 record is gone: the old rigs and groups cannot be recovered by this build or any other. An already-open older tab, the old connection test or a reverted deployment reads v3 as `unsupported-version`, keeps running with temporary empty settings and its stale-baseline guard refuses to overwrite, so the v3 record is not lost, but its snapshot rigs, groups and known addresses appear missing there. Reverting this story therefore requires shipping a v3 reader first; reverting it would not restore pre-v3 groups.
+
 
 Story: [F02-S01](stories/F02-S01.md). Date: 2026-11-09. F02-S02 wires this repository into the connection test through `src/rig-settings.js`, with visible status and validated legacy address migration. The old `mixmate-address` key is no longer written. No automatic mixer connection or new mixer message is introduced.
 

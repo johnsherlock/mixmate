@@ -1,19 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory } from 'fake-indexeddb';
-import { SettingsRepository, SETTINGS_DB, emptySettings, validateSettings, SettingsValidationError, SettingsVersionError, settingsStatusText } from '../src/settings.js';
+import { SettingsRepository, SETTINGS_DB, emptySettings, validateSettings, SettingsValidationError, SettingsVersionError, settingsStatusText,
+  snapshotRigName, promoteKnownAddress, validPrivateAddress, RIG_LIMIT, KNOWN_ADDRESS_LIMIT } from '../src/settings.js';
 
+// Current v3 document (F02-S05): snapshot-named rigs, known addresses.
 function fixture() {
-  return { version: 2, selectedProfileId: 'rig-a', localDefinitions: null, preferences: { orientation: 'portrait', showMeters: true }, profiles: [
-    { id: 'rig-a', name: 'Rehearsal', address: '192.168.0.60', groups: [
+  return { version: 3, selectedProfileId: 'rig-a', knownAddresses: ['192.168.0.60', '10.0.0.2'], preferences: { orientation: 'portrait', showMeters: true }, profiles: [
+    { id: 'rig-a', name: 'Rehearsal', groups: [
       { id: 'guitars', name: 'Guitars', members: ['i.5', 'i.3', 'f.0', 'l.0', 'p.1'] },
     ], navigation: { mixId: 'a.0', view: 'groups', expandedGroupId: 'guitars' } },
   ] };
 }
-// The previous on-disk document shape: no localDefinitions field.
+// The F04-S05 version-2 on-disk shape: address-identified rigs plus localDefinitions.
+function v2Fixture() {
+  return { version: 2, selectedProfileId: 'rig-b', localDefinitions: null, preferences: { orientation: 'portrait', showMeters: true }, profiles: [
+    { id: 'rig-a', name: 'Rehearsal', address: '192.168.0.60', groups: [
+      { id: 'guitars', name: 'Guitars', members: ['i.5', 'i.3', 'f.0', 'l.0', 'p.1'] },
+    ], navigation: { mixId: 'a.0', view: 'groups', expandedGroupId: 'guitars' } },
+    { id: 'rig-b', name: 'Venue', address: '10.0.0.2', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
+    { id: 'rig-c', name: 'Same IP', address: '192.168.0.60', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
+  ] };
+}
+// The version-1 shape: no localDefinitions field.
 function legacyFixture() {
-  const { localDefinitions, ...value } = fixture();
+  const { localDefinitions, ...value } = v2Fixture();
   return { ...value, version: 1 };
+}
+// What either legacy document migrates to: definitions discarded, addresses kept
+// (previously selected first, deduplicated), preferences kept.
+function migratedFixture() {
+  return { version: 3, profiles: [], selectedProfileId: null, knownAddresses: ['10.0.0.2', '192.168.0.60'], preferences: { orientation: 'portrait', showMeters: true } };
 }
 function local(groups = [{ id: 'local-band', name: 'Band', members: ['i.1', 'i.0'] }]) {
   return { id: 'device-local', groups, navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
@@ -122,13 +139,22 @@ test('whitelist rejects live state, unknown fields, invalid addresses, duplicate
     value => { value.profiles[0].levels = [0.8]; },
     value => { value.profiles[0].groups[0].meter = 0.5; },
     value => { value.preferences.armed = true; },
-    value => { value.profiles[0].address = '8.8.8.8'; },
-    value => { value.profiles[0].address = '192.168.0.60\n'; },
+    value => { value.profiles[0].address = '192.168.0.60'; },
+    value => { value.localDefinitions = null; },
+    value => { delete value.knownAddresses; },
+    value => { value.knownAddresses[0] = '8.8.8.8'; },
+    value => { value.knownAddresses[0] = '192.168.0.60\n'; },
     value => { value.profiles[0].groups[0].members[0] = 'i.5\n'; },
-    value => { value.profiles[0].address = '192.168.00.60'; },
-    value => { value.profiles[0].address = '192.168.0.60/path'; },
-    value => { value.profiles[0].address = '172.32.0.1'; },
-    value => { value.profiles[0].address = '10.256.0.1'; },
+    value => { value.knownAddresses[0] = '192.168.00.60'; },
+    value => { value.knownAddresses[0] = '192.168.0.60/path'; },
+    value => { value.knownAddresses[0] = '172.32.0.1'; },
+    value => { value.knownAddresses[0] = '10.256.0.1'; },
+    value => { value.knownAddresses.push('192.168.0.60'); },
+    value => { value.knownAddresses = Array.from({ length: KNOWN_ADDRESS_LIMIT + 1 }, (_, n) => `10.0.0.${n + 1}`); },
+    value => { value.profiles.push({ ...structuredClone(value.profiles[0]), id: 'rig-b' }); },
+    value => { value.profiles[0].name = ' Rehearsal'; },
+    value => { value.profiles[0].name = 'Tab\tname'; },
+    value => { value.profiles = Array.from({ length: RIG_LIMIT + 1 }, (_, n) => ({ id: `r${n}`, name: `Snap ${n}`, groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } })); value.selectedProfileId = null; },
     value => { value.profiles.push(value.profiles[0]); },
     value => { value.profiles[0].groups[0].members.push('i.5'); },
     value => { value.profiles[0].groups[0].members.push('i.0.mix'); },
@@ -148,23 +174,41 @@ test('whitelist rejects live state, unknown fields, invalid addresses, duplicate
   const arrayAccessor = fixture(); Object.defineProperty(arrayAccessor.profiles, '0', { get() { getterCalls++; return fixture().profiles[0]; } });
   assert.throws(() => validateSettings(arrayAccessor), SettingsValidationError);
   assert.equal(getterCalls, 0);
-  for (const value of [fixture(), legacyFixture()]) {
-    const injected = JSON.parse(JSON.stringify(value).replace(/"version":[12]/, match => `${match},"__proto__":{"polluted":true}`));
+  for (const value of [fixture(), v2Fixture(), legacyFixture()]) {
+    const injected = JSON.parse(JSON.stringify(value).replace(/"version":[123]/, match => `${match},"__proto__":{"polluted":true}`));
     assert.throws(() => validateSettings(injected), SettingsValidationError);
   }
   assert.equal({}.polluted, undefined);
 });
 
-test('valid settings preserve user text as inert data and only private IPv4 profiles are accepted', () => {
+test('valid settings preserve snapshot names as inert data and only private IPv4 known addresses are accepted', () => {
   for (const address of ['10.0.0.1', '172.16.0.60', '172.31.255.255', '192.168.1.60']) {
-    const data = fixture(); data.profiles[0].address = address;
+    const data = fixture(); data.knownAddresses = [address];
     data.profiles[0].name = '<img src=x onerror=alert(1)>';
     assert.deepEqual(validateSettings(data), data);
   }
+  const many = fixture(); many.profiles = Array.from({ length: RIG_LIMIT }, (_, n) => ({ id: `r${n}`, name: `Snap ${n}`, groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } })); many.selectedProfileId = 'r0';
+  assert.equal(validateSettings(many).profiles.length, RIG_LIMIT);
+  const cased = fixture(); cased.profiles.push({ id: 'rig-b', name: 'rehearsal', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } });
+  assert.equal(validateSettings(cased).profiles.length, 2, 'names are case-sensitive identities');
+});
+
+test('F02-S05 snapshot names, private addresses and known-address promotion are bounded and exact', () => {
+  assert.equal(snapshotRigName('IMGL FIBBERS'), 'IMGL FIBBERS');
+  assert.equal(snapshotRigName('  Padded  '), 'Padded');
+  for (const bad of ['', '   ', 'x'.repeat(81), 'Tab\tname', 'New\nline', '\u007f', null, undefined, 3, 'x'.repeat(2000)]) assert.equal(snapshotRigName(bad), null, JSON.stringify(bad));
+  assert.equal(snapshotRigName('x'.repeat(80)), 'x'.repeat(80));
+  assert.equal(validPrivateAddress('192.168.0.60'), '192.168.0.60'); assert.equal(validPrivateAddress('8.8.8.8'), null); assert.equal(validPrivateAddress(' 10.0.0.1'), null);
+  let list = [];
+  for (let n = 1; n <= KNOWN_ADDRESS_LIMIT + 2; n++) list = promoteKnownAddress(list, `10.0.0.${n}`);
+  assert.equal(list.length, KNOWN_ADDRESS_LIMIT); assert.equal(list[0], `10.0.0.${KNOWN_ADDRESS_LIMIT + 2}`); assert.ok(!list.includes('10.0.0.1'), 'the oldest drops off');
+  const promoted = promoteKnownAddress(list, '10.0.0.5');
+  assert.equal(promoted[0], '10.0.0.5'); assert.equal(promoted.length, KNOWN_ADDRESS_LIMIT); assert.equal(new Set(promoted).size, promoted.length);
+  assert.throws(() => promoteKnownAddress(list, '8.8.8.8'), SettingsValidationError);
 });
 
 test('corrupt or unsupported stored schemas remain untouched; fallback changes stay memory-only', async () => {
-  for (const data of [{ version: 9, secretFutureState: true }, { ...fixture(), version: 3 }, { ...fixture(), version: 0 }, { ...fixture(), profiles: 'corrupt' }]) {
+  for (const data of [{ version: 9, secretFutureState: true }, { ...fixture(), version: 4 }, { ...fixture(), version: 0 }, { ...fixture(), profiles: 'corrupt' }]) {
     const factory = new IDBFactory(); await seed(factory, data);
     const repo = new SettingsRepository({ indexedDB: factory });
     try {
@@ -272,7 +316,7 @@ test('closing rejects further mutations and initialization; unsupported import v
   await repo.initialize(); await repo.close();
   await assert.rejects(repo.update(() => {}), /closed/);
   await assert.rejects(repo.initialize(), /closed/);
-  assert.throws(() => validateSettings({ ...emptySettings(), version: 3 }), SettingsVersionError);
+  assert.throws(() => validateSettings({ ...emptySettings(), version: 4 }), SettingsVersionError);
 });
 
 
@@ -369,31 +413,36 @@ test('simultaneous first-save repositories cannot both replace the same empty ba
   } finally { await a.close(); await b.close(); }
 });
 
-test('F04-S05 version-1 documents migrate purely to version 2 with no device-local set; reading never writes', async () => {
-  const legacy = legacyFixture(), before = structuredClone(legacy), migrated = validateSettings(legacy);
-  assert.deepEqual(legacy, before);
-  assert.deepEqual(migrated, fixture());
-  assert.equal(migrated.version, 2); assert.equal(migrated.localDefinitions, null);
-  assert.deepEqual(migrated.profiles[0].groups, legacy.profiles[0].groups);
+test('F02-S05 version-1 and version-2 documents migrate purely to version 3, discarding rigs/groups but keeping addresses; reading never writes', async () => {
+  for (const legacy of [legacyFixture(), v2Fixture(), { ...v2Fixture(), localDefinitions: local() }]) {
+    const before = structuredClone(legacy), migrated = validateSettings(legacy);
+    assert.deepEqual(legacy, before);
+    assert.deepEqual(migrated, migratedFixture());
+  }
+  const unselected = v2Fixture(); unselected.selectedProfileId = null;
+  assert.deepEqual(validateSettings(unselected).knownAddresses, ['192.168.0.60', '10.0.0.2'], 'array order when nothing was selected');
   // A version-1 document cannot smuggle version-2 fields past migration.
   assert.throws(() => validateSettings({ ...legacyFixture(), localDefinitions: null }), SettingsValidationError);
   assert.throws(() => validateSettings({ ...legacyFixture(), localDefinitions: local() }), SettingsValidationError);
-  const factory = new IDBFactory(); await seed(factory, legacyFixture());
-  const repo = new SettingsRepository({ indexedDB: factory });
-  try {
-    const result = await repo.initialize();
-    assert.equal(result.status.mode, 'persistent'); assert.equal(result.status.state, 'ready');
-    assert.deepEqual(result.settings, fixture());
-    assert.deepEqual(await stored(factory), legacyFixture(), 'initialization reads the v1 record without rewriting it');
-    await repo.update(settings => { settings.localDefinitions = local(); });
-    assert.equal(repo.snapshot().status.state, 'saved');
-    assert.deepEqual(await stored(factory), { ...fixture(), localDefinitions: local() });
-  } finally { await repo.close(); }
+  // Nor can a legacy document carry version-3 fields.
+  assert.throws(() => validateSettings({ ...v2Fixture(), knownAddresses: [] }), SettingsValidationError);
+  for (const version of [1, 2]) {
+    const factory = new IDBFactory(), seeded = version === 1 ? legacyFixture() : v2Fixture(); await seed(factory, seeded);
+    const repo = new SettingsRepository({ indexedDB: factory });
+    try {
+      const result = await repo.initialize();
+      assert.equal(result.status.mode, 'persistent'); assert.equal(result.status.state, 'ready');
+      assert.deepEqual(result.settings, migratedFixture());
+      assert.deepEqual(await stored(factory), seeded, 'initialization reads the legacy record without rewriting it');
+      await repo.update(settings => { settings.knownAddresses = promoteKnownAddress(settings.knownAddresses, '192.168.1.60'); });
+      assert.equal(repo.snapshot().status.state, 'saved');
+      assert.deepEqual(await stored(factory), { ...migratedFixture(), knownAddresses: ['192.168.1.60', '10.0.0.2', '192.168.0.60'] });
+    } finally { await repo.close(); }
+  }
 });
 
-test('F04-S05 version-2 device-local definitions are strictly validated and newer versions stay untouched', async () => {
-  const valid = { ...fixture(), localDefinitions: local() };
-  assert.deepEqual(validateSettings(valid), valid);
+test('F02-S05 legacy documents are still strictly validated before discarding, and newer versions stay untouched', async () => {
+  const valid = { ...v2Fixture(), localDefinitions: local() };
   const cases = [
     value => { delete value.localDefinitions; },
     value => { value.localDefinitions = []; },
@@ -401,20 +450,19 @@ test('F04-S05 version-2 device-local definitions are strictly validated and newe
     value => { value.localDefinitions = { ...local(), id: 'bad id' }; },
     value => { value.localDefinitions.groups[0].members.push('i.1'); },
     value => { value.localDefinitions.groups[0].members.push('a.0'); },
-    value => { value.localDefinitions.groups.push(structuredClone(value.localDefinitions.groups[0])); },
-    value => { value.localDefinitions.groups[0].level = 0.5; },
     value => { value.localDefinitions.navigation.expandedGroupId = 'missing'; },
-    value => { value.localDefinitions.navigation.view = 'meters'; },
-    value => { value.localDefinitions.groups = Array.from({ length: 65 }, (_, n) => ({ id: `g${n}`, name: `G${n}`, members: [] })); },
+    value => { value.profiles[0].address = '8.8.8.8'; },
+    value => { value.profiles[0].groups[0].level = 0.5; },
+    value => { value.selectedProfileId = 'missing'; },
   ];
   for (const change of cases) { const value = structuredClone(valid); change(value); assert.throws(() => validateSettings(value), SettingsValidationError); }
-  for (const version of [3, 99]) {
-    const future = { ...valid, version }, factory = new IDBFactory(); await seed(factory, future);
+  for (const version of [4, 99]) {
+    const future = { ...fixture(), version }, factory = new IDBFactory(); await seed(factory, future);
     const repo = new SettingsRepository({ indexedDB: factory });
     try {
       assert.equal((await repo.initialize()).status.reason, 'unsupported-version');
       assert.throws(() => validateSettings(future), SettingsVersionError);
-      await repo.update(settings => { settings.localDefinitions = local(); });
+      await repo.update(settings => { settings.knownAddresses = ['192.168.0.60']; });
       assert.deepEqual(await stored(factory), future);
     } finally { await repo.close(); }
   }

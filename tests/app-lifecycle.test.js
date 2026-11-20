@@ -339,9 +339,17 @@ test('waiting and verified update notices never reload, activate a worker or int
 });
 
 
+// F02-S05 v3 document: snapshot-named rigs and known addresses.
 function rigFixture() {
-  return { version: 2, selectedProfileId: 'first-rig', localDefinitions: null, preferences: { orientation: 'portrait', showMeters: false }, profiles: [
-    { id: 'first-rig', name: 'Rehearsal', address: '192.168.0.60', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
+  return { version: 3, selectedProfileId: 'first-rig', knownAddresses: ['192.168.0.60', '192.168.1.60'], preferences: { orientation: 'portrait', showMeters: false }, profiles: [
+    { id: 'first-rig', name: 'Rehearsal', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
+    { id: 'second-rig', name: 'Venue', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
+  ] };
+}
+// The previous address-identified v2 document.
+function v2RigFixture() {
+  return { version: 2, selectedProfileId: 'second-rig', localDefinitions: null, preferences: { orientation: 'portrait', showMeters: false }, profiles: [
+    { id: 'first-rig', name: 'Rehearsal', address: '192.168.0.60', groups: [{ id: 'g', name: 'Old group', members: ['i.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
     { id: 'second-rig', name: 'Venue', address: '192.168.1.60', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } },
   ] };
 }
@@ -350,24 +358,20 @@ async function seedRigs(factory, settings = rigFixture()) {
   await repository.replace(settings); await repository.close();
 }
 
-test('rig UI migrates only a validated legacy address durably, reopens and never auto-connects', async () => {
+test('F02-S05 connection test seeds a known address from a validated legacy address durably, reopens and never auto-connects', async () => {
   const factory = new IDBFactory(), storage = new Map([['mixmate-address', '192.168.1.60']]);
   const view = app({ indexedDB: factory, storage });
   assert.equal(view.element('address').value, '192.168.0.60'); // Legacy resolves after durable-record detection.
   assert.match(view.element('settings-status').textContent, /Checking/);
-  await view.settingsReady();
+  await view.settingsReady(); await view.settingsIdle();
   const saved = view.repository().snapshot();
-  assert.equal(saved.settings.profiles.length, 1);
-  assert.equal(saved.settings.profiles[0].address, '192.168.1.60');
-  assert.deepEqual(saved.settings.profiles[0].groups, []);
+  assert.deepEqual(saved.settings.profiles, []); assert.deepEqual(saved.settings.knownAddresses, ['192.168.1.60']);
   assert.equal(saved.status.state, 'saved');
   assert.equal(storage.has('mixmate-address'), false);
-  const id = saved.settings.profiles[0].id;
-  assert.equal(view.element('rig-profile').value, id);
+  assert.equal(view.element('address').value, '192.168.1.60');
   assert.equal(view.sockets.length, 0);
   await view.close();
   const reopened = app({ indexedDB: factory, storage }); await reopened.settingsReady();
-  assert.equal(reopened.element('rig-profile').value, id);
   assert.equal(reopened.element('address').value, '192.168.1.60');
   assert.equal(reopened.sockets.length, 0);
   await reopened.close();
@@ -379,62 +383,42 @@ test('rig UI migrates only a validated legacy address durably, reopens and never
   }
 });
 
-test('rig create/rename/delete and display preferences persist stable IDs, inert names and duplicate addresses', async () => {
-  const factory = new IDBFactory(), view = app({ indexedDB: factory }); await view.settingsReady();
-  const initialID = view.element('rig-profile').value;
-  view.element('rig-name').value = '<img src=x> Rehearsal'; view.element('rig-name').emit('input');
-  view.element('save-rig').emit('click'); await view.settingsIdle();
-  assert.equal(view.element('rig-profile').value, initialID);
-  assert.equal(view.element('rig-profile').options[0].textContent, '<img src=x> Rehearsal');
-  assert.equal(view.element('rig-profile').options[0].innerHTML, undefined);
-  view.element('new-rig').emit('click');
-  view.element('rig-name').value = 'Venue'; view.element('rig-name').emit('input');
-  view.element('address').value = '192.168.0.60'; view.element('address').emit('input');
-  view.element('save-rig').emit('click'); await view.settingsIdle();
-  const secondID = view.element('rig-profile').value;
-  assert.notEqual(secondID, initialID);
-  assert.equal(view.repository().snapshot().settings.profiles.length, 2);
+test('F02-S05 connection test prefills the most recent known address, migrates v2 addresses and persists display preferences; it never records or auto-connects', async () => {
+  const factory = new IDBFactory(); await rawSettings(factory, v2RigFixture());
+  const view = app({ indexedDB: factory }); await view.settingsReady();
+  assert.deepEqual(view.repository().snapshot().settings.knownAddresses, ['192.168.1.60', '192.168.0.60']);
+  assert.deepEqual(view.repository().snapshot().settings.profiles, [], 'old rigs and groups are discarded');
+  assert.equal(view.element('address').value, '192.168.1.60');
   view.element('preferred-orientation').value = 'landscape'; view.element('preferred-orientation').emit('change');
-  view.element('show-meters').checked = false; view.element('show-meters').emit('change'); await view.settingsIdle();
-  assert.deepEqual(view.repository().snapshot().settings.preferences, { orientation: 'landscape', showMeters: false });
-  view.element('delete-rig').emit('click'); await view.settingsIdle();
-  assert.equal(view.element('rig-profile').value, initialID);
-  assert.equal(view.repository().snapshot().settings.profiles.length, 1);
-  assert.equal(view.sockets.length, 0);
+  view.element('show-meters').checked = true; view.element('show-meters').emit('change'); await view.settingsIdle();
+  assert.deepEqual(view.repository().snapshot().settings.preferences, { orientation: 'landscape', showMeters: true });
+  view.element('address').value = '10.0.0.5'; view.element('address').emit('input');
+  view.element('connect-form').emit('submit'); const socket = view.sockets[0]; socket.open();
+  socket.receive('3:::SETD^i.0.mix^0.5\nSETD^i.0.stereoIndex^-1'); await view.settingsIdle();
+  assert.deepEqual(view.repository().snapshot().settings.knownAddresses, ['192.168.1.60', '192.168.0.60'], 'this page does not record addresses');
+  assert.equal(view.sockets.length, 1);
   await view.close();
   const reopened = app({ indexedDB: factory }); await reopened.settingsReady();
-  assert.equal(reopened.element('rig-profile').value, initialID);
   assert.equal(reopened.element('preferred-orientation').value, 'landscape');
-  assert.equal(reopened.element('show-meters').checked, false);
+  assert.equal(reopened.element('show-meters').checked, true);
+  assert.equal(reopened.sockets.length, 0);
   await reopened.close();
 });
 
-test('profile selection and address changes synchronously disarm and clear an armed fake mixer without writes', async () => {
+test('address changes synchronously disarm and clear an armed fake mixer without writes', async () => {
   const factory = new IDBFactory(); await seedRigs(factory);
   const view = app({ indexedDB: factory }); await view.settingsReady();
-  view.element('connect-form').emit('submit'); const first = view.sockets[0]; first.open();
-  first.receive('3:::SETD^i.0.mix^0.5\nSETD^i.0.stereoIndex^-1');
+  view.element('connect-form').emit('submit'); const socket = view.sockets[0]; socket.open();
+  socket.receive('3:::SETD^i.0.mix^0.5\nSETD^i.0.stereoIndex^-1');
   view.element('enable-fader').checked = true; view.element('enable-fader').emit('change');
-  view.element('rig-name').value = 'Renamed while live'; view.element('rig-name').emit('input'); view.element('save-rig').emit('click');
-  await view.settingsIdle();
-  assert.equal(first.readyState, 1);
-  assert.equal(view.element('enable-fader').checked, true);
-  view.element('rig-profile').value = 'second-rig'; view.element('rig-profile').emit('change');
-  assert.equal(first.readyState, 3);
-  assert.equal(view.element('enable-fader').checked, false);
-  assert.equal(view.element('fader').textContent, '—');
-  assert.equal(view.element('address').value, '192.168.1.60');
-  assert.equal(view.sockets.length, 1);
-  await view.settingsIdle();
-  view.element('connect-form').emit('submit'); const second = view.sockets[1]; second.open();
-  second.receive('3:::SETD^i.0.mix^0.5\nSETD^i.0.stereoIndex^-1');
-  view.element('enable-fader').checked = true; view.element('enable-fader').emit('change');
+  view.element('show-meters').checked = true; view.element('show-meters').emit('change'); await view.settingsIdle();
+  assert.equal(socket.readyState, 1); assert.equal(view.element('enable-fader').checked, true);
   view.element('address').value = '10.0.0.60'; view.element('address').emit('input');
-  assert.equal(second.readyState, 3);
+  assert.equal(socket.readyState, 3);
   assert.equal(view.element('enable-fader').checked, false);
   assert.equal(view.element('address').disabled, false);
   assert.equal(view.element('fader').textContent, '—');
-  assert.deepEqual(first.sent, [OUTBOUND.init]); assert.deepEqual(second.sent, [OUTBOUND.init]);
+  assert.deepEqual(socket.sent, [OUTBOUND.init]);
   await view.close();
 });
 
@@ -442,8 +426,8 @@ test('blocked settings storage remains visibly temporary and preserves the legac
   const storage = new Map([['mixmate-address', '192.168.1.60']]), view = app({ storage }); await view.settingsReady();
   assert.match(view.element('settings-status').textContent, /temporary.*lost/);
   assert.equal(storage.get('mixmate-address'), '192.168.1.60');
-  view.element('rig-name').value = 'Temporary rig'; view.element('save-rig').emit('click'); await view.settingsIdle();
-  assert.equal(view.repository().snapshot().settings.profiles[0].name, 'Temporary rig');
+  view.element('preferred-orientation').value = 'landscape'; view.element('preferred-orientation').emit('change'); await view.settingsIdle();
+  assert.equal(view.repository().snapshot().settings.preferences.orientation, 'landscape');
   assert.match(view.element('settings-status').textContent, /temporary/);
   assert.ok(!view.element('settings-status').textContent.includes('saved on this device'));
   assert.equal(storage.get('mixmate-address'), '192.168.1.60');
@@ -460,52 +444,31 @@ test('late settings load cannot retarget a user-entered live address', async () 
   view.element('connect-form').emit('submit'); const socket = view.sockets[0]; socket.open();
   release(); await view.settingsReady();
   assert.equal(view.element('address').value, '10.20.30.40');
-  assert.equal(view.element('rig-profile').value, '');
-  assert.match(view.element('rig-feedback').textContent, /Temporary/);
   assert.equal(socket.url, 'ws://10.20.30.40/');
   assert.equal(socket.readyState, 1); assert.equal(view.sockets.length, 1);
   assert.equal(view.element('address').disabled, true);
   await view.close();
 });
 
-test('delayed profile save completion cannot overwrite a newer address draft or connection', async () => {
+test('delayed preference save completion cannot overwrite a newer address draft or connection', async () => {
   const factory = new IDBFactory(); await seedRigs(factory);
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   class DelayedRepository extends SettingsRepository { update(updater) { return gate.then(() => super.update(updater)); } }
   const repo = new DelayedRepository({ indexedDB: factory }), view = app({ repository: repo }); await view.settingsReady();
-  view.element('rig-name').value = 'Renamed'; view.element('rig-name').emit('input'); view.element('save-rig').emit('click');
+  view.element('preferred-orientation').value = 'landscape'; view.element('preferred-orientation').emit('change');
   view.element('address').value = '10.0.0.70'; view.element('address').emit('input');
   view.element('connect-form').emit('submit'); const socket = view.sockets[0]; socket.open();
   release(); await view.settingsIdle();
   assert.equal(view.element('address').value, '10.0.0.70');
   assert.equal(socket.url, 'ws://10.0.0.70/'); assert.equal(socket.readyState, 1);
-  assert.match(view.element('rig-feedback').textContent, /Unsaved address draft/);
-  assert.equal(repo.snapshot().settings.profiles[0].address, '192.168.0.60');
+  assert.equal(repo.snapshot().settings.preferences.orientation, 'landscape');
   assert.deepEqual(socket.sent, [OUTBOUND.init]);
   await view.close();
 });
 
-
-test('display preferences preserve a new-rig draft identity and cannot overwrite the previous rig', async () => {
-  const factory = new IDBFactory(); await seedRigs(factory);
-  const view = app({ indexedDB: factory }); await view.settingsReady();
-  view.element('new-rig').emit('click');
-  view.element('rig-name').value = 'New venue'; view.element('rig-name').emit('input');
-  view.element('preferred-orientation').value = 'landscape'; view.element('preferred-orientation').emit('change');
-  assert.equal(view.element('rig-profile').value, '');
-  view.element('save-rig').emit('click'); await view.settingsIdle();
-  const saved = view.repository().snapshot().settings;
-  assert.equal(saved.profiles.length, 3);
-  assert.equal(saved.profiles.find(profile => profile.id === 'first-rig').name, 'Rehearsal');
-  assert.notEqual(view.element('rig-profile').value, 'first-rig');
-  assert.equal(saved.profiles.find(profile => profile.id === view.element('rig-profile').value).name, 'New venue');
-  await view.close();
-});
-
-test('late settings never infer profile identity from an already connected matching address', async () => {
-  const factory = new IDBFactory(), settings = rigFixture();
-  settings.profiles[1].address = settings.profiles[0].address;
+test('late settings never replace an already connected address', async () => {
+  const factory = new IDBFactory(), settings = rigFixture(); settings.knownAddresses = ['192.168.1.60'];
   await seedRigs(factory, settings);
   let release;
   const gate = new Promise(resolve => { release = resolve; });
@@ -514,87 +477,35 @@ test('late settings never infer profile identity from an already connected match
   view.element('connect-form').emit('submit'); view.sockets[0].open();
   release(); await view.settingsReady();
   assert.equal(view.element('address').value, '192.168.0.60');
-  assert.equal(view.element('rig-profile').value, '');
   view.element('show-meters').checked = true; view.element('show-meters').emit('change'); await view.settingsIdle();
-  assert.equal(view.element('rig-profile').value, '');
   assert.equal(view.sockets[0].readyState, 1);
-  await view.close();
-});
-
-
-test('invalid rig edits and a cancelled deletion do not overwrite saved definitions', async () => {
-  const factory = new IDBFactory(); await seedRigs(factory);
-  const view = app({ indexedDB: factory, confirmDelete: false }); await view.settingsReady();
-  view.element('rig-name').value = ' '; view.element('save-rig').emit('click');
-  assert.match(view.element('rig-feedback').textContent, /not saved/);
-  view.element('rig-name').value = 'Valid'; view.element('address').value = '8.8.8.8'; view.element('address').emit('input');
-  view.element('save-rig').emit('click');
-  assert.match(view.element('rig-feedback').textContent, /not saved/);
-  view.element('delete-rig').emit('click'); await view.settingsIdle();
-  assert.deepEqual(view.repository().snapshot().settings, rigFixture());
-  assert.equal(view.sockets.length, 0);
-  await view.close();
-});
-
-test('the UI caps profiles at 32 while preserving edits to existing profiles', async () => {
-  const factory = new IDBFactory(), settings = rigFixture();
-  settings.profiles = Array.from({ length: 32 }, (_, i) => ({ ...settings.profiles[0], id: `rig-${i}`, name: `Rig ${i + 1}` }));
-  settings.selectedProfileId = 'rig-0'; await seedRigs(factory, settings);
-  const view = app({ indexedDB: factory }); await view.settingsReady();
-  assert.equal(view.element('new-rig').disabled, true);
-  view.element('new-rig').emit('click');
-  assert.equal(view.element('rig-profile').value, 'rig-0');
-  view.element('rig-name').value = 'Still editable'; view.element('save-rig').emit('click'); await view.settingsIdle();
-  assert.equal(view.repository().snapshot().settings.profiles.length, 32);
-  assert.equal(view.repository().snapshot().settings.profiles[0].name, 'Still editable');
   await view.close();
 });
 
 test('migration removes its durable legacy source so a later settings reset cannot revive it', async () => {
   const factory = new IDBFactory(), storage = new Map([['mixmate-address', '192.168.1.60']]);
-  const view = app({ indexedDB: factory, storage }); await view.settingsReady();
+  const view = app({ indexedDB: factory, storage }); await view.settingsReady(); await view.settingsIdle();
   assert.equal(storage.has('mixmate-address'), false);
   await view.repository().replace(emptySettings()); await view.close();
   const reopened = app({ indexedDB: factory, storage }); await reopened.settingsReady();
   assert.equal(reopened.element('address').value, '192.168.0.60');
-  assert.deepEqual(reopened.repository().snapshot().settings.profiles, []); // Deliberate empty reset stays empty.
+  assert.deepEqual(reopened.repository().snapshot().settings.knownAddresses, []); // Deliberate empty reset stays empty.
   await reopened.close();
 });
 
-test('another window save becomes a visible temporary conflict without changing its durable profile', async () => {
+test('another window save becomes a visible temporary conflict without changing its durable settings', async () => {
   const factory = new IDBFactory(); await seedRigs(factory);
   const a = app({ indexedDB: factory }), b = app({ indexedDB: factory });
   await Promise.all([a.settingsReady(), b.settingsReady()]);
-  a.element('rig-name').value = 'Window A'; a.element('save-rig').emit('click'); await a.settingsIdle();
-  b.element('rig-name').value = 'Window B'; b.element('save-rig').emit('click'); await b.settingsIdle();
+  a.element('preferred-orientation').value = 'landscape'; a.element('preferred-orientation').emit('change'); await a.settingsIdle();
+  b.element('show-meters').checked = true; b.element('show-meters').emit('change'); await b.settingsIdle();
   assert.match(b.element('settings-status').textContent, /changed in another window.*temporary/);
-  assert.equal(b.repository().snapshot().settings.profiles[0].name, 'Window B');
+  assert.equal(b.repository().snapshot().settings.preferences.showMeters, true);
   assert.equal(b.sockets.length, 0);
   await a.close(); await b.close();
   const reopened = app({ indexedDB: factory }); await reopened.settingsReady();
-  assert.equal(reopened.element('rig-name').value, 'Window A');
+  assert.deepEqual(reopened.repository().snapshot().settings.preferences, { orientation: 'landscape', showMeters: false });
   await reopened.close();
-});
-
-
-test('valid profile/default replacements clear a previous address custom validation error before Connect', async () => {
-  for (const action of ['profile', 'new', 'delete', 'save']) {
-    const factory = new IDBFactory(); await seedRigs(factory);
-    const view = app({ indexedDB: factory }); await view.settingsReady();
-    view.element('address').value = '8.8.8.8'; view.element('address').emit('input');
-    view.element('connect-form').emit('submit');
-    assert.equal(view.element('address').checkValidity(), false);
-    assert.equal(view.sockets.length, 0);
-    if (action === 'profile') { view.element('rig-profile').value = 'second-rig'; view.element('rig-profile').emit('change'); }
-    if (action === 'new') view.element('new-rig').emit('click');
-    if (action === 'delete') view.element('delete-rig').emit('click');
-    if (action === 'save') { view.element('address').value = '192.168.0.60'; view.element('save-rig').emit('click'); }
-    assert.equal(view.element('address').checkValidity(), true, `${action} should clear stale custom validity`);
-    view.element('connect-form').emit('submit');
-    assert.equal(view.sockets.length, 1);
-    assert.ok(view.sockets[0].url.startsWith('ws://192.168.'));
-    await view.settingsIdle(); await view.close();
-  }
 });
 
 test('an untouched startup address replacement clears stale custom validity without affecting edited targets', async () => {
@@ -644,14 +555,10 @@ test('late replacement completion cannot retarget a new draft, preferences or an
   const view = app({ repository: new DelayedRepository({ indexedDB: factory }) }); await view.settingsReady();
   view.element('reset-settings').emit('click');
   view.element('confirm-settings').emit('click');
-  view.element('new-rig').emit('click');
-  view.element('rig-name').value = 'New draft'; view.element('rig-name').emit('input');
   view.element('address').value = '10.2.3.60'; view.element('address').emit('input');
   view.element('preferred-orientation').value = 'landscape'; view.element('preferred-orientation').emit('change');
   view.element('connect-form').emit('submit'); const socket = view.sockets[0]; socket.open();
   release(); await view.recoveryIdle(); await view.settingsIdle();
-  assert.equal(view.element('rig-profile').value, '');
-  assert.equal(view.element('rig-name').value, 'New draft');
   assert.equal(view.element('address').value, '10.2.3.60');
   assert.equal(view.element('preferred-orientation').value, 'landscape');
   assert.equal(socket.readyState, 1); assert.equal(view.sockets.length, 1);
@@ -666,7 +573,6 @@ test('a temporary reset stays usable and never claims a durable replacement; no 
   view.element('confirm-settings').emit('click'); await view.recoveryIdle();
   assert.deepEqual(view.repository().snapshot().settings, emptySettings());
   assert.match(view.element('recovery-feedback').textContent, /Temporary defaults.*not replaced/);
-  assert.equal(view.element('rig-profile').value, '');
   assert.equal(view.sockets.length, 0); await view.close();
 });
 
@@ -691,7 +597,6 @@ test('confirmed reset preserves app cache/sibling keys/offline marker and cannot
   const reopened = app({ indexedDB: factory, storage, storageAccess: access }); await reopened.settingsReady();
   assert.deepEqual(reopened.repository().snapshot().settings, emptySettings());
   assert.equal(reopened.element('address').value, '192.168.0.60');
-  assert.equal(reopened.element('rig-profile').value, '');
   assert.equal(reopened.sockets.length, 0); await reopened.close();
 });
 

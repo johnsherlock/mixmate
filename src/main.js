@@ -257,7 +257,6 @@ const rigSettings = mountRigSettings({
   makeOption: (label, value) => { const option = new Option('', value); option.textContent = label; return option; },
   onTargetChange: () => { connection.disconnect(); setStatus('disconnected'); },
   isConnected: () => ['connecting', 'connected', 'live'].includes(connectionStatus),
-  confirmDelete: name => window.confirm(`Delete local rig “${name}” and its group definitions? This does not change the mixer.`),
 });
 
 let storageManager;

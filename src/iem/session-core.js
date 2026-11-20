@@ -20,6 +20,9 @@ const apiKind = target => target?.kind === 'pan' ? 'pan' : target?.kind === 'geq
 function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, timers = globalThis, timeoutMs = 15000, idleMs = 30000, meterTtlMs = 2000, meterCadenceMs = 100,
   now = () => globalThis.performance?.now() ?? Date.now(), wallNow = () => Date.now(), clockGraceMs = 1000, settingsRepository } = {}, auxControl = false) {
   const provider = createLiveProvider(), listeners = new Set();
+  // F02-S05: true only once the current writer socket has opened; with a
+  // qualified companion this is full readiness (`qualified` in snapshots).
+  let writerReady = false;
   let socket = null, receiver = null, generation = 0, deadline, keepalive, idle, receiverDeadline, receiverIdle, meterExpiry, meterFlush;
   let meters = new Map(), meterStamp = null, meterRevision = 0, inspectCurrent = () => {};
   const stamp = () => ({ mono: now(), wall: wallNow() });
@@ -211,6 +214,8 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (auxControl) for (const update of parseAuxEqStateFrame(frame)) updates.push({ path: update.path, value: update.value, auxIndex: update.auxIndex, field: update.field === 'bypass' ? 'eqBypass' : 'eqBand' });
     for (const { path, value, field, auxIndex } of updates) {
       const actual = !observed.has(path) || observed.get(path) !== value;
+      // F02-S05: a desk snapshot recall changes the rig context; the socket stays.
+      if (actual && field === 'currentSnapshot' && observed.has(path)) { cancelControl('Desk snapshot changed; obsolete adjustment cancelled.', 'profile'); selected = null; }
       observed.set(path, value); receipts.set(path, ++sequence);
       if (dispatchWatch?.paths.has(path)) dispatchWatch.hit = true;
       if (field === 'eqBand' || field === 'eqBypass') { eqObserved.set(path, value); controlsChanged = true; }
@@ -487,7 +492,9 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   };
   const snapshot = () => {
     if (socket) inspectCurrent(); // A read after sleep cannot resurrect old state before timers run.
-    return { phase, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}) };
+    // Full readiness: received Ui24 AUX state and, for control sessions, an open writer.
+    const qualified = phase === 'live' && (!controlEnabled || writerReady);
+    return { phase, qualified, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}) };
   };
   const emit = (kind = 'state') => { for (const listener of listeners) listener(snapshot(), kind); };
   const clearTimers = () => { timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = null; timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
@@ -498,6 +505,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     const old = socket, oldReceiver = receiver;
     socket = receiver = null;
     provider.clear(); meters = new Map(); meterStamp = null; meterRevision = 0;
+    writerReady = false;
     phase = next; detail = message;
     for (const connection of [old, oldReceiver]) if (connection) {
       connection.onopen = connection.onmessage = connection.onerror = connection.onclose = null;
@@ -557,7 +565,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     current.onopen = () => {
       if (!responsive()) return;
       if (current.readyState !== 1) { stop('closed', 'Mixer socket is not open — received state cleared'); return; }
-      writerOpened = true; if (qualified) timers.clearTimeout(deadline); phase = qualified ? 'live' : 'connected'; detail = qualified ? 'Received Ui24 AUX state · peer editing' : 'Socket connected — waiting for received Ui24 model and AUX state'; emit();
+      writerOpened = true; writerReady = true; if (qualified) timers.clearTimeout(deadline); phase = qualified ? 'live' : 'connected'; detail = qualified ? 'Received Ui24 AUX state · peer editing' : 'Socket connected — waiting for received Ui24 model and AUX state'; emit();
       if (!active() || current.readyState !== 1) return;
       try { current.send('3:::INIT'); } catch { failSend(); return; }
       if (!active()) return;

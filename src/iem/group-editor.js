@@ -27,15 +27,14 @@ export function mountGroupEditor({
     confirmingDelete = false,
     // Set only while this editor's own delete of the expanded group is pending.
     deleteCollapse = null;
-  // Contexts without an explicit owner predate device-local definitions and can
-  // only address a bound saved rig.
+  // F02-S05: the only owner is the snapshot-named rig (kind "profile").
+  // Contexts without an explicit owner can only address a bound rig.
   const owner = () =>
     context.owner !== undefined
       ? context.owner
       : context.profileId
         ? { kind: "profile", id: context.profileId }
         : null;
-  // The device-local set has no stored record until its first saved group.
   // Malformed owners address nothing rather than granting editor access.
   const definition = () => {
     try {
@@ -44,24 +43,14 @@ export function mountGroupEditor({
       return null;
     }
   };
-  const available = () =>
-    Boolean(
-      context.ready &&
-        owner() &&
-        (owner().kind === "local" || definition()),
-    );
+  const available = () => Boolean(context.ready && owner() && definition());
   const groups = () => definition()?.groups || [];
   const ownerLabel = () =>
-    owner()?.kind === "profile"
-      ? `Saved rig: ${definition()?.name || context.ownerName || "unknown"}`
-      : "Groups on this device — no saved rig selected";
+    `Snapshot: ${definition()?.name || context.ownerName || "unknown"} — groups kept on this device`;
   const validBinding = () => {
     const current = owner();
     if (!binding || !current || context.revision !== binding.revision) return false;
-    if (current.kind !== binding.kind) return false;
-    if (current.kind === "profile") return current.id === binding.id;
-    // A local set may gain its stable ID from this editor's own first save.
-    return binding.id === null || current.id === null || current.id === binding.id;
+    return current.kind === binding.kind && current.id === binding.id;
   };
   function catalog() {
     const rows = context.catalog || context.sources;
@@ -127,7 +116,11 @@ export function mountGroupEditor({
     paintMembers();
   }
   function open(id = null) {
-    if (saving || !available()) return false;
+    if (saving) return false;
+    if (!available()) {
+      ui.unavailable?.(context.unavailableReason || "Groups are unavailable until the desk reports a snapshot name.");
+      return false;
+    }
     binding = { ...owner(), revision: context.revision };
     ui.show(ownerLabel());
     selectGroup(id || context.expandedGroupId || groups()[0]?.id || null);
@@ -160,13 +153,9 @@ export function mountGroupEditor({
     ui.message.textContent =
       "Draft cleared. Save group to apply; Cancel leaves the saved definition unchanged.";
   }
-  // Tokens address canonical definitions by owner; the local set's ID is either
-  // the stored one or a fresh ID created only by this transaction.
+  // Tokens address canonical definitions by owner.
   function capture() {
-    const current = owner(),
-      token = { kind: binding.kind, id: binding.id ?? current?.id ?? null, revision: binding.revision, operation: ++operation };
-    if (token.kind === "local" && token.id === null) token.createdId = createID();
-    return token;
+    return { kind: binding.kind, id: binding.id, revision: binding.revision, operation: ++operation };
   }
   const currentFor = (token) =>
     !destroyed &&
@@ -175,26 +164,11 @@ export function mountGroupEditor({
     validBinding() &&
     context.revision === token.revision &&
     owner()?.kind === token.kind &&
-    (token.kind !== "profile" || owner().id === token.id);
-  function target(settings, token, create) {
-    if (token.kind === "profile") {
-      const rig = settings.profiles.find((profile) => profile.id === token.id);
-      if (!rig) throw Error("The saved rig no longer exists.");
-      return rig;
-    }
-    const changed = "Device-local groups changed. Reopen Edit Groups before saving.";
-    if (token.id !== null) {
-      if (settings.localDefinitions?.id !== token.id) throw Error(changed);
-      return settings.localDefinitions;
-    }
-    if (settings.localDefinitions) throw Error(changed);
-    if (!create) throw Error("This group no longer exists.");
-    settings.localDefinitions = {
-      id: token.createdId,
-      groups: [],
-      navigation: { mixId: null, view: "groups", expandedGroupId: null },
-    };
-    return settings.localDefinitions;
+    owner().id === token.id;
+  function target(settings, token) {
+    const rig = settings.profiles.find((profile) => profile.id === token.id);
+    if (!rig) throw Error("The snapshot rig no longer exists.");
+    return rig;
   }
   const guard = (token) => {
     if (
@@ -206,14 +180,7 @@ export function mountGroupEditor({
       throw Error("The rig or session changed; this draft was not applied.");
   };
   function adopt(result, token) {
-    // Bind this editor to the local identity created by its own committed draft.
-    if (token.createdId && result.settings.localDefinitions?.id === token.createdId) binding.id = token.createdId;
-    const ownerId = token.createdId && binding.id === token.createdId ? token.createdId : token.id;
-    return token.kind === "profile"
-      ? result.settings.profiles.find((profile) => profile.id === ownerId)
-      : result.settings.localDefinitions?.id === ownerId
-        ? result.settings.localDefinitions
-        : null;
+    return result.settings.profiles.find((profile) => profile.id === token.id);
   }
   const durable = (result) =>
     result.status.mode === "persistent" && result.status.state === "saved";
@@ -228,7 +195,7 @@ export function mountGroupEditor({
       token = capture();
     const change = (settings) => {
       guard(token);
-      const rig = target(settings, token, !original);
+      const rig = target(settings, token);
       const index = rig.groups.findIndex((group) => group.id === next.id);
       if (original) {
         if (
@@ -315,7 +282,7 @@ export function mountGroupEditor({
     setConfirmingDelete(false);
     const change = (settings) => {
       guard(token);
-      const rig = target(settings, token, false);
+      const rig = target(settings, token);
       const index = rig.groups.findIndex((group) => group.id === original.id);
       if (index < 0 || JSON.stringify(rig.groups[index]) !== JSON.stringify(original))
         throw Error("This group changed while you were editing. Reopen it before deleting.");

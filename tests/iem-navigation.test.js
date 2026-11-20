@@ -8,7 +8,7 @@ import { mountLiveController } from '../src/iem/live-controller.js';
 import { projectGroupNavigation, resolveGroupNavigation } from '../src/iem/group-navigation.js';
 import { mountGroupEditor } from '../src/iem/group-editor.js';
 const vu = JSON.parse(await readFile(new URL('./fixtures/iem-vu2.json', import.meta.url))).frame;
-const state = '3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.0.mix^0.5\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.6\nSETD^i.0.aux.0.value^0.2\nSETS^i.0.name^<img src=x>\nSETD^l.0.aux.0.value^0.3\nSETD^p.1.aux.0.value^0.4\nSETD^f.1.aux.0.value^0.5\nSETD^i.2.aux.0.value^0.6\nSETS^i.23.name^Name only';
+const state = '3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.0.mix^0.5\nSETD^a.1.matrix^0\nSETD^a.1.mix^0.6\nSETD^i.0.aux.0.value^0.2\nSETS^i.0.name^<img src=x>\nSETD^l.0.aux.0.value^0.3\nSETD^p.1.aux.0.value^0.4\nSETD^f.1.aux.0.value^0.5\nSETD^i.2.aux.0.value^0.6\nSETS^i.23.name^Name only\nSETS^var.currentSnapshot^Rig 1';
 class Events {
   handlers = new Map();
   addEventListener(type, fn) { this.handlers.set(type, [...this.handlers.get(type) || [], fn]); }
@@ -26,10 +26,10 @@ class Clock {
 }
 function definitions() {
   const settings = emptySettings();
-  settings.profiles = ['rig-a', 'rig-b'].map((id, n) => ({ id, name: `Rig ${n + 1}`, address: '192.168.0.60',
+  settings.profiles = ['rig-a', 'rig-b'].map((id, n) => ({ id, name: `Rig ${n + 1}`,
     groups: n ? [{ id: 'other', name: 'Other rig group', members: ['p.1'] }] : [{ id: '7_group-Z', name: '<b>Band [one]</b>', members: ['f.1', 'i.20', 'l.0', 'i.0'] }, { id: 'empty', name: 'Empty', members: [] }],
     navigation: { mixId: null, view: 'channels', expandedGroupId: null } }));
-  settings.selectedProfileId = 'rig-a'; return settings;
+  settings.selectedProfileId = 'rig-a'; settings.knownAddresses = ['192.168.0.60']; return settings;
 }
 const field = value => Object.assign(new Events(), { value, textContent: '', disabled: false, setCustomValidity(value) { this.validity = value; }, reportValidity() {} });
 async function fixture({ settings = definitions(), memory = false, repository: provided, factory = new IDBFactory() } = {}) {
@@ -45,7 +45,7 @@ async function fixture({ settings = definitions(), memory = false, repository: p
     receive(data) { this.onmessage?.({ data }); }
   }
   const session = createReadOnlySession({ WebSocketClass: FakeSocket, timers, now: () => timers.now, wallNow: () => timers.now });
-  const ui = { name: field(''), newRig: field(''), saveRig: field(''), feedback: field(''), address: field('192.168.0.60'), profile: field(''), connect: field(''), disconnect: field(''), note: field(''), settings: field(''), form: new Events(), navigation: [new Events()], close() {}, profiles(rows, id = '') { this.profile.value = id; } };
+  const ui = { feedback: field(''), address: field('192.168.0.60'), connect: field(''), disconnect: field(''), note: field(''), settings: field(''), form: new Events(), navigation: [new Events()], close() {} };
   const view = { renders: 0, meterRenders: 0, render(model) { this.last = model; this.renders++; }, renderMeters(model) { this.meters = model; this.meterRenders++; }, preferences() {}, destroy() {} };
   const document = Object.assign(new Events(), { hidden: false }), window = new Events();
   const controller = mountLiveController({ session, repository, view, ui, document, window });
@@ -70,31 +70,36 @@ test('group projection preserves exact ordered IDs with unresolved placeholders,
   assert.equal(projectGroupNavigation({ ...base, selectedAux: null }, profile, null).view, 'overview');
 });
 
-test('F08-S03/F04-S05 manual same-IP connect never binds a saved rig; it edits device-local groups until explicit rig selection', async () => {
+test('F02-S05 the desk snapshot name selects, creates and follows rigs exactly; an address never binds a rig', async () => {
   const app = await fixture(); let enabled;
   const ui = { name: field(''), cancel: field(''), message: field(''), status: field(''), show(label) { this.label = label; }, hide() {}, members(catalog) { this.catalog = catalog; }, choices(groups) { this.groups = groups; }, busy() {}, bind() {}, destroy() {} };
   const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui, setEnabled: value => { enabled = value; } });
   try {
-    assert.equal(enabled, true); assert.equal(app.controller.context().profileId, 'rig-a');
-    assert.deepEqual(app.controller.context().owner, { kind: 'profile', id: 'rig-a' });
-    app.ui.address.emit('input'); // The string still equals both saved rig addresses.
-    assert.equal(app.controller.context().profileId, null); assert.deepEqual(app.controller.context().owner, { kind: 'local', id: null });
-    assert.equal(enabled, true); assert.match(app.ui.feedback.textContent, /not bound to a saved rig/);
-    app.connect(); assert.equal(app.session.snapshot().phase, 'live');
-    assert.equal(app.controller.context().profileId, null);
-    assert.equal(editor.open(), true); assert.deepEqual(ui.groups, [], 'saved-rig groups are not shown for a manual address');
-    assert.match(ui.label, /no saved rig/);
+    assert.equal(enabled, true); assert.equal(app.controller.context().profileId, 'rig-a', 'offline: last-used rig');
+    app.ui.address.emit('input'); assert.equal(app.controller.context().profileId, 'rig-a', 'address edits are not identity');
+    const socket = app.connect(state.replace('Rig 1', 'Rig 2')); assert.equal(app.session.snapshot().phase, 'live');
+    assert.equal(app.controller.context().profileId, 'rig-b');
+    assert.equal(editor.open(), true); assert.deepEqual(ui.groups.map(group => group.id), ['other']); assert.match(ui.label, /Snapshot: Rig 2/);
     // All Mixes (no AUX selected): union of sources received on available AUXes.
     assert.equal(app.controller.context().selectedAux, null);
     assert.deepEqual(ui.catalog.map(source => source.id), ['i.0', 'i.2', 'l.0', 'p.1', 'f.1']);
-    assert.ok(ui.catalog.every(source => !source.unresolved));
     assert.equal(ui.catalog[0].name, '<img src=x>');
-    editor.close();
-    app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change');
-    assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(enabled, true);
-    assert.equal(app.session.snapshot().observations.size, 0); assert.equal(app.sockets.length, 1);
-    assert.equal(editor.open(), true); assert.deepEqual(ui.groups.map(group => group.id), ['other']);
-    assert.deepEqual(app.repository.snapshot().settings, definitions());
+    // A desk recall of another snapshot follows live: the editor closes, the socket stays.
+    socket.receive('3:::SETS^var.currentSnapshot^New show');
+    assert.equal(app.controller.context().profileId, null); assert.equal(enabled, false);
+    await app.controller.whenRigIdle();
+    const created = app.repository.snapshot().settings.profiles.find(rig => rig.name === 'New show');
+    assert.ok(created && !['rig-a', 'rig-b'].includes(created.id)); assert.deepEqual(created.groups, []);
+    assert.equal(app.controller.context().profileId, created.id); assert.equal(enabled, true);
+    assert.equal(app.repository.snapshot().settings.selectedProfileId, created.id);
+    assert.equal(socket.readyState, 1); assert.equal(app.sockets.length, 1);
+    // Exact, case-sensitive identity: a differently cased name is another rig.
+    socket.receive('3:::SETS^var.currentSnapshot^rig 2'); await app.controller.whenRigIdle();
+    assert.notEqual(app.controller.context().profileId, 'rig-b');
+    assert.deepEqual(app.repository.snapshot().settings.profiles.map(rig => rig.name), ['Rig 1', 'Rig 2', 'New show', 'rig 2']);
+    // Recalling a known snapshot returns to its rig and groups.
+    socket.receive('3:::SETS^var.currentSnapshot^Rig 1'); assert.equal(app.controller.context().profileId, 'rig-a');
+    assert.deepEqual(app.repository.snapshot().settings.profiles[0].groups.map(group => group.id), ['7_group-Z', 'empty']);
   } finally { editor.destroy(); await app.close(); }
 });
 
@@ -113,31 +118,6 @@ test('F04-S05 All Mixes union excludes matrix outputs and name-only sources; sel
   } finally { await app.close(); }
 });
 
-test('F04-S05 device-local groups render, navigate and persist view without an AUX identity or a saved rig', async () => {
-  const settings = definitions(); settings.selectedProfileId = null;
-  settings.localDefinitions = { id: 'local-set', groups: [{ id: 'mine', name: 'Mine', members: ['i.2', 'i.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
-  const app = await fixture({ settings });
-  try {
-    assert.deepEqual(app.controller.context().owner, { kind: 'local', id: 'local-set' });
-    app.connect(); app.controller.selectAux(0);
-    assert.deepEqual(app.view.last.groups, [{ id: 'mine', name: 'Mine' }]);
-    assert.equal(app.controller.toggleGroup('mine'), true); await app.controller.whenNavigationIdle();
-    assert.deepEqual(app.view.last.sources.slice(1).map(source => source.sourceId), ['i.2', 'i.0']);
-    assert.deepEqual(app.repository.snapshot().settings.localDefinitions.navigation, { mixId: null, view: 'groups', expandedGroupId: 'mine' });
-    assert.deepEqual(app.repository.snapshot().settings.profiles, definitions().profiles);
-    assert.equal(app.controller.toggleGroup('7_group-Z'), false, 'saved-rig groups are not addressable without that rig');
-  } finally { await app.close(); }
-});
-test('F04-S05 device-local saved view is restored on AUX selection without a mix identity', async () => {
-  const settings = definitions(); settings.selectedProfileId = null;
-  settings.localDefinitions = { id: 'local-set', groups: [{ id: 'mine', name: 'Mine', members: ['i.2', 'i.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: 'mine' } };
-  const app = await fixture({ settings });
-  try {
-    app.connect(); app.controller.selectAux(0); await app.controller.whenNavigationIdle();
-    assert.deepEqual(app.view.last.sources.slice(1).map(source => source.sourceId), ['i.2', 'i.0']);
-    assert.deepEqual(app.repository.snapshot().settings.localDefinitions.navigation, { mixId: null, view: 'groups', expandedGroupId: 'mine' });
-  } finally { await app.close(); }
-});
 const focusable = (name, log) => Object.assign(field(''), { focus() { log.push(name); } });
 const editorUI = (log = []) => ({ focusLog: log, name: focusable('name', log), cancel: focusable('cancel', log), message: field(''), status: field(''), show() { this.visible = true; }, hide() { this.visible = false; }, members() {}, choices() {}, busy() {}, bind(h) { this.actions = h; }, destroy() {}, saved(m) { this.savedMessage = m; }, deletable() {}, confirmDelete() {}, scope() {} });
 for (const memory of [false, true]) test(`F04-S05 deleting the expanded group reports its ${memory ? 'temporary' : 'saved'} outcome instead of silently closing`, async () => {
@@ -207,32 +187,34 @@ test('startup/invalid/missing AUX or unsupported saved EQ never connect or silen
   }
 });
 test('queued older navigation cannot reset a later user choice or write after context/profile/mode changes', async () => {
-  for (const action of ['new-choice', 'profile', 'hide', 'mode-drop']) {
+  for (const action of ['new-choice', 'snapshot', 'hide', 'mode-drop']) {
     const app = await fixture(); const socket = app.connect(); app.controller.selectAux(0); await app.controller.whenNavigationIdle();
     const before = structuredClone(app.repository.snapshot().settings.profiles[0].navigation), pending = [];
     const update = app.repository.update.bind(app.repository);
     app.repository.update = change => new Promise(resolve => pending.push(resolve)).then(() => update(change));
     app.controller.toggleGroup('7_group-Z'); const old = app.controller.whenNavigationIdle();
     if (action === 'new-choice') app.controller.allChannels();
-    if (action === 'profile') { app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change'); }
+    if (action === 'snapshot') socket.receive('3:::SETS^var.currentSnapshot^Rig 2');
     if (action === 'hide') { app.document.hidden = true; app.document.emit('visibilitychange'); }
     if (action === 'mode-drop') socket.receive('3:::SETD^a.0.matrix^1');
     for (const release of pending) release(); await old; await app.controller.whenNavigationIdle();
     if (action === 'new-choice') { assert.equal(app.view.last.view, 'channels'); assert.equal(app.repository.snapshot().settings.profiles[0].navigation.view, 'channels'); }
-    else { assert.deepEqual(app.repository.snapshot().settings.profiles[0].navigation, before); assert.equal(app.view.last.selectedAux, null); }
+    else { assert.deepEqual(app.repository.snapshot().settings.profiles[0].navigation, before); assert.equal(app.view.last.selectedAux, action === 'snapshot' ? 0 : null); }
+    if (action === 'snapshot') assert.equal(app.controller.context().profileId, 'rig-b');
     assert.equal(app.repository.snapshot().settings.profiles[1].navigation.mixId, null); await app.close();
   }
 });
-test('same-address profiles remain isolated and late accepted saves never retarget a newer view/profile', async () => {
-  const app = await fixture(); app.connect(); app.controller.selectAux(0); await app.controller.whenNavigationIdle();
+test('snapshot rigs remain isolated and a late accepted save never retargets the newer rig after a desk recall', async () => {
+  const app = await fixture(); const socket = app.connect(); app.controller.selectAux(0); await app.controller.whenNavigationIdle();
   const update = app.repository.update.bind(app.repository); let release, accepted;
   const committed = new Promise(resolve => { accepted = resolve; });
   app.repository.update = change => update(change).then(result => { accepted(); return new Promise(resolve => { release = () => resolve(result); }); });
   app.controller.toggleGroup('7_group-Z'); const old = app.controller.whenNavigationIdle(); await committed;
-  app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change'); app.connect();
-  assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(app.view.last.selectedAux, null);
+  app.repository.update = update;
+  socket.receive('3:::SETS^var.currentSnapshot^Rig 2');
+  assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(app.view.last.expandedGroupId, null);
   release(); await old;
-  assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(app.view.last.selectedAux, null); assert.equal(app.sockets.length, 2);
+  assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(app.view.last.expandedGroupId, null); assert.equal(app.sockets.length, 1);
   assert.equal(app.repository.snapshot().settings.profiles[0].navigation.expandedGroupId, '7_group-Z'); assert.equal(app.repository.snapshot().settings.profiles[1].navigation.mixId, null); await app.close();
 });
 test('navigation updater preserves concurrent groups/preferences and memory-only status stays visibly temporary', async () => {
@@ -270,7 +252,7 @@ test('a reopened repository restores an expanded group only after explicit Conne
     assert.equal(reopened.sockets.length, 0); assert.equal(reopened.view.last.selectedAux, null); assert.equal(reopened.view.last.sources.length, 0);
     const socket = reopened.connect(null);
     assert.equal(reopened.view.last.expandedGroupId, null); assert.equal(reopened.view.last.sources.length, 0);
-    socket.receive('3:::SETD^a.0.mix^0.5\nSETD^a.0.matrix^0');
+    socket.receive('3:::SETS^var.currentSnapshot^Rig 1\nSETD^a.0.mix^0.5\nSETD^a.0.matrix^0');
     assert.equal(reopened.view.last.selectedAux, null); // Unknown model cannot restore a Ui24 view.
     socket.receive('3:::SETS^model^ui24');
     assert.equal(reopened.view.last.selectedAux, 0); assert.equal(reopened.view.last.expandedGroupId, '7_group-Z');
@@ -305,136 +287,18 @@ test('legacy either-side preferences restore one logical identity and migrate on
 });
 
 
-test('live rig setup saves explicit distinct identities, disconnects first and reopens offline groups', async () => {
-  const app = await fixture();
-  try {
-    app.connect(); app.ui.newRig.emit('click');
-    assert.equal(app.sockets.at(-1).readyState, 3);
-    assert.equal(app.controller.context().profileId, null);
-    app.ui.name.value = 'Same IP new rig'; app.ui.saveRig.emit('click');
-    assert.equal(app.controller.context().profileId, null); // No binding before completion.
-    await app.controller.whenSetupIdle();
-    const id = app.controller.context().profileId;
-    assert.ok(id && !['rig-a', 'rig-b'].includes(id));
-    assert.equal(app.sockets.length, 1); assert.equal(app.session.snapshot().phase, 'disconnected');
-    assert.equal(app.repository.snapshot().settings.profiles.length, 3);
-    assert.match(app.ui.feedback.textContent, /saved on this device/);
-    app.ui.profile.value = 'rig-a'; app.ui.profile.emit('change');
-    assert.equal(app.controller.context().profileId, 'rig-a');
-    assert.deepEqual(app.repository.snapshot().settings.profiles[0].groups[0].members, ['f.1', 'i.20', 'l.0', 'i.0']);
-    app.ui.address.emit('input'); assert.equal(app.controller.context().profileId, null);
-    app.ui.profile.value = id; app.ui.profile.emit('change');
-    assert.equal(app.controller.context().profileId, id);
-    const reopened = new SettingsRepository({ indexedDB: app.factory }); await reopened.initialize();
-    assert.equal(reopened.snapshot().settings.selectedProfileId, id); await reopened.close();
-  } finally { await app.close(); }
-});
-
-test('live rig setup labels unavailable and conflicted saves temporary and preserves durable records', async () => {
-  for (const memory of [true, false]) {
-    const app = await fixture({ memory }); let other;
-    try {
-      if (!memory) { other = new SettingsRepository({ indexedDB: app.factory }); await other.initialize(); await other.update(s => { s.profiles[0].name = 'Newer other window'; }); }
-      app.ui.newRig.emit('click'); app.ui.name.value = 'Temporary'; app.ui.saveRig.emit('click');
-      await app.controller.whenSetupIdle();
-      assert.ok(app.controller.context().profileId); assert.match(app.ui.feedback.textContent, /temporary.*lost when this page closes/); assert.doesNotMatch(app.ui.feedback.textContent, /Export/);
-      assert.equal(app.repository.snapshot().status.mode, 'memory');
-      assert.match(app.ui.settings.textContent, memory ? /unavailable/ : /another window/);
-      if (other) assert.equal(other.snapshot().settings.profiles.length, 2);
-      assert.equal(app.sockets.length, 0);
-    } finally { await other?.close(); await app.close(); }
-  }
-});
-
-test('late live rig commit cannot retarget fresh manual input or connection', async () => {
-  const app = await fixture(); const update = app.repository.update.bind(app.repository); let release;
-  app.repository.update = change => update(change).then(result => new Promise(resolve => { release = () => resolve(result); }));
-  try {
-    app.ui.newRig.emit('click'); app.ui.name.value = 'Delayed rig'; app.ui.saveRig.emit('click');
-    while (!release) await new Promise(resolve => setImmediate(resolve));
-    app.ui.address.value = '192.168.1.60'; app.ui.address.emit('input'); app.connect(null);
-    release(); await app.controller.whenSetupIdle();
-    assert.equal(app.controller.context().profileId, null); assert.equal(app.ui.address.value, '192.168.1.60');
-    assert.equal(app.sockets.length, 1); assert.equal(app.sockets[0].readyState, 1);
-    assert.doesNotMatch(app.ui.feedback.textContent, /Rig saved/);
-  } finally { await app.close(); }
-});
-
-test('queued rig save is canceled before applying when a newer rig selection occurs', async () => {
-  const app = await fixture(); const update = app.repository.update.bind(app.repository); let apply;
-  app.repository.update = change => new Promise((resolve, reject) => { apply = () => update(change).then(resolve, reject); });
-  try {
-    app.ui.newRig.emit('click'); app.ui.name.value = 'Obsolete'; app.ui.saveRig.emit('click');
-    app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change'); apply(); await app.controller.whenSetupIdle();
-    assert.equal(app.controller.context().profileId, 'rig-b'); assert.equal(app.repository.snapshot().settings.profiles.length, 2);
-    assert.equal(app.sockets.length, 0);
-  } finally { await app.close(); }
-});
-
-
-test('live rig save abort after request success stays temporary and cannot claim durable save', async () => {
-  const factory = new IDBFactory(), open = factory.open.bind(factory); let abort = false;
-  factory.open = (...args) => {
-    const request = open(...args);
-    request.addEventListener('success', () => {
-      const db = request.result, transaction = db.transaction.bind(db);
-      db.transaction = (...args) => {
-        const tx = transaction(...args);
-        if (abort && tx.mode === 'readwrite') {
-          const objectStore = tx.objectStore.bind(tx);
-          tx.objectStore = (...args) => {
-            const store = objectStore(...args), put = store.put.bind(store);
-            store.put = (...args) => { const request = put(...args); request.addEventListener('success', () => tx.abort()); return request; };
-            return store;
-          };
-        }
-        return tx;
-      };
-    });
-    return request;
-  };
-  const app = await fixture({ factory }); let reopened;
-  try {
-    abort = true; app.ui.newRig.emit('click'); app.ui.name.value = 'Aborted'; app.ui.saveRig.emit('click');
-    await app.controller.whenSetupIdle(); assert.match(app.ui.feedback.textContent, /temporary/);
-    assert.equal(app.repository.snapshot().status.mode, 'memory');
-    reopened = new SettingsRepository({ indexedDB: factory }); await reopened.initialize();
-    assert.equal(reopened.snapshot().settings.profiles.length, 2); assert.equal(app.sockets.length, 0);
-  } finally { await reopened?.close(); await app.close(); }
-});
-
-
-test('rig Save moves its focused button to the visible name before disabling, without late focus theft', async () => {
-  const app = await fixture(); const update = app.repository.update.bind(app.repository); let release;
-  app.repository.update = change => update(change).then(result => new Promise(resolve => { release = () => resolve(result); }));
-  try {
-    app.ui.newRig.emit('click'); app.ui.name.value = 'Keyboard rig';
-    app.document.activeElement = app.ui.saveRig;
-    app.ui.name.focus = () => { assert.equal(app.ui.saveRig.disabled, false); app.document.activeElement = app.ui.name; };
-    app.ui.saveRig.emit('click');
-    assert.equal(app.document.activeElement, app.ui.name); assert.equal(app.ui.saveRig.disabled, true);
-    while (!release) await new Promise(resolve => setImmediate(resolve));
-    // A subsequent explicit action owns focus, including another dialog/context.
-    const nextFocus = {}; app.document.activeElement = nextFocus;
-    app.ui.profile.value = 'rig-b'; app.ui.profile.emit('change');
-    release(); await app.controller.whenSetupIdle();
-    assert.equal(app.document.activeElement, nextFocus); assert.equal(app.controller.context().profileId, 'rig-b');
-  } finally { await app.close(); }
-});
-
-
 test('F09-S08: the live setup and Edit Groups dialogs have no Export settings control (user decision 2026-11-20)', async () => {
   const source = await Promise.all(['../src/iem/live-controller.js', '../src/iem/group-editor-ui.js', '../src/iem/group-editor.js', '../connection-test.html', '../src/settings-recovery.js'].map(file => readFile(new URL(file, import.meta.url), 'utf8')));
   for (const text of source) { assert.doesNotMatch(text, /Export settings'|>Export settings<|exportSettings|export-settings|import-settings/); }
   const app = await fixture({ memory: true });
   try {
     assert.equal(app.controller.exportSettings, undefined);
-    app.ui.newRig.emit('click'); app.ui.name.value = 'Temporary live rig'; app.ui.saveRig.emit('click'); await app.controller.whenSetupIdle();
+    app.connect(); await app.controller.whenRigIdle();
     let bound;
     const ui = { name: field(''), cancel: field(''), message: field(''), status: field(''), show() {}, hide() {}, members() {}, choices() {}, busy() {}, bind(actions) { bound = actions; this.actions = actions; }, destroy() {} };
     const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui, createID: () => 'offline-group' });
     editor.open(); ui.name.value = 'Temporary live group'; await ui.actions.save();
     assert.equal(bound.exportSettings, undefined); assert.match(ui.message.textContent, /temporary.*lost when this page closes/);
-    assert.equal(app.sockets.length, 0); editor.destroy();
+    assert.equal(app.sockets.length, 1); editor.destroy();
   } finally { await app.close(); }
 });

@@ -7,7 +7,7 @@ import { createGroupEditorUI } from '../src/iem/group-editor-ui.js';
 
 function definitions() {
   const settings = emptySettings();
-  settings.profiles = ['rig-a', 'rig-b'].map((id, index) => ({ id, name: `Local rig ${index + 1}`, address: '192.168.0.60', groups: index ? [] : [{ id: 'existing', name: 'Original', members: ['i.9', 'f.0', 'i.2'] }], navigation: { mixId: null, view: 'channels', expandedGroupId: null } }));
+  settings.profiles = ['rig-a', 'rig-b'].map((id, index) => ({ id, name: `Local rig ${index + 1}`, groups: index ? [] : [{ id: 'existing', name: 'Original', members: ['i.9', 'f.0', 'i.2'] }], navigation: { mixId: null, view: 'channels', expandedGroupId: null } }));
   settings.selectedProfileId = 'rig-a'; return settings;
 }
 async function fixture(options = {}) {
@@ -258,13 +258,12 @@ test('F04-S05 confirmed delete removes only the captured saved-rig group and cle
   settings.profiles[0].groups.push({ id: 'keep', name: 'Keep', members: ['l.0'] });
   settings.profiles[0].navigation = { mixId: 'a.0', view: 'groups', expandedGroupId: 'existing' };
   settings.profiles[1].groups = [{ id: 'existing', name: 'Same ID other rig', members: [] }];
-  settings.localDefinitions = { id: 'local-set', groups: [{ id: 'existing', name: 'Same ID local', members: ['i.0'] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
   const app = await fixture({ settings }); app.editor.open('existing');
   app.ui.actions.requestDelete(); await app.ui.actions.confirmDelete();
   const result = app.repository.snapshot().settings;
   assert.deepEqual(result.profiles[0].groups, [{ id: 'keep', name: 'Keep', members: ['l.0'] }]);
   assert.equal(result.profiles[0].navigation.expandedGroupId, null); assert.equal(result.profiles[0].navigation.mixId, 'a.0');
-  assert.deepEqual(result.profiles[1].groups, settings.profiles[1].groups); assert.deepEqual(result.localDefinitions, settings.localDefinitions);
+  assert.deepEqual(result.profiles[1].groups, settings.profiles[1].groups);
   assert.equal(app.ui.visible, false); assert.match(app.ui.savedMessage, /Group deleted.*saved on this device/);
   const reopened = new SettingsRepository({ indexedDB: app.factory });
   assert.deepEqual((await reopened.initialize()).settings, result);
@@ -291,38 +290,22 @@ test('F04-S05 delete rejects stale groups, stays visibly temporary in memory and
   await app.close();
 });
 
-test('F04-S05 device-local owner edits without a saved rig, creates one stable ID lazily and never touches rig groups', async () => {
-  let id = 0;
-  const app = await fixture(); app.context({ profileId: null, owner: { kind: 'local', id: null }, revision: 2, selectedAux: null, sources: [], catalog: [{ sourceId: 'i.2', name: 'Vox' }] });
-  assert.equal(app.enabled, true); assert.equal(app.editor.open(), true);
-  assert.equal(app.ui.rigName, 'Groups on this device — no saved rig selected');
-  assert.deepEqual(app.ui.groups, []); assert.deepEqual(app.editor.snapshot().members, []);
-  app.ui.name.value = 'Local band'; app.ui.actions.toggle('i.2'); await app.ui.actions.save();
-  const first = app.repository.snapshot().settings;
-  assert.equal(first.localDefinitions.id, 'new-2'); id = first.localDefinitions.id;
-  assert.deepEqual(first.localDefinitions.groups, [{ id: 'new-1', name: 'Local band', members: ['i.2'] }]);
-  assert.deepEqual(first.localDefinitions.navigation, { mixId: null, view: 'groups', expandedGroupId: null });
-  assert.deepEqual(first.profiles, definitions().profiles);
-  app.context({ owner: { kind: 'local', id } });
-  app.editor.open(); app.ui.actions.selectGroup(null); app.ui.name.value = 'Second'; await app.ui.actions.save();
-  assert.equal(app.repository.snapshot().settings.localDefinitions.id, id, 'the created local identity stays stable');
-  assert.deepEqual(app.repository.snapshot().settings.localDefinitions.groups.map(group => group.name), ['Local band', 'Second']);
-  app.editor.open('new-1'); app.ui.actions.requestDelete(); await app.ui.actions.confirmDelete();
-  assert.deepEqual(app.repository.snapshot().settings.localDefinitions.groups.map(group => group.name), ['Second']);
-  // Binding a saved rig switches to its own groups; nothing is moved implicitly.
-  app.context({ profileId: 'rig-a', owner: { kind: 'profile', id: 'rig-a' }, revision: 3 });
-  app.editor.open(); assert.deepEqual(app.ui.groups.map(group => group.id), ['existing']);
-  assert.equal(app.ui.rigName, 'Saved rig: Local rig 1');
-  assert.deepEqual(app.repository.snapshot().settings.profiles, definitions().profiles);
+test('F02-S05 groups belong only to the bound snapshot rig; no rig means unavailable with its one-line reason', async () => {
+  const app = await fixture();
+  let reason = null; app.ui.unavailable = text => { reason = text; };
+  app.editor.open(); assert.equal(app.ui.rigName, 'Snapshot: Local rig 1 — groups kept on this device'); app.ui.actions.close();
+  app.context({ profileId: null, owner: null, unavailableReason: 'Groups unavailable: the desk reported no usable snapshot name.', revision: 2 });
+  assert.equal(app.enabled, false); assert.equal(app.editor.open(), false);
+  assert.equal(reason, 'Groups unavailable: the desk reported no usable snapshot name.'); assert.equal(app.ui.visible, false);
+  // The removed device-local owner kind addresses nothing.
+  app.context({ owner: { kind: 'local', id: 'rig-a' }, revision: 3 }); assert.equal(app.enabled, false); assert.equal(app.editor.open(), false);
+  // Switching rigs edits that rig's own groups; nothing moves implicitly.
+  app.context({ profileId: 'rig-b', owner: { kind: 'profile', id: 'rig-b' }, revision: 4 });
+  assert.equal(app.editor.open(), true); assert.deepEqual(app.ui.groups, []); assert.equal(app.ui.rigName, 'Snapshot: Local rig 2 — groups kept on this device');
+  app.ui.name.value = 'Snapshot B band'; app.ui.actions.toggle('i.2'); await app.ui.actions.save();
+  const saved = app.repository.snapshot().settings;
+  assert.deepEqual(saved.profiles[1].groups.map(group => group.name), ['Snapshot B band']);
+  assert.deepEqual(saved.profiles[0].groups, definitions().profiles[0].groups);
   await app.close();
 });
 
-test('F04-S05 a first local save cannot overwrite a local set created after the draft opened', async () => {
-  const app = await fixture(); app.context({ profileId: null, owner: { kind: 'local', id: null }, revision: 2 });
-  app.editor.open(); app.ui.name.value = 'Late';
-  const other = { id: 'elsewhere', groups: [{ id: 'x', name: 'X', members: [] }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } };
-  await app.repository.update(settings => { settings.localDefinitions = other; });
-  await app.ui.actions.save(); assert.match(app.ui.message.textContent, /not saved.*Device-local groups changed/);
-  assert.deepEqual(app.repository.snapshot().settings.localDefinitions, other);
-  await app.close();
-});

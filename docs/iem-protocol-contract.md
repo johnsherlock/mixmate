@@ -23,6 +23,7 @@ All indices below are zero-based. Counts are library Ui24 **profile bounds**, no
 | Wire path | Wire type/domain | Normalized observation | Source evidence |
 | --- | --- | --- | --- |
 | `model`, `firmware` | SETS; known model `ui12`/`ui16`/`ui24`, bounded firmware string | device metadata; no fallback model | DeviceInfo selectors |
+| `var.currentSnapshot` | SETS string (≤1024 bytes), including received empty | device `currentSnapshot`; receive-only local rig identity (F02-S05) | Root read-only INIT capture, firmware 3.0.7865-ui24, 2026-11-20 (`SETS^var.currentSnapshot^IMGL FIBBERS`) |
 | `a.<0..9>.name` | SETS string, including received empty | AUX `name` | Channel raw-name selector |
 | `a.<0..9>.mix` | SETD finite 0..1 | AUX `level` | master-bus Aux channel and selectFaderValue; Channel clamps to 0..1 |
 | `a.<0..9>.pan` | SETD finite 0..1 | AUX `pan` | master-channel pan selector/setter |

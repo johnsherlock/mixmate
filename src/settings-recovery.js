@@ -2,7 +2,7 @@ import { emptySettings } from './settings.js';
 
 // F09-S08 (user decision 2026-11-20): settings export/import (backup files)
 // was removed from every MixMate surface. Reset and storage protection remain;
-// the settings repository's schema and v1 -> v2 read migration are unchanged.
+// F02-S05 moves the schema to v3 (snapshot-named rigs, known addresses).
 
 // Local reset only. Replacement settings cannot reach mixer state or a write facade.
 export function mountSettingsRecovery({ repository, rigs, $, storageManager }) {
@@ -19,9 +19,7 @@ export function mountSettingsRecovery({ repository, rigs, $, storageManager }) {
     if (preview) { clearPreview(); feedback('Settings changed. Choose Reset again to review the latest replacement.'); }
   }
   for (const [id, event] of [
-    ['address', 'input'], ['rig-name', 'input'], ['rig-profile', 'change'],
-    ['preferred-orientation', 'change'], ['show-meters', 'change'], ['new-rig', 'click'],
-    ['save-rig', 'click'], ['delete-rig', 'click'], ['connect-form', 'submit'],
+    ['address', 'input'], ['preferred-orientation', 'change'], ['show-meters', 'change'], ['connect-form', 'submit'],
   ]) $(id).addEventListener(event, invalidate);
 
   clearPreview();
@@ -35,8 +33,8 @@ export function mountSettingsRecovery({ repository, rigs, $, storageManager }) {
     const status = repository.snapshot().status;
     const temporary = status.mode === 'memory' ? '\nStorage is unavailable or protected from overwrite: this applies temporary settings only; the existing stored record stays untouched.' : '';
     $('settings-preview-text').textContent =
-      `Reset local settings? This removes ${previous.profiles.length} current rigs and all local group definitions. Unsaved editor changes will be discarded.\n` +
-      'Use empty rig/group lists and default display preferences.\n' +
+      `Reset local settings? This removes ${previous.profiles.length} snapshot rigs with their group definitions and ${previous.knownAddresses.length} known desk addresses. Unsaved editor changes will be discarded.\n` +
+      'Use empty rig/group/address lists and default display preferences.\n' +
       'MixMate will disconnect. No mixer settings change. App files, offline version history and other apps are kept.' + temporary;
     $('confirm-settings').textContent = 'Reset local settings';
     $('confirm-settings').disabled = false;
