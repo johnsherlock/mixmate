@@ -364,7 +364,7 @@ Implementation on `codex/f09-s07-points-floor-cleanup` (from main `50e24d5`, F09
   - Re-anchoring happens only at gesture begin (and silently on open/draw/reset). Between gestures, handles may show over a stale base until the next gesture after a native edit.
 - **Tests.** Intentional expectation updates: −70 floor/scale tests (the member-below-floor fixture moves from 0.03 ≈ −67.9 dB to 0.02 ≈ −72.7 dB), ruler ticks, group strip text (now tooltip and Δ spans), CSS geometry rule test (overlay removed), channel-detail mount with `debug: true`. The "points return to 0 dB Δ" UI test is replaced by five persistent-point tests.
 
-Live checks outstanding: listed in [F09-S07](stories/F09-S07.md#live-acceptance-pending-root). F08-S01 remains parked.
+Live acceptance passed (root, 2026-11-20): see the [F09-S07](stories/F09-S07.md#live-acceptance-passed-root-2026-11-20--results-in-the-pr-record) PR record. F08-S01 remains parked.
 
 F09-S07 review fixes on `6de49dc` (2026-11-20, story agent): local GEQ hints are shown next to the owner status; points restart at render time when the editable coordinate (requested values while echoes are pending, else received bands once editable) stops matching; a failed/partial release counts as interrupted; `?debug=0/false/no/off` stays off; strip status is exposed through `aria-describedby`; ruler labels and the group Δ readout use CSS container queries (drop −∞ then −70; drop "Δ " below 104 px, then shrink the font). The group strip keeps its 24 px footer so its fader travel and ruler stay aligned with member strips. Container-query rendering is not browser-verified by the agent.
 
@@ -393,7 +393,7 @@ Implementation on `codex/f09-s08-group-silence-nav` (from main `dc371cb`, F09-S0
   - GEQ pointer coordinates follow the new geometry (x span 100 instead of 108 in the fake);
   - removed import/export lifecycle tests, with reset variants kept.
 
-Live checks outstanding: listed in [F09-S08](stories/F09-S08.md#live-acceptance-pending-root). F08-S01 remains parked.
+Live acceptance passed (root, 2026-11-20): see the [F09-S08](stories/F09-S08.md#live-acceptance-passed-root-2026-11-20--results-in-the-pr-record) PR record. F08-S01 remains parked.
 
 ## F09-S09 EQ cleanup, immediate GEQ reset, prototype pan — 2026-11-20
 
@@ -414,7 +414,7 @@ Implementation on `codex/f09-s09-eq-cleanup` (from main `9527f91`, F09-S08 merge
 - **Fixed accepted F09-S08 doc leftovers:** ADR-0008 and `iem-relative-groups.md` silent-anchor wording; F09-S08 decision 3 (near-handle grab is mouse-only).
 - **Not verified:** browser layout of the live EQ/pan dialog (needs a connected session; no desk used).
 
-Live checks outstanding: listed in [F09-S09](stories/F09-S09.md#live-acceptance-pending-root). F08-S01 remains parked.
+Live acceptance passed (root, 2026-11-20): see the [F09-S09](stories/F09-S09.md#live-acceptance-passed-root-2026-11-20--results-in-the-pr-record) PR record. F08-S01 remains parked.
 
 ## F09-S10 GEQ point touch drag — 2026-11-20
 
@@ -427,4 +427,13 @@ Implementation on `codex/f09-s10-eq-touch` (from main `c4acb38`, F09-S09 merged 
   - The pre-existing level cap shows the retained request after the window, unlike pan, which falls back to the received value.
 - **Not verified by the story agent:** real-browser touch behaviour (no browser or desk used); the CSS-text test asserts the rule only.
 
-Live checks outstanding: listed in [F09-S10](stories/F09-S10.md#live-acceptance-pending-root). F08-S01 remains parked.
+Live acceptance passed (root, 2026-11-20; emulated touch drag on the desk, recorded on PR #56). F08-S01 remains parked.
+
+## 2026-11-20 — F09 batch close: accepted P3 review follow-ups (root)
+
+Accepted as non-blocking by the independent final-head reviews of PRs #54 and #56 (Codex unavailable; user direction):
+
+- **F09-S08:** on touch, a press on a handle's dot within about 24 px of the next handle grabs the neighbour, because the topmost r=24 hit circle wins. Fix: choose the nearest handle when the target is a hit circle.
+- **F09-S08:** the `.mm-feedback` status uses `aria-label` rather than a live region, so screen readers may not announce changes.
+- **F09-S10:** the CSS test checks only `.mm-live-eq` rules. An unscoped later rule that re-enables pan on `.mm-eq-svg` would pass it.
+- **F09-S10:** real-device touch behaviour is unverified and belongs to F08-S01.
