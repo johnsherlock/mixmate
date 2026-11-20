@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createDemoProvider } from '../src/iem/demo-provider.js';
 import { createEmptyLiveProvider } from '../src/iem/live-provider.js';
 import { installFaderGestures } from '../src/iem/gestures.js';
-import { mountReadOnlyView } from '../src/iem/live-view.js';
+import { mountReadOnlyView, debugFlag } from '../src/iem/live-view.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
@@ -380,29 +380,35 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     const model = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'band' }); view.render(model);
     const bank = root.querySelector('.mm-strip-scroll'), article = bank.children[0], input = article.querySelector('input'), cap = article.querySelector('.mm-fader-hit');
     assert.equal(article.querySelector('.mm-meter-pair'), undefined); assert.equal(input.disabled, false); assert.equal(input.min, String(FADER_SCALE_MIN)); assert.equal(input.max, String(FADER_SCALE_TOP_DB)); assert.equal(input.step, 'any'); assert.equal(input.dataset.keyStep, '0.5'); assert.equal(Number(input.value), positionToScale(0.4), 'cap starts at the loudest member level on the dB scale');
-    assert.deepEqual(article.querySelector('.mm-ruler').children.map(node => node.textContent), ['+10', '0', '−12', '−24', '−40', '−60', '−∞'], 'dB ticks replace the POSITION label');
-    assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.match(article.querySelector('.mm-value').textContent, /Δ 0\.0 dB/);
+    assert.deepEqual(article.querySelector('.mm-ruler').children.map(node => node.textContent), ['+10', '0', '−12', '−24', '−40', '−60', '−70', '−∞'], 'dB ticks replace the POSITION label (−70 floor since F09-S07)');
+    assert.equal(article.querySelector('.mm-ruler').children.at(-1).dataset.tick, 'off', 'the −∞ label is tagged so compact CSS can drop it');
+    assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.equal(article.querySelector('.mm-delta-prefix').textContent, 'Δ '); assert.equal(article.querySelector('.mm-delta-amount').textContent, '0.0 dB');
     assert.equal(root.querySelector('.mm-pinned').children.length, 0); assert.equal(root.querySelector('.mm-level-enable'), undefined);
     const name = article.querySelector('.mm-strip-name'), select = article.querySelector('.mm-group-level-select');
     root.emit('click', { target: { closest: selector => selector === 'button' ? name : null } }); root.emit('click', { target: { closest: selector => selector === 'button' ? select : null } }); assert.deepEqual(actions, ['nav:band', 'level:band']);
     const wrap = input.parentElement, event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
     root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60)); assert.equal(Number(input.value), positionToScale(0.523456));
     bank.scrollLeft = 87; control.previewDelta = 0.523456; control.groupRequested = [{ sourceId: 'i.0', auxIndex: 0, value: 0.45 }]; view.render(model); view.renderMeters(model);
-    assert.match(article.querySelector('.mm-value').textContent, /^Δ \+0\.5 dB$/);
+    assert.equal(article.querySelector('.mm-delta-amount').textContent, '+0.5 dB', 'Δ prefix stays a separate span compact CSS can hide');
     const member = bank.children[1];
     assert.equal(Number(member.querySelector('input').value), positionToScale(0.45), 'member cap previews the requested common delta'); assert.equal(member.dataset.groupRequested, 'true');
-    assert.match(member.querySelector('.mm-live-strip-state').textContent, /^Last received Received · Group requested -[0-9]+\.[0-9] dB$/, 'formatted dB, no raw full-precision value');
-    assert.match(member.querySelector('.mm-live-strip-state').attributes.title, /raw 0\.45/);
+    assert.equal(member.querySelector('.mm-live-strip-state'), undefined, 'F09-S07: no per-strip state line');
+    assert.equal(member.querySelector('.mm-detail-button'), undefined, 'F09-S07: Details only with ?debug');
+    assert.match(member.querySelector('.mm-fader-space').attributes.title, /^Last received Received · Group requested -[0-9]+\.[0-9] dB \(raw 0\.45\)$/, 'status stays in the tooltip');
+    const described = member.querySelector('.mm-sr-only');
+    assert.equal(described.textContent, member.querySelector('.mm-fader-space').attributes.title, 'screen readers get the same status');
+    assert.equal(member.querySelector('input').attributes['aria-describedby'], described.id);
+    assert.equal(article.querySelector('.mm-pan-button'), undefined, 'no group bottom note');
     assert.equal(bank.children[0], article); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(bank.scrollLeft, 87);
     control.armed = false; control.eligible = false; control.gestureActive = false; control.groupRequested = null; view.render(model); assert.equal(Number(input.value), positionToScale(0.4));
     assert.equal(bank.children[1].dataset.groupRequested, 'false'); assert.equal(Number(bank.children[1].querySelector('input').value), positionToScale(0.4), 'member returns to received actual'); assert.equal(input.disabled, false); assert.equal(article.querySelector('.mm-meter-pair'), undefined);
     profile.groups.push({ id: 'other', name: 'Other', members: ['i.0'] });
     control.eligible = true; control.lastDelta = 3;
     view.render(projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: null }));
-    assert.match(bank.children[0].querySelector('.mm-value').textContent, /Δ \+3\.0 dB/);
+    assert.equal(bank.children[0].querySelector('.mm-delta-amount').textContent, '+3.0 dB');
     assert.equal(bank.children[1].querySelector('input').disabled, false);
-    assert.match(bank.children[1].querySelector('.mm-value').textContent, /Δ 0\.0 dB/);
-    assert.match(bank.children[1].querySelector('.mm-pan-button').textContent, /starts at zero/);
+    assert.equal(bank.children[1].querySelector('.mm-delta-amount').textContent, '0.0 dB');
+    assert.equal(bank.children[1].querySelector('.mm-pan-button'), undefined, 'F09-S07: no bottom group note text');
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
 });
 
@@ -537,4 +543,9 @@ test('logical sends retain both raw processing sides and expose different or unk
   assert.equal(project(1).stateText, 'Send mute: Unmuted · Pre-fader · Post-processing');
   observations.delete('i.0.aux.0.post'); observations.delete('i.0.aux.1.post');
   assert.match(project(0).stateText, /Output 1: .*Unknown.*Output 2: .*Unknown/);
+});
+
+test('F09-S07: only an enabling ?debug value shows development Details', () => {
+  for (const search of ['?debug', '?debug=1', '?debug=true', '?x=1&debug=yes']) assert.equal(debugFlag(search), true, search);
+  for (const search of ['', '?debug=0', '?debug=false', '?debug=FALSE', '?debug=no', '?debug=off', '?debugx']) assert.equal(debugFlag(search), false, search);
 });

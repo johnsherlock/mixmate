@@ -1,6 +1,6 @@
 import { mountChannelDetail } from './channel-detail.js';
 import { mountShell } from './shell.js';
-import { mountReadOnlyView } from './live-view.js';
+import { debugFlag, mountReadOnlyView } from './live-view.js';
 import { createAuxControlSession } from './aux-control-session.js';
 import { createDialogOwner } from './dialog-owner.js';
 import { mountPanControls } from './pan-controls.js';
@@ -14,7 +14,10 @@ const root = mountShell(document.getElementById('iem-root'), 'live');
 const repository = new SettingsRepository(), session = createAuxControlSession({ settingsRepository: repository });
 let controller, panControls, eqControls, channelDetail;
 const dialogOwner = createDialogOwner();
-const view = mountReadOnlyView(root, { onOpenPan: target => panControls.open(target), onOpenEq: auxIndex => eqControls.open(auxIndex), onOpenDetail: model => channelDetail.open(model), onDetailUpdate: models => channelDetail?.update(models), onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllChannels: () => controller.allChannels(),
+// F09-S07: per-strip Details diagnostics are development-only (index.html?debug).
+const debug = debugFlag(window.location.search);
+if (debug) root.dataset.debug = 'true';
+const view = mountReadOnlyView(root, { debug, onOpenPan: target => panControls.open(target), onOpenEq: auxIndex => eqControls.open(auxIndex), onOpenDetail: model => channelDetail.open(model), onDetailUpdate: models => channelDetail?.update(models), onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllChannels: () => controller.allChannels(),
   canEditLevel: target => session.canEditLevelTarget(target), onSelectGroupLevel: id => controller.selectGroupLevel(id), onSelectLevel: target => controller.selectLevel(target), onToggleLevel: () => controller.toggleLevel(),
   onBeginLevel: () => session.beginLevelGesture(), onPreviewLevel: (token, value) => session.previewLevelGesture(token, value), onCommitLevel: (token, value) => session.commitLevelGesture(token, value), onCancelLevel: () => session.cancelLevelGesture() });
 const connectionUI = createLiveConnectionUI(root, { levels: true, pan: true, dialogOwner });

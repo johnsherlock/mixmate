@@ -8,7 +8,12 @@ import { FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, 
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null } = {}) {
+// F09-S07: `?debug` (or any value except 0/false/no/off) shows development-only Details.
+export function debugFlag(search = '') {
+  const value = new URLSearchParams(search).get('debug');
+  return value !== null && !['0', 'false', 'no', 'off'].includes(value.trim().toLowerCase());
+}
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false;
@@ -37,7 +42,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const shortcutNodes = new Map(), levelTargets = new WeakMap();
 
   let control = null, preview = null, selectedAux = null, bankModels = [];
-  const detailModels = new WeakMap();
+  // Detail models are keyed by strip article; Details buttons exist only with ?debug.
+  const detailModels = new WeakMap(), detailButtons = new WeakMap();
   function bankLayout() {
     const columns = landscapeColumns(bank.clientWidth || bank.getBoundingClientRect().width);
     bank.style.setProperty('--mm-bank-columns', String(columns));
@@ -59,9 +65,12 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     }
   }
   // One decimal so the group Δ fits a compact landscape strip; two in the title.
-  const deltaText = (value, digits = 1) => `Δ ${value > 0 ? '+' : ''}${value.toFixed(digits)} dB`;
+  // F09-S07: the readout is a fixed "Δ " prefix span plus an amount span, so
+  // compact landscape can hide the prefix (CSS) instead of truncating.
+  const deltaAmount = (value, digits = 1) => `${value > 0 ? '+' : ''}${value.toFixed(digits)} dB`;
+  const deltaText = (value, digits = 1) => `Δ ${deltaAmount(value, digits)}`;
   // F09-S06 dB-linear level display: input values are scale units (dB from
-  // -60 to +10, plus a short bottom segment down to -inf); the private session
+  // -70 to +10, plus a short bottom segment down to -inf); the private session
   // still receives and returns desk positions 0..1.
   const unitPosition = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
   const scaleText = position => String(positionToScale(position));
@@ -74,13 +83,28 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     scale.textContent = '';
     for (const value of [...FADER_SCALE_TICKS, FADER_SCALE_MIN]) {
       const tick = element('span', '', value === FADER_SCALE_MIN ? '−∞' : `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}`);
+      // F09-S07: compact layouts drop the −∞ label (CSS) so it never overlaps −70.
+      tick.dataset.tick = value === FADER_SCALE_MIN ? 'off' : String(value);
       tick.style.top = `${scaleTickPercent(value)}%`; scale.append(tick);
     }
     scale.setAttribute('aria-hidden', 'true');
-    scale.setAttribute('title', 'dB scale: equal dB = equal distance from +10 to −60 dB; the bottom segment reaches −∞');
+    scale.setAttribute('title', 'dB scale: equal dB = equal distance from +10 to −70 dB; the bottom segment reaches −∞');
   }
-  // One fixed single line; the full text stays in the title and Details.
-  const setState = (strip, text, title = text) => { strip.state.textContent = text; strip.state.setAttribute('title', title); strip.stateFull = title; };
+  // F09-S07: no per-strip state line (not in the design; its text changes made
+  // strips jitter mid-drag). The text lives only in the fader space's title
+  // tooltip and the debug-only Details; header/footer keep the single status.
+  // Attribute-only, so it never changes layout during a gesture.
+  // Screen readers get the same text through a visually hidden description
+  // referenced by the fader (aria-describedby); it occupies no layout.
+  const setState = (strip, text, title = text) => {
+    if (strip.stateFull === title) return;
+    strip.space.setAttribute('title', title); strip.status.textContent = title; strip.stateFull = title;
+  };
+  let statusIds = 0;
+  function statusNode(article, control) {
+    const node = element('span', 'mm-sr-only'); node.id = `mm-strip-status-${++statusIds}`; article.append(node);
+    control?.setAttribute('aria-describedby', node.id); return node;
+  }
   const selectedTarget = target => control?.selected && JSON.stringify(target) === JSON.stringify(control.selected);
   function renderShortcuts(model, selected) {
     if (!shortcuts) return;
@@ -125,7 +149,6 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (!unitPosition(position)) return null;
       const next = positionToScale(position);
       const group = groupInputs.get(input);
-      if (group) group.note.textContent = 'Live Δ · sending while you drag';
       if (preview?.input === input) { preview.value = next; preview.position = position; }
       mirrorPreview(input, next);
       return next;
@@ -140,8 +163,11 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     const article = element('article', `mm-strip ${kind === 'source' ? 'mm-channel' : kind === 'group' ? 'mm-group' : 'mm-master'}`);
     const head = element('div', 'mm-strip-head'), name = element('button', 'mm-strip-name'), description = element('span', 'mm-strip-detail');
     name.type = 'button'; name.disabled = true; head.append(name, description);
-    const detail = element('button', 'mm-detail-button', 'Details'); detail.type = 'button'; detail.dataset.channelDetail = ''; detail.setAttribute('aria-haspopup', 'dialog');
-    article.append(detail);
+    // F09-S07: Details is a development diagnostic, shown only with ?debug.
+    if (debug) {
+      const detail = element('button', 'mm-detail-button', 'Details'); detail.type = 'button'; detail.dataset.channelDetail = ''; detail.setAttribute('aria-haspopup', 'dialog');
+      detailButtons.set(detail, article); article.append(detail);
+    }
     const output = element('output', 'mm-value'), space = element('div', 'mm-fader-space'), scale = element('span', 'mm-ruler');
     ruler(scale);
     if (kind === 'group') {
@@ -151,12 +177,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (select) { select.type = 'button'; selection.append(select); }
       if (!control) head.append(selection);
       const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
+      const deltaPrefix = element('span', 'mm-delta-prefix', 'Δ '), delta = element('span', 'mm-delta-amount', '—'); output.append(deltaPrefix, delta);
       // Full-range group fader on the dB-linear scale (F09-S06): the cap starts
       // at the loudest member's received level; every member gets the same dB Δ,
       // so all move the same distance (top: loudest at max; bottom: quietest at
-      // -60 dB; a member already below -60 dB allows no downward travel).
+      // -70 dB since F09-S07; a member already below -70 dB allows no downward
+      // travel).
       unavailable.setAttribute('aria-label', 'Relative group level unavailable · read-only');
-      const state = element('span', 'mm-live-strip-state'), note = element('span', 'mm-group-control-note', control ? 'REQUESTED Δ · no balance proof' : 'Local definition · no group meter');
       space.append(scale, unavailable);
       let input;
       if (control) {
@@ -166,11 +193,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (control) {
         selection.className = 'mm-group-control-note mm-group-selection';
         selection.setAttribute('title', 'Group master · cap follows the loudest member · one common Δ per gesture · no aggregate level or VU');
-        note.textContent = 'Last requested gesture Δ'; note.className = 'mm-pan-button';
-        note.setAttribute('title', 'Last requested gesture offset; no proof of hardware balance or application. Each gesture uses current received state and starts at zero.');
-        article.append(head, output, space, note, state, selection);
-      } else article.append(head, output, space, state, note);
-      const strip = { kind, article, name, description, output, state, input, select, unavailable, note };
+        article.append(head, output, space, selection);
+      } else article.append(head, output, space);
+      const strip = { kind, article, name, description, output, delta, space, input, select, unavailable, status: statusNode(article, input || output) };
       if (input) groupInputs.set(input, strip);
       return strip;
     }
@@ -183,14 +208,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     });
     const meterCaption = element('span', 'mm-live-meter-caption'), meterLabel = element('span', 'mm-live-meter-label'), meterStatus = element('span', 'mm-live-meter-status');
     meterCaption.append(meterLabel, meterStatus);
-    const pan = element(control?.panCapable && kind === 'source' ? 'button' : 'span', 'mm-pan-button'), state = element('span', 'mm-live-strip-state');
+    const pan = element(control?.panCapable && kind === 'source' ? 'button' : 'span', 'mm-pan-button');
     let panReadout;
     if (control?.panCapable && kind === 'source') {
       panReadout = element('span', 'mm-pan-readout'); pan.append(element('span', 'mm-pan-short', 'Pan'), panReadout);
       article.dataset.panBrowse = 'true';
     }
-    space.append(scale, input, meter); article.append(head, output, space, pan, state, meterCaption);
-    return { kind, article, name, description, output, input, pan, panReadout, state, meter, tracks, meterCaption, meterLabel, meterStatus };
+    space.append(scale, input, meter); article.append(head, output, space, pan, meterCaption);
+    return { kind, article, name, description, output, space, input, pan, panReadout, meter, tracks, meterCaption, meterLabel, meterStatus, status: statusNode(article, input) };
   }
   function updateMeter(strip, model) {
     if (strip.kind === 'group') return;
@@ -214,14 +239,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     });
   }
   function publishDetails() {
-    onDetailUpdate([...sourceStrips.values(), ...pinnedStrips.values(), ...overviewStrips.values()].filter(strip => strip.article.parentElement && !strip.article.parentElement.hidden && !(strip.article.parentElement === bank && sends.hidden)).map(strip => detailModels.get(strip.article.querySelector('.mm-detail-button'))));
+    onDetailUpdate([...sourceStrips.values(), ...pinnedStrips.values(), ...overviewStrips.values()].filter(strip => strip.article.parentElement && !strip.article.parentElement.hidden && !(strip.article.parentElement === bank && sends.hidden)).map(strip => detailModels.get(strip.article)));
   }
   function renderMeters(model) {
     for (const [strips, models] of [[overviewStrips, model.mixes], [sourceStrips, model.sources], [pinnedStrips, model.selectedMix ? [model.selectedMix] : []]]) {
       for (const item of models || []) { const strip = strips.get(strips === sourceStrips ? item.sourceId || item.renderKey || item.id : item.id); if (strip) {
         updateMeter(strip, item);
-        const button = strip.article.querySelector('.mm-detail-button');
-        detailModels.set(button, { ...item, requestedDetail: detailModels.get(button)?.requestedDetail });
+        detailModels.set(strip.article, { ...item, requestedDetail: detailModels.get(strip.article)?.requestedDetail });
       } }
     }
     publishDetails();
@@ -237,11 +261,11 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (!strip) { strip = createStrip(model.kind === 'group' ? 'group' : kind); strips.set(key(model), strip); container.append(strip.article); }
       if (container.children[index] !== strip.article) container.insertBefore(strip.article, container.children[index] || null);
       strip.article.dataset.id = model.id;
-      const detailButton = strip.article.querySelector('.mm-detail-button');
-      detailModels.set(detailButton, model); detailButton.setAttribute('aria-label', `Details for ${model.name}`);
+      const detailButton = strip.article; // detail model key (the strip itself)
+      detailModels.set(detailButton, model); strip.article.querySelector('.mm-detail-button')?.setAttribute('aria-label', `Details for ${model.name}`);
       if (model.auxIndex !== undefined) strip.article.style.setProperty('--mm-strip-color', outputColour(model.themeIndex ?? model.auxIndex));
       strip.name.textContent = model.name; strip.description.textContent = model.detail;
-      strip.output.textContent = model.kind === 'group' ? '—' : model.levelText ?? '—';
+      if (strip.kind !== 'group') strip.output.textContent = model.levelText ?? '—';
       strip.article.dataset.unresolved = String(Boolean(model.unresolved));
       if (strip.kind === 'group') {
         strip.name.disabled = false; strip.name.dataset.toggleGroup = model.groupId;
@@ -261,9 +285,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           if (preview?.input !== strip.input) strip.input.value = scaleText(reference);
           strip.unavailable.hidden = Boolean(eligible);
         }
-        strip.note.textContent = chosen && control?.gestureActive ? 'Live Δ · sending while you drag' : chosen && control?.lastDelta !== null ? 'Last requested gesture Δ' : 'Gesture Δ · starts at zero';
         const delta = chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0;
-        strip.output.textContent = eligible ? deltaText(delta) : 'Δ —';
+        const amount = eligible ? deltaAmount(delta) : '—';
+        if (strip.delta.textContent !== amount) strip.delta.textContent = amount;
         strip.output.setAttribute('title', eligible ? deltaText(delta, 2) : 'Group adjustment unavailable');
         strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         setState(strip, chosen ? control.reason || control.status : model.stateText);
@@ -363,7 +387,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   function click(event) {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
-    if (detailModels.has(button)) { gestures.cancel(); onOpenDetail(detailModels.get(button)); return; }
+    if (detailButtons.has(button)) { gestures.cancel(); onOpenDetail(detailModels.get(detailButtons.get(button))); return; }
     if (button.dataset.openPan !== undefined) { gestures.cancel(); onOpenPan({ sourceId: button.dataset.openPan, auxIndex: Number(button.dataset.panAux) }); }
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
     if (control && levelTargets.has(button)) { gestures.cancel(); onSelectLevel(levelTargets.get(button)); }
@@ -384,7 +408,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     render, renderMeters,
     detailModel(id) {
       for (const strip of [...sourceStrips.values(), ...pinnedStrips.values(), ...overviewStrips.values()]) {
-        const model = detailModels.get(strip.article.querySelector('.mm-detail-button'));
+        const model = detailModels.get(strip.article);
         if (model?.id === id) return model;
       }
       return null;

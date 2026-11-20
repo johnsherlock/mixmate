@@ -57,7 +57,7 @@ test('wired Details opening retains inactive requested paths and current cancele
   const session=createAuxControlSession({WebSocketClass:Socket,timers,now:()=>0,wallNow:()=>0});
   let detail;
   const project=()=>projectLiveState(session.snapshot(),0);
-  const view=mountReadOnlyView(app.root,{ onOpenDetail:model=>detail.open(model),onDetailUpdate:models=>detail?.update(models),canEditLevel:target=>session.canEditLevelTarget(target) });
+  const view=mountReadOnlyView(app.root,{ debug:true,onOpenDetail:model=>detail.open(model),onDetailUpdate:models=>detail?.update(models),canEditLevel:target=>session.canEditLevelTarget(target) });
   detail=mountChannelDetail({root:app.root,dialogOwner:owner,onOpen:model=>{ session.invalidateLevelContext(); view.render(project()); return view.detailModel(model.id); }});
   const off=session.subscribe(()=>view.render(project()));
   try {

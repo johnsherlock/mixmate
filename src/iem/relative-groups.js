@@ -8,13 +8,14 @@ const amplitude = position => (position < 0.055 ? Math.sin(28.559933214452666 * 
   Math.exp((23.90844819639692 + (-26.23877598214595 + (12.195249692570245 - 0.4878099877028098 * position) * position) * position) * position) * 0.0002676529517952372;
 export const GROUP_MIN_DB = -199;
 export const GROUP_MAX_DB = 20 * Math.log10(amplitude(1));
-// Full-range group travel (F09-S05; floor changed by F09-S06, user decision
-// 2026-11-19, docs/iem-relative-groups.md). Downward travel stops when the
+// Full-range group travel (F09-S05; floor set by F09-S06, user decision
+// 2026-11-19, and lowered to -70 dB by F09-S07, user decision 2026-11-20,
+// docs/iem-relative-groups.md). Downward travel stops when the
 // QUIETEST member reaches this floor: the bottom of the dB-linear display scale
 // (src/iem/fader-scale.js), like the Demo. A member already below it makes
 // downward travel zero. A group never writes position 0 / -inf. Upward travel
 // stops when the LOUDEST member reaches desk position 1 (+10 dB).
-export const GROUP_FLOOR_DB = -60;
+export const GROUP_FLOOR_DB = -70;
 export function continuousFaderDB(position) {
   if (typeof position !== 'number' || !Number.isFinite(position) || position < 0 || position > 1) throw Error('Invalid received fader position.');
   const value = amplitude(position);
