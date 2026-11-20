@@ -1,4 +1,3 @@
-import { exportSettingsBackup } from '../settings-recovery.js';
 import { mixerURL } from '../mixer-address.js';
 import { validateSettings, settingsStatusText } from '../settings.js';
 import { restoreDialogFocus } from './dialog-owner.js';
@@ -24,9 +23,8 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   const name = make('input'), nameLabel = make('label', 'Local rig name');
   name.maxLength = 80; name.autocomplete = 'off'; nameLabel.append(name);
   const newRig = make('button', 'New rig'), saveRig = make('button', 'Save rig');
-  const exportSettings = make('button', 'Export settings'); exportSettings.type = 'button'; exportSettings.disabled = true;
   newRig.type = saveRig.type = 'button'; newRig.disabled = saveRig.disabled = true;
-  const actions = make('div'); actions.className = 'mm-dialog-actions'; actions.append(newRig, saveRig, exportSettings);
+  const actions = make('div'); actions.className = 'mm-dialog-actions'; actions.append(newRig, saveRig); // F09-S08: no Export settings (user decision 2026-11-20).
   const feedback = make('p'); feedback.className = 'mm-caption'; feedback.setAttribute('role', 'status');
   settings.setAttribute('role', 'status');
   const local = make('p', 'Rigs and groups stay in this browser on this device and site address. They are not mixer settings or shared with other devices. Without a saved rig, Edit Groups uses one group set kept on this device; a selected saved rig keeps its own groups. Both work offline. Saving does not connect.'); local.className = 'mm-caption';
@@ -69,7 +67,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   const onCloseClick = event => { if (connectionVisible && (!dialogOwner || dialogOwner.owns(dialogLease))) { event.stopImmediatePropagation?.(); close(); } };
   closeButton.addEventListener('click', onCloseClick);
   return {
-    form, profile, address, name, newRig, saveRig, exportSettings, feedback, connect, disconnect, settings, note, close, show, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
+    form, profile, address, name, newRig, saveRig, feedback, connect, disconnect, settings, note, close, show, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
     navigation: [...root.querySelectorAll('.mm-entry-links a')],
     profiles(profiles, selectedId = '') {
       const option = make('option', 'Manual address — not a saved rig'); option.value = '';
@@ -81,11 +79,11 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   };
 }
 
-export function mountLiveController({ session, repository, view, ui, document = globalThis.document, window = globalThis.window, createID = () => globalThis.crypto.randomUUID(), downloadBackup }) {
+export function mountLiveController({ session, repository, view, ui, document = globalThis.document, window = globalThis.window, createID = () => globalThis.crypto.randomUUID() }) {
   let touched = false, destroyed = false, profiles = [], localDefinitions = null, selectedAux = null;
   let setupIntent = 0, setupPending = Promise.resolve(), setupSaving = false;
   const feedback = message => { if (ui.feedback) ui.feedback.textContent = message; };
-  const setupButtons = () => { if (ui.exportSettings) ui.exportSettings.disabled = !settingsReady; if (ui.newRig) ui.newRig.disabled = !settingsReady || profiles.length >= 32; if (ui.saveRig) ui.saveRig.disabled = !settingsReady || setupSaving; };
+  const setupButtons = () => { if (ui.newRig) ui.newRig.disabled = !settingsReady || profiles.length >= 32; if (ui.saveRig) ui.saveRig.disabled = !settingsReady || setupSaving; };
   const refreshPicker = () => { ui.profiles(profiles, boundProfileId || ''); setupButtons(); };
   let boundProfileId = null, contextRevision = 0, settingsReady = false, previousPhase = 'idle';
   let projected = { selectedAux: null, sources: [] }, requestedNavigation = null, restoreCandidate = null, receivedCatalog = [];
@@ -171,11 +169,6 @@ export function mountLiveController({ session, repository, view, ui, document = 
     refreshPicker(); render(); emitContext();
     ui.address.setCustomValidity('');
   });
-  function exportCurrentSettings() {
-    try { return exportSettingsBackup(repository, downloadBackup); }
-    catch { return 'Could not start the settings backup download. Try Export settings again in this browser before leaving.'; }
-  }
-  if (ui.exportSettings) listen(ui.exportSettings, 'click', () => feedback(exportCurrentSettings()));
   if (ui.name) listen(ui.name, 'input', () => { touched = true; setupIntent++; feedback('Rig name draft. Save rig to apply locally.'); });
   if (ui.newRig) listen(ui.newRig, 'click', () => {
     if (!settingsReady || profiles.length >= 32) return;
@@ -217,7 +210,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
       refreshPicker(); emitContext(); render();
       feedback(result.status.mode === 'persistent' && result.status.state === 'saved'
         ? 'Rig saved on this device. Edit Groups is ready; Connect remains a separate action.'
-        : 'Rig is temporary in this app. Choose Export settings here before closing or leaving this page; reopen after checking storage to try again.');
+        : 'Rig is temporary in this app and will be lost when this page closes; reopen after checking storage to try again.');
     }).catch(error => { if (!destroyed && setupIntent === intent) feedback(`Rig not saved. ${error.message}`); })
       .finally(() => { setupSaving = false; if (!destroyed) setupButtons(); });
   });
@@ -293,7 +286,6 @@ export function mountLiveController({ session, repository, view, ui, document = 
   return {
     ready,
     whenSetupIdle: () => setupPending,
-    exportSettings: exportCurrentSettings,
     context,
     subscribeContext(listener) { contextListeners.add(listener); listener(context()); return () => contextListeners.delete(listener); },
     selectAux(index) {

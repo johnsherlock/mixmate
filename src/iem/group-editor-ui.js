@@ -47,8 +47,8 @@ export function createGroupEditorUI(root, connectionUI) {
     cancel = make("button", "", "Cancel"),
     save = make("button", "mm-primary", "Save group");
   cancel.type = save.type = "button";
-  const exportSettings = make('button', '', 'Export settings'); exportSettings.type = 'button';
-  actions.append(message, exportSettings, cancel, save);
+  // F09-S08 (user decision 2026-11-20): no Export settings button (not in the design).
+  actions.append(message, cancel, save);
   content.append(rigLabel, bar, confirmRow, members, status, actions);
   const name = make("input", "mm-group-title-name");
   name.maxLength = 80;
@@ -79,7 +79,6 @@ export function createGroupEditorUI(root, connectionUI) {
   listen(keep, "click", () => handlers?.cancelDelete?.());
   listen(destroyGroup, "click", () => handlers?.confirmDelete?.());
   listen(save, "click", () => handlers?.save());
-  listen(exportSettings, "click", () => handlers?.exportSettings());
   listen(root, "keydown", (event) => {
     if (active && (!connectionUI.dialogOwner || connectionUI.dialogOwner.owns(dialogLease)) && event.key === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation?.();
