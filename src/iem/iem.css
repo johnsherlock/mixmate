@@ -2397,14 +2397,6 @@ body {
   border-radius: 3px;
   padding: 8px;
 }
-#mixmate-iem-concept .mm-live-strip-state {
-  display: block;
-  padding: 4px 6px;
-  font-size: 10px;
-  line-height: 1.35;
-  color: #b5c0c8;
-  overflow-wrap: anywhere;
-}
 #mixmate-iem-concept[data-mode="live"] .mm-strip-detail {
   white-space: normal;
   overflow-wrap: anywhere;
@@ -2436,7 +2428,6 @@ body {
 
 #mixmate-iem-concept[data-mode="live"] .mm-live-meter-legend{flex-shrink:0;margin:0;padding:3px 8px;font-size:10px;line-height:1.3;color:#b5c0c8;background:#17232a}
 #mixmate-iem-concept[data-mode="live"] .mm-live-meter-label,#mixmate-iem-concept[data-mode="live"] .mm-live-meter-status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-strip-state{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;height:18px;min-height:18px;flex:0 0 18px;line-height:12px;padding:3px 6px}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-pan-button{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mixmate-iem-concept[data-mode="live"][data-show-meters="false"] .mm-live-meter-legend{visibility:hidden}
 
@@ -2471,8 +2462,7 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip-name{height:24px;min-height:24px;max-height:24px;line-height:18px;-webkit-line-clamp:1}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-value{font-size:15px;line-height:18px;padding:2px 1px}
 /* Visually clip, rather than remove, full text for assistive technology. */
-#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-pan-button,
-#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-live-strip-state{position:absolute;width:1px;height:1px;min-height:0;max-height:1px;flex-basis:auto;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-pan-button{position:absolute;width:1px;height:1px;min-height:0;max-height:1px;flex-basis:auto;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}
 
 #mixmate-iem-concept .mm-local-group-editor{display:flex;flex-direction:column;gap:7px;flex:1;min-height:0;height:100%;overflow:hidden}#mixmate-iem-concept .mm-group-rig-label{margin:0;overflow-wrap:anywhere;flex-shrink:0}#mixmate-iem-concept .mm-local-group-editor>.mm-caption{font-size:10px;margin:0;flex-shrink:0}#mixmate-iem-concept .mm-local-group-editor .mm-editor-feedback{max-width:none;flex:1;min-width:0}#mixmate-iem-concept .mm-member-checks [data-unresolved="true"]{border-style:dashed}#mixmate-iem-concept .mm-local-group-editor .mm-dialog-actions{flex-shrink:0}
 
@@ -2558,17 +2548,15 @@ body {
   overscroll-behavior-x: contain;
 }
 
-/* F04-S04: prototype channel surfaces; full readbacks remain in owned Details. */
+/* F04-S04: prototype channel surfaces; full readbacks remain in the debug-only Details (?debug, F09-S07). */
 #mixmate-iem-concept[data-mode="live"] .mm-live-meter-legend,
 #mixmate-iem-concept[data-mode="live"] .mm-strip-detail,
-#mixmate-iem-concept[data-mode="live"] .mm-live-meter-caption,
-#mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state {display:none}
+#mixmate-iem-concept[data-mode="live"] .mm-live-meter-caption {display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-strip {position:relative;padding-bottom:24px;isolation:isolate}
 #mixmate-iem-concept[data-mode="live"] .mm-detail-button {position:absolute;bottom:2px;right:3px;min-height:22px;height:22px;padding:1px 4px;font-size:10px;z-index:2}
-#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-pan-button {position:absolute;inset:auto auto 2px 3px;width:calc(100% - 58px);min-height:22px;height:22px;max-height:22px;margin:0;padding:1px 3px;clip:auto;clip-path:none;line-height:18px}
+#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-pan-button {position:absolute;inset:auto 3px 2px 3px;width:auto;min-height:22px;height:22px;max-height:22px;margin:0;padding:1px 3px;clip:auto;clip-path:none;line-height:18px}
 #mixmate-iem-concept[data-mode="live"] .mm-pan-readout {display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-pan-short {display:inline}
-#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state {position:static;width:auto;height:auto;min-height:16px;max-height:36px;margin:0;clip:auto;clip-path:none;white-space:normal;overflow:auto;flex:0 0 auto}
 #mixmate-iem-concept[data-mode="live"] .mm-channel .mm-strip-head {padding:3px 5px}
 #mixmate-iem-concept[data-mode="live"][data-orientation="landscape"] .mm-strip-scroll {display:grid;grid-auto-flow:column;grid-template-rows:minmax(0,1fr);grid-auto-columns:calc((100% - (var(--mm-bank-columns, 6) - 1)*7px)/var(--mm-bank-columns, 6));gap:7px}
 #mixmate-iem-concept[data-mode="live"][data-orientation="landscape"] .mm-strip-scroll > .mm-strip {min-width:0;max-width:none}
@@ -2582,7 +2570,7 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-pan-status {margin:0}
 #mixmate-iem-concept[data-mode="live"] .mm-strip > span.mm-pan-button {display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-group > .mm-group-control-note {display:none}
-#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan] {inset:auto auto 2px 3px;width:calc(100% - 58px);height:22px;min-height:22px;max-height:22px;line-height:18px;padding:1px 3px;font-size:10px}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan] {inset:auto 3px 2px 3px;width:auto;height:22px;min-height:22px;max-height:22px;line-height:18px;padding:1px 3px;font-size:10px}
 #mixmate-iem-concept .mm-danger{border-color:#b86a62;background:#4a2622;color:#f4c4bc}#mixmate-iem-concept .mm-group-delete-confirm{flex-wrap:wrap;margin-top:0}#mixmate-iem-concept .mm-group-delete-confirm>p{flex:1 1 100%;margin:0;overflow-wrap:anywhere}#mixmate-iem-concept .mm-group-delete-confirm[hidden],#mixmate-iem-concept .mm-group-editor-bar>button[hidden]{display:none}
 /* F06-S04 live AUX GEQ view: a sibling of .mm-content so level gestures never own its controls. */
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;padding:7px 10px 8px;overflow:auto}
@@ -2626,31 +2614,24 @@ body {
   opacity: .85;
 }
 
-/* F09-S06 stable geometry during gestures: a strip's state line is one fixed
-   12px single-line overlay (absolute, no layout height, no pointer events,
-   semi-transparent, under the fader caps) directly above the Pan/Details row in
-   every live layout, hidden by visibility, never by display,
-   so it neither costs fader travel nor resizes .mm-fader-space mid-drag. Full
-   text stays in its title and Details. Header/footer status text is one
-   ellipsised line whose length never changes the row wrapping. */
-#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-live-strip-state,
-#mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,
-#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{display:block;visibility:hidden;position:absolute;left:3px;right:3px;bottom:24px;z-index:1;pointer-events:none;box-sizing:border-box;width:auto;height:12px;min-height:12px;max-height:12px;flex:none;margin:0;padding:1px 6px;font-size:9px;line-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;clip:auto;clip-path:none;background:#13191b99;border-radius:2px}
-/* The overlay sits in the fader space's bottom padding band just above the
-   Pan/Details row; caps always paint above it, so a cap at the bottom of travel
-   is never hidden. Live strips are isolated stacking contexts, so this z-index
-   (and the overlay/Details z-indexes) never leak above the sticky group strip
-   of an expanded group. */
+/* F09-S07 stable geometry: live strips have no per-strip state line (removed:
+   not in the design, and its text changes made strips jitter mid-drag). Status
+   stays in the single-line header/footer and the fader space's title tooltip.
+   Header/footer status text is one ellipsised line whose length never changes
+   the row wrapping. Live strips are isolated stacking contexts, so cap
+   z-indexes never leak above the sticky group strip of an expanded group. */
 #mixmate-iem-concept[data-mode="live"] .mm-strip .mm-fader-control{z-index:2}
-#mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{visibility:visible}
-#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip > .mm-live-strip-state,
-#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state,
-#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{position:absolute;width:1px;height:1px;min-height:0;max-height:1px;flex-basis:auto;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;visibility:visible}
+/* Development-only Details (?debug): Pan shares the bottom row with it. */
+#mixmate-iem-concept[data-mode="live"][data-debug="true"] .mm-strip > .mm-pan-button,
+#mixmate-iem-concept[data-mode="live"][data-debug="true"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan]{right:auto;width:calc(100% - 58px)}
+/* Compact landscape group readout: drop the "Δ " prefix so "+10.4 dB" fits; geometry unchanged. */
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group > .mm-value .mm-delta-prefix{display:none}
+/* -70 and -inf ruler labels are 5/85 of travel apart: compact strips drop the -inf label rather than overlap. */
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-ruler span[data-tick="off"]{display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-preview .mm-feedback{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mixmate-iem-concept[data-mode="live"][data-orientation="portrait"] .mm-preview .mm-feedback{flex:1 1 100%;white-space:nowrap}
 #mixmate-iem-concept[data-mode="live"] .mm-mode-label{white-space:nowrap;flex-shrink:0;min-width:27ch}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-mode-label{min-width:0}
 #mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-dirty{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state{display:none}
 /* One line, sized so "-14.7 dB" fits a landscape bank strip; a wrap would resize the fader mid-drag. */
 #mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-value{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px;line-height:20px;padding-inline:0}

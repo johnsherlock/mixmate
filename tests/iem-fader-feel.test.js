@@ -10,11 +10,11 @@ import { mountLiveController } from '../src/iem/live-controller.js';
 import { SettingsRepository, emptySettings } from '../src/settings.js';
 import { Node, domFixture } from './helpers/fake-dom.js';
 
-// F09-S06 fader feel: dB-linear display scale, -60 dB group floor, bounded
+// F09-S06 fader feel: dB-linear display scale, group floor (-70 dB since F09-S07), bounded
 // received-basis waits for dropped desk echoes, stable gesture geometry.
 // Fake transports and fake timers only; no desk, browser or network.
 const FRAME = '3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a.0.stereoIndex^0\nSETD^a.1.stereoIndex^1\nSETD^a.0.mix^0.4\nSETD^a.1.mix^0.4\n' +
-  'SETD^i.0.stereoIndex^-1\nSETD^i.0.aux.0.value^0.35\nSETD^i.0.aux.1.value^0.35\nSETD^f.0.aux.0.value^0.65\nSETD^f.0.aux.1.value^0.65\nSETD^i.1.stereoIndex^-1\nSETD^i.1.aux.0.value^0.03\nSETD^i.1.aux.1.value^0.03\n' +
+  'SETD^i.0.stereoIndex^-1\nSETD^i.0.aux.0.value^0.35\nSETD^i.0.aux.1.value^0.35\nSETD^f.0.aux.0.value^0.65\nSETD^f.0.aux.1.value^0.65\nSETD^i.1.stereoIndex^-1\nSETD^i.1.aux.0.value^0.02\nSETD^i.1.aux.1.value^0.02\n' +
   Array.from({ length: 31 }, (_, band) => `SETD^a.0.eq.peak.${band}^0.5\nSETD^a.1.eq.peak.${band}^0.5`).join('\n') + '\nSETD^a.0.eq.bypass^0\nSETD^a.1.eq.bypass^0';
 async function groups(members = ['i.0', 'f.0']) {
   const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
@@ -41,12 +41,12 @@ async function groups(members = ['i.0', 'f.0']) {
 const sent = message => parseIemStateFrame(message)[0];
 const control = app => app.session.snapshot().control;
 
-test('dB-linear display scale: equal dB is equal distance above -60 dB, the bottom segment reaches -inf, and round trips are exact enough', () => {
+test('dB-linear display scale: equal dB is equal distance above -70 dB (F09-S07), the bottom segment reaches -inf, and round trips are exact enough', () => {
   assert.equal(FADER_SCALE_FLOOR_DB, GROUP_FLOOR_DB, 'group floor is the bottom of the dB-linear scale');
   assert.equal(positionToScale(1), FADER_SCALE_TOP_DB); assert.equal(scaleToPosition(FADER_SCALE_TOP_DB), 1);
   assert.equal(positionToScale(0), FADER_SCALE_MIN); assert.equal(scaleToPosition(FADER_SCALE_MIN), 0, 'an individual fader reaches desk position 0 (-inf)');
   assert.ok(Math.abs(positionToScale(FADER_FLOOR_POSITION) - FADER_SCALE_FLOOR_DB) < 1e-9, 'continuous at the floor');
-  for (const db of [9.5, 1.3, 0, -2.4, -11.6, -26.8, -38.2, -52.9, -59.9]) {
+  for (const db of [9.5, 1.3, 0, -2.4, -11.6, -26.8, -38.2, -52.9, -59.9, -64.2, -69.9]) {
     const position = continuousDBToFader(db);
     assert.ok(Math.abs(positionToScale(position) - db) < 1e-9, `scale is dB above the floor (${db})`);
     assert.ok(Math.abs(scaleToPosition(positionToScale(position)) - position) < 1e-12, `round trip (${db})`);
@@ -55,7 +55,8 @@ test('dB-linear display scale: equal dB is equal distance above -60 dB, the bott
   const loud = continuousDBToFader(0), quiet = continuousDBToFader(-30);
   const down = 6, loudMove = positionToScale(continuousDBToFader(-down)) - positionToScale(loud), quietMove = positionToScale(continuousDBToFader(-30 - down)) - positionToScale(quiet);
   assert.ok(Math.abs(loudMove - quietMove) < 1e-9); assert.ok(Math.abs((continuousDBToFader(-down) - loud) - (continuousDBToFader(-36) - quiet)) > 0.05, 'raw positions would differ a lot');
-  for (const position of [0.001, 0.01, 0.03, 0.05]) {
+  assert.equal(FADER_SCALE_FLOOR_DB, -70); assert.equal(FADER_SCALE_MIN, -75); assert.ok(FADER_FLOOR_POSITION > 0.02 && FADER_FLOOR_POSITION < 0.03, 'the -70 dB floor is a valid desk position above 0');
+  for (const position of [0.001, 0.01, 0.02, 0.025]) {
     const scale = positionToScale(position);
     assert.ok(scale > FADER_SCALE_MIN && scale < FADER_SCALE_FLOOR_DB, `received ${continuousFaderDB(position).toFixed(1)} dB displays in the bottom segment`);
     assert.ok(Math.abs(scaleToPosition(scale) - position) < 1e-15, 'display never rewrites the received position');
@@ -65,11 +66,11 @@ test('dB-linear display scale: equal dB is equal distance above -60 dB, the bott
   assert.throws(() => positionToScale(1.2)); assert.throws(() => scaleToPosition(Number.NaN));
 });
 
-test('group: -60 dB floor for the quietest member, equal dB (equal scale distance) for every member, never position 0; a member below -60 dB stops downward travel', async () => {
+test('group: -70 dB floor (F09-S07) for the quietest member, equal dB (equal scale distance) for every member, never position 0; a member below -70 dB stops downward travel', async () => {
   const app = await groups();
   try {
     const anchor = { members: [0.35, 0.65].map(value => ({ db: continuousFaderDB(value) })) };
-    assert.equal(groupTravel(anchor).lower, -60 - continuousFaderDB(0.35));
+    assert.equal(GROUP_FLOOR_DB, -70); assert.equal(groupTravel(anchor).lower, -70 - continuousFaderDB(0.35));
     assert.equal(app.session.selectGroupTarget('band', 0), true);
     let token = app.session.beginLevelGesture();
     assert.ok(Math.abs(positionToScale(control(app).groupReference) - continuousFaderDB(0.65)) < 1e-9, 'cap starts at the loudest member on the dB scale');
@@ -83,12 +84,12 @@ test('group: -60 dB floor for the quietest member, equal dB (equal scale distanc
       const before = command.path.startsWith('i.0') ? 0.35 : 0.65;
       assert.ok(Math.abs((positionToScale(command.value) - positionToScale(before)) + 6) < 1e-9, `${command.path} moves the same scale distance`);
     }
-    // Full-down (scale minimum / Home): quietest stops at -60 dB, loudest keeps its gap; nothing at 0.
+    // Full-down (scale minimum / Home): quietest stops at -70 dB, loudest keeps its gap; nothing at 0.
     app.advance(60); app.session.previewLevelGesture(token, scaleToPosition(FADER_SCALE_MIN)); app.advance(60);
     const bottom = app.writes().slice(4).map(sent);
     assert.equal(bottom.length, 4); assert.ok(bottom.every(command => command.value > 0), 'a group never writes position 0');
     const quietest = Math.min(...bottom.map(command => continuousFaderDB(command.value))), loudest = Math.max(...bottom.map(command => continuousFaderDB(command.value)));
-    assert.ok(Math.abs(quietest - GROUP_FLOOR_DB) < 1e-9, 'quietest exactly at the -60 dB floor');
+    assert.ok(Math.abs(quietest - GROUP_FLOOR_DB) < 1e-9, 'quietest exactly at the -70 dB floor');
     assert.ok(Math.abs((loudest - quietest) - (continuousFaderDB(0.65) - continuousFaderDB(0.35))) < 1e-9, 'gap preserved');
     app.session.commitLevelGesture(token, scaleToPosition(FADER_SCALE_MIN)); app.echo();
     // Top: loudest exactly at desk position 1.
@@ -100,7 +101,7 @@ test('group: -60 dB floor for the quietest member, equal dB (equal scale distanc
   const below = await groups(['i.0', 'i.1']);
   try {
     below.session.selectGroupTarget('band', 0); const token = below.session.beginLevelGesture(), start = control(below).groupReference;
-    assert.equal(below.session.previewLevelGesture(token, 0), start, 'a member at about -70 dB allows no downward travel');
+    assert.equal(below.session.previewLevelGesture(token, 0), start, 'a member at about -73 dB (below the -70 floor) allows no downward travel');
     below.advance(100); assert.equal(below.writes().length, 0, 'nothing sent'); below.session.cancelLevelGesture();
   } finally { below.session.disconnect(); await below.repository.close(); }
 });
@@ -170,20 +171,17 @@ test('controller coalesces session redraws to one per animation frame during an 
   controller.destroy();
 });
 
-test('stable strip/header geometry rules: fixed single-line strip state toggled by visibility, single-line header/footer status', async () => {
-  const css = await readFile(new URL('../src/iem/iem.css', import.meta.url), 'utf8'), block = css.slice(css.indexOf('/* F09-S06 stable geometry'));
+test('stable strip/header geometry rules (F09-S07): no per-strip state line, Pan alone fills the bottom row, single-line header/footer status', async () => {
+  const css = await readFile(new URL('../src/iem/iem.css', import.meta.url), 'utf8'), block = css.slice(css.indexOf('/* F09-S07 stable geometry'));
   assert.ok(block.length > 100);
-  const rule = /\.mm-strip\[data-actionable="true"\] > \.mm-live-strip-state\{display:block;visibility:hidden;position:absolute;[^}]*bottom:24px;[^}]*z-index:1;pointer-events:none;[^}]*height:12px;min-height:12px;max-height:12px;flex:none;[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/.exec(block);
-  assert.ok(rule, 'one fixed-height, single-line absolute overlay: no layout height, never steals fader travel or touches');
-  assert.doesNotMatch(block.split('[data-ultra-compact')[0], /\.mm-live-strip-state\{[^}]*position:static/, 'never back in the flex flow');
-  // The strip reserves 24px at the bottom for Pan/Details; the 12px overlay sits directly above it, in the fader
-  // space's bottom padding band, translucent, and every fader control (cap) paints above it (z-index 2 > 1).
+  assert.doesNotMatch(css, /mm-live-strip-state/, 'the removed strip state overlay leaves no CSS behind');
   assert.match(css, /#mixmate-iem-concept\[data-mode="live"\] \.mm-strip \{position:relative;padding-bottom:24px;isolation:isolate\}/, 'each live strip is its own stacking context: inner z-indexes cannot paint over the sticky expanded-group strip');
   assert.match(css, /\.mm-strip-scroll\.mm-expanded > \.mm-group \{\s*position: sticky;\s*left: 0;\s*z-index: 1;/, 'the sticky group strip stays above scrolled member strips');
-  assert.match(block, /\.mm-strip \.mm-fader-control\{z-index:2\}/, 'caps are never hidden by the overlay');
-  assert.match(block, /background:#13191b99/, 'semi-transparent');
-  assert.match(block, /\.mm-strip\[data-actionable="true"\] > \.mm-live-strip-state\{visibility:visible\}/, 'actionable toggles visibility, never display or height');
+  assert.match(css, /#mixmate-iem-concept\[data-mode="live"\] \.mm-strip > \.mm-pan-button \{position:absolute;inset:auto 3px 2px 3px;width:auto;/, 'without Details, Pan spans the strip footer like the mockup');
+  assert.match(block, /\[data-debug="true"\] \.mm-strip > \.mm-pan-button,[^{]*\{right:auto;width:calc\(100% - 58px\)\}/, 'only ?debug makes room for Details');
+  assert.match(block, /\.mm-strip \.mm-fader-control\{z-index:2\}/);
+  assert.match(block, /\[data-compact="true"\] \.mm-ruler span\[data-tick="off"\]\{display:none\}/, 'compact drops the −∞ label rather than overlap −70');
+  assert.match(block, /\[data-compact="true"\] \.mm-group > \.mm-value \.mm-delta-prefix\{display:none\}/, 'compact group Δ readout drops its prefix instead of truncating');
   assert.match(block, /\.mm-preview \.mm-feedback\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
   assert.match(block, /\.mm-bottom \.mm-dirty\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
-  assert.doesNotMatch(block, /\.mm-live-strip-state\{[^}]*white-space:normal/);
 });

@@ -1,22 +1,24 @@
 import { continuousFaderDB, continuousDBToFader, GROUP_MAX_DB, GROUP_MIN_DB } from './relative-groups.js';
 
 // F09-S06 display scale for live level faders (user decision 2026-11-19,
-// docs/iem-aux-level-controls.md). Presentation only: the wire value stays the
-// desk fader position 0..1 and passes through the same typed guards.
+// docs/iem-aux-level-controls.md); floor lowered to -70 dB by F09-S07 (user
+// decision 2026-11-20). Presentation only: the wire value stays the desk fader
+// position 0..1 and passes through the same typed guards.
 //
-// Scale units are dB. From the -60 dB floor to the +10 dB top the travel is
+// Scale units are dB. From the -70 dB floor to the +10 dB top the travel is
 // linear in dB (equal dB = equal distance, like the Demo). Below the floor a
-// short "off" segment (5 scale units, about 7% of travel) maps desk position
-// linearly from the -60 dB position down to 0 (-inf), so an individual fader
-// can still reach silence and received levels below -60 dB display near the
-// bottom without being rewritten. Groups never use that segment for writes:
-// their downward travel stops when the quietest member reaches -60 dB.
+// short "off" segment (5 scale units, about 6% of travel) maps desk position
+// linearly from the -70 dB position (desk position ~0.025, still > 0) down to
+// 0 (-inf), so an individual fader can still reach silence and received levels
+// below -70 dB display near the bottom without being rewritten. Groups never
+// use that segment for writes: their downward travel stops when the quietest
+// member reaches -70 dB.
 export const FADER_SCALE_TOP_DB = 10;
-export const FADER_SCALE_FLOOR_DB = -60;
-export const FADER_SCALE_MIN = -65;
+export const FADER_SCALE_FLOOR_DB = -70;
+export const FADER_SCALE_MIN = -75;
 export const FADER_SCALE_POINTER_STEP_DB = 0.1;
 export const FADER_SCALE_KEY_STEP_DB = 0.5;
-export const FADER_SCALE_TICKS = Object.freeze([10, 0, -12, -24, -40, -60]);
+export const FADER_SCALE_TICKS = Object.freeze([10, 0, -12, -24, -40, -60, -70]);
 export const FADER_FLOOR_POSITION = continuousDBToFader(FADER_SCALE_FLOOR_DB);
 const OFF_SPAN = FADER_SCALE_FLOOR_DB - FADER_SCALE_MIN;
 const unit = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
