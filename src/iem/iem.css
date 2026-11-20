@@ -2607,9 +2607,12 @@ body {
 #mixmate-iem-concept[data-mode="live"][data-orientation="portrait"] .mm-live-eq{overflow:visible}
 #mixmate-iem-concept[data-mode="live"][data-orientation="portrait"] .mm-live-eq .mm-eq-native{flex:0 0 auto}
 /* Side colours are SVG presentation attributes (L filled green, R hollow magenta); no CSS override. */
-/* Points mode keeps native page/graph panning: only handles and an explicitly chosen draw mode capture touch. */
-#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-plot,#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg{touch-action:pan-x pan-y}
-#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg[data-draw="true"]{touch-action:none;cursor:crosshair}
+/* F09-S10: the whole graph captures touch in every mode, as the prototype (.mm-eq-svg{touch-action:none}).
+   Chrome ignores touch-action on SVG children and uses the <svg>'s value, so a pannable svg made the browser
+   pointercancel handle drags. Points-mode background touches still start no gesture and send nothing; a swipe
+   that starts on the graph no longer scrolls the page. */
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-plot,#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg{touch-action:none}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg[data-draw="true"]{cursor:crosshair}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle:focus-visible{outline:2px solid var(--mm-yellow)}
 /* Compact landscape (e.g. 844×390): the graph fills the remaining travel instead of scrolling below the viewport. */
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq{overflow:hidden;gap:2px;padding:3px 8px 4px}

@@ -382,7 +382,7 @@ Implementation on `codex/f09-s08-group-silence-nav` (from main `dc371cb`, F09-S0
   - The group strip's availability follows "some member has a finite displayed position", not `canEditLevel`. While the session cannot anchor (own echoes or a basis wait), the cap stays visible and enabled, and a press simply gets no gesture token. The reason stays in the tooltip.
   - Export removal also covers Settings / test: export and file import are gone, while reset and storage protection stay. `docs/settings-backup.md` is marked historical.
   - GEQ graph margins are top/right 22 px (was 14) so edge halos stay inside the viewBox. The plot is about 8 px narrower and shorter.
-  - The near-handle grab radius is 24 px. On touch it still competes with the plot's pan gesture (`touch-action: pan-x pan-y` in points mode), so a near-miss touch may become a pan, which sends nothing.
+  - The near-handle grab radius is 24 px. On touch it still competes with the plot's pan gesture (`touch-action: pan-x pan-y` in points mode), so a near-miss touch may become a pan, which sends nothing. *Superseded by F09-S10: the graph is `touch-action: none`; a near-miss touch starts nothing and no longer pans.*
   - The keyboard GEQ gesture commits on keyup and cancels on Escape or when the handle loses focus.
 - **Accepted F09-S07 text follow-ups, fixed:**
   - The restart hint is mirrored into a head badge. In the fake reproduction the hint was present in the status text, so the live invisibility is presumed to be layout (status line below the graph). This is not browser-verified with a real desk change.
@@ -415,3 +415,16 @@ Implementation on `codex/f09-s09-eq-cleanup` (from main `9527f91`, F09-S08 merge
 - **Not verified:** browser layout of the live EQ/pan dialog (needs a connected session; no desk used).
 
 Live checks outstanding: listed in [F09-S09](stories/F09-S09.md#live-acceptance-pending-root). F08-S01 remains parked.
+
+## F09-S10 GEQ point touch drag — 2026-11-20
+
+Implementation on `codex/f09-s10-eq-touch` (from main `c4acb38`, F09-S09 merged in PR #55). User report after F09-S09.
+
+- **Bug (root reproduced on the desk, Playwright with touch emulation):** dragging GEQ handle 2 by touch showed "The last point change was interrupted; points restarted from the current curve". Computed `touch-action` was `none` on `.mm-eq-handle` but `pan-x pan-y` on `.mm-eq-svg`; events were pointerdown → pointermove → pointercancel (all touch), with 54 band writes streamed before the cancel. Chrome uses the `<svg>`'s touch-action for SVG children, so it began a pan and cancelled the pointer.
+- **Routine decision, for review:** the live `.mm-eq-svg` and `.mm-eq-plot` are `touch-action: none` in every mode, as the prototype (`mockups/iem.html`). **Trade-off:** a swipe that starts on the graph no longer scrolls the page (same as the prototype); on phone portrait the page scrolls from the head or the area outside the graph. Background touch/pen in points mode still starts no gesture and sends nothing; the mouse-only near-grab and draw mode are unchanged. The per-handle `touch-action: none` rule stays (harmless).
+- **Accepted F09-S09 follow-ups (open, not fixed here):**
+  - A pan grab held across the 2.5 s window expiry makes the readout jump (the requested value stops being shown while the hand is still on the control).
+  - The pre-existing level cap shows the retained request after the window, unlike pan, which falls back to the received value.
+- **Not verified by the story agent:** real-browser touch behaviour (no browser or desk used); the CSS-text test asserts the rule only.
+
+Live checks outstanding: listed in [F09-S10](stories/F09-S10.md#live-acceptance-pending-root). F08-S01 remains parked.
