@@ -1,7 +1,7 @@
 import { installFaderGestures } from './gestures.js';
 import { stereoRelationship } from './protocol.js';
 import { AUX_EQ_DISPLAY_CENTRES, auxEqPositionToDb } from './aux-eq-protocol.js';
-import { AUX_EQ_POINT_COUNT, auxEqCentreX, auxEqPointGain, pointCentreGainLimit, requestedDrawSamples, requestedPointSamples } from './aux-eq-curve.js';
+import { AUX_EQ_POINT_COUNT, auxEqCentreX, auxEqPointGain, mapRequestedAuxEqCurve, pointCentreGainLimit, requestedDrawSamples, requestedPointSamples } from './aux-eq-curve.js';
 
 // Live AUX GEQ view. Presentation copies never grant authority: only the private
 // session's typed GEQ API can select/begin/preview/commit. Received per-side band
@@ -12,13 +12,19 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const unit = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 const hzText = f => f >= 1000 ? `${(f / 1000).toFixed(f < 10000 ? 2 : 1)} kHz` : `${Math.round(f)} Hz`;
 const dbText = value => `${value > 0 ? '+' : ''}${value.toFixed(1)} dB`;
+// Same request-side rules as the private owner (control-state-model.js, which
+// only session-core may import): the observed desk echoes to 10 significant
+// digits and a band within 1e-9 of its last request is not re-sent.
+const ANCHOR_EPSILON = 1e-9;
+const deskFormat = value => (value === 0 ? 0 : Number(value.toPrecision(10)));
 const flatPoints = () => [0.233, 0.566, 0.85].map(x => ({ x, gainDb: 0, q: 0.5 }));
 export const EQ_APPROXIMATION_NOTE = 'Approximation: band centres are the native display labels (20 Hz–20 kHz), not verified DSP centres. Lines join band values; they are not a measured response. No shelves, cuts, filters or parametric bands.';
-// Editable basis: the session coordinate at gesture start — received band
-// values, or the last requested values while the desk has not echoed them
-// (that requested curve is shown dashed).
+// Editable basis: the session coordinate — received band values, or the last
+// requested values while the desk has not echoed them (shown dashed).
+// F09-S07 (user decision 2026-11-20): points are persistent parametric drawing
+// aids over an anchored base, like the Demo, within one editing session.
 export const EQ_MODE_NOTES = Object.freeze({
-  points: 'Points: a relative Δ adjustment on top of the current editable basis (received bands, or your last requested curve if the desk has not echoed it). Bands outside a point\'s influence keep their exact value; points return to 0 dB Δ after each release.',
+  points: 'Points: three persistent shape points (frequency, width, gain) over the curve captured when point editing starts. The requested curve is that base plus every point\'s bump at the 31 band centres, so moving FREQ or WIDTH moves a point\'s bump and the bands it leaves go back. Points restart at 0 dB from the current curve after a draw, a reset or a change made elsewhere.',
   draw: 'Draw: starts from the current editable basis (received bands, or your last requested curve if the desk has not echoed it); drag across the graph to redraw bands. Changed bands are sent live while you draw (throttled); release sends the final drawn bands.',
 });
 export const EQ_SIDE_COLOURS = Object.freeze(['#7fd17f', '#e58ee5']);
@@ -79,7 +85,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
   sidebar.append(modes, tabs, bank, unverified); shell.append(plot, sidebar);
   const status = make('p', 'mm-live-eq-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
   const modeNote = make('p', 'mm-caption mm-live-eq-mode-note');
-  const legendText = 'Received band values: L filled green dots, R hollow magenta dots (one green line when both sides are equal). Dashed: requested curve at the 31 band centres. Dotted: basis plus point Δ (not yet sent).';
+  const legendText = 'Received band values: L filled green dots, R hollow magenta dots (one green line when both sides are equal). Dashed: requested curve at the 31 band centres. Dotted: point base plus every point\'s bump.';
   const legend = make('p', 'mm-caption mm-live-eq-legend', legendText);
   const approximation = make('p', 'mm-caption mm-live-eq-approximation', EQ_APPROXIMATION_NOTE); approximation.setAttribute('title', EQ_APPROXIMATION_NOTE);
   // Explicit two-step reset, like Delete group: the first tap only asks.
@@ -111,15 +117,32 @@ export function mountEqControls({ root, session, controller, window = globalThis
   const readbackNodes = new Map();
 
   let open = false, auxIndex = null, binding = null, destroyed = false, mode = 'points', selectedPoint = 0, points = flatPoints();
-  // Points are a relative Δ for one gesture; between gestures they rest at 0 dB.
-  const neutralize = () => { points = points.map(point => ({ ...point, gainDb: 0 })); };
+  // F09-S07 point anchor (in memory only, never persisted): base = the session
+  // coordinate in dB captured when point editing starts; points keep their
+  // x/q/gain across gestures and every points gesture requests base + bumps of
+  // ALL points. Re-anchored (base := current coordinate, gains := 0, x/q kept)
+  // on open, after a draw/reset, and when the coordinate no longer matches the
+  // last requested base + bumps (native edits, other editors, interruptions).
+  let anchor = null;
+  const zeroGains = () => { points = points.map(point => ({ ...point, gainDb: 0 })); };
+  const dropAnchor = () => { anchor = null; zeroGains(); };
+  function reanchor(coordinate) { anchor = { base: Object.freeze(coordinate.map(auxEqPositionToDb)), interrupted: false }; zeroGains(); }
+  // Own requested values may come back as the desk's 10-significant-digit echo
+  // or stay within the sparse-dispatch epsilon; anything else is an outside change.
+  function anchorMatches(coordinate) {
+    let expected;
+    try { expected = mapRequestedAuxEqCurve(requestedPointSamples(points, anchor.base)).values; } catch { return false; }
+    return coordinate.length === expected.length && coordinate.every((value, index) => Math.abs(value - expected[index]) < ANCHOR_EPSILON || deskFormat(value) === deskFormat(expected[index]));
+  }
   let gesture = null, drag = null, previewValues = null, snapshot = null, editable = false, focusBefore = null, hint = '';
-  const ZERO_DELTA_HINT = 'No change sent: adjust GAIN Δ (or drag a point up/down) to change the curve; frequency and width only shape the next adjustment.';
+  const RESTART_OUTSIDE = 'Curve changed on the desk; points restarted from the current curve.';
+  const RESTART_INTERRUPTED = 'The last point change was interrupted; points restarted from the current curve.';
+  const ZERO_GAIN_HINT = 'No change sent: every point gain is 0 dB, so frequency and width have no bump to move yet.';
   const owned = control => control?.selected?.kind === 'geq' && control.selected.auxIndex === auxIndex;
-  // Display-only basis for handles/shape: the gesture basis, else the session
+  // Display-only basis for handles/shape: the point anchor, else the session
   // coordinate, else complete equal received bands. Never sent by itself.
   function displayBasis(readback) {
-    if (gesture?.basis) return gesture.basis;
+    if (anchor) return anchor.base;
     const coordinate = owned(snapshot?.control) ? snapshot.control.eqCoordinate : null;
     if (coordinate) return coordinate.map(auxEqPositionToDb);
     const side = readback?.sides[0];
@@ -213,7 +236,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
     bypassBadge.textContent = readback.bypassed ? 'GEQ BYPASSED on desk · status only' : '';
     bypassBadge.dataset.bypass = String(readback.bypassed);
     editable = Boolean(session.canEditEqTarget(auxIndex) && !control?.dispatching);
-    if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; gestures?.cancel(); drag = null; neutralize(); }
+    // The owner ended the gesture (native change, revalidation): the points stay;
+    // the next gesture re-anchors if the curve no longer matches them.
+    if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; gestures?.cancel(); drag = null; }
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
     if (!editable && !confirmRow.hidden) hideConfirm(false);
     confirmText.textContent = `Reset all ${BANDS} GEQ bands of Output ${readback.sides.map(side => side.auxIndex + 1).join(' and ')} to 0 dB? Bypass, filters and other processing are untouched.`;
@@ -240,10 +265,14 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (!token) { render(); return null; }
     const coordinate = session.snapshot().control?.eqCoordinate;
     if (!coordinate) { session.cancelEqGesture(); render(); return null; }
-    // Freeze this gesture's basis: the session coordinate at gesture start.
-    const basis = Object.freeze(coordinate.map(auxEqPositionToDb));
-    neutralize(); hint = '';
-    gesture = { token, input, basis, draw: [...basis], lastDraw: null };
+    hint = '';
+    if (mode === 'points') {
+      if (!anchor) reanchor(coordinate);
+      else if (!anchorMatches(coordinate)) { hint = anchor.interrupted ? RESTART_INTERRUPTED : RESTART_OUTSIDE; reanchor(coordinate); }
+      else anchor.interrupted = false;
+      syncParams(); // Sliders show the (possibly restarted) values before the gesture reads its start.
+    }
+    gesture = { token, input, draw: coordinate.map(auxEqPositionToDb), lastDraw: null };
     previewValues = null;
     return token;
   }
@@ -257,29 +286,36 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function finish(commit) {
     const active = gesture; gesture = null; drag = null;
     if (!active) return;
-    // A points gesture with every Δ at 0 sends nothing; say so instead of silence.
-    if (mode === 'points' && points.every(point => point.gainDb === 0)) hint = ZERO_DELTA_HINT;
-    // Sparse dispatch: a release whose bands all match the basis sends nothing.
-    if (commit) { session.commitEqGesture(active.token); if (!hint && session.snapshot().control?.outcome === 'no-op') hint = 'No change sent: every band already matches the current editable basis.'; }
-    else session.cancelEqGesture();
-    neutralize(); previewValues = null; render();
+    if (commit) {
+      session.commitEqGesture(active.token);
+      // Sparse dispatch: a release whose bands all match sends nothing; say so.
+      if (mode === 'points' && session.snapshot().control?.outcome === 'no-op') hint = points.every(point => point.gainDb === 0) ? ZERO_GAIN_HINT : 'No change sent: every band already matches the requested curve.';
+    } else {
+      session.cancelEqGesture();
+      if (mode === 'points' && anchor) anchor.interrupted = true;
+    }
+    // A draw gesture (committed or not) changes the curve under the points.
+    if (mode === 'draw') dropAnchor();
+    previewValues = null; render();
   }
   const gestures = installFaderGestures(section, {
     onBegin: input => begin(input),
     onPreview(input, token, value) {
-      if (!gesture || gesture.token !== token) return null;
+      if (!gesture || gesture.token !== token || !anchor) return null;
       const key = { freq: 'x', q: 'q', gain: 'gainDb' }[input.dataset.eqParam], previous = points[selectedPoint][key];
       // F09-S06: other bands saturate at ±15 dB in the requested samples; the
       // point's gain itself stops once its own centre reaches the limit.
       if (key === 'gainDb') value = pointCentreGainLimit(centreRest(selectedPoint, points[selectedPoint].x), value, previous);
       points[selectedPoint] = { ...points[selectedPoint], [key]: value };
-      if (!previewIntent(requestedPointSamples(points, gesture.basis))) { points[selectedPoint] = { ...points[selectedPoint], [key]: previous }; syncParams(); return previous; }
+      // Every point's persistent bump over the anchored base (never a reset Δ).
+      if (!previewIntent(requestedPointSamples(points, anchor.base))) { points[selectedPoint] = { ...points[selectedPoint], [key]: previous }; syncParams(); return previous; }
       syncParams(); return value;
     },
     onCommit: () => finish(true),
     onCancel: () => finish(false),
   });
-  const centreRest = (index, x) => basisAt(gesture.basis, x) + auxEqPointGain(points.filter((_, i) => i !== index), x);
+  // Base plus the OTHER points' persistent bumps at x (for the centre limit).
+  const centreRest = (index, x) => basisAt(anchor.base, x) + auxEqPointGain(points.filter((_, i) => i !== index), x);
   function pointer(event) {
     const g = geometry(), rect = g.rect;
     return { x: clamp((event.clientX - (rect.left || 0) - g.left) / (g.right - g.left), 0, 1), db: clamp(15 - (event.clientY - (rect.top || 0) - g.top) / g.range * 30, -15, 15) };
@@ -310,6 +346,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 4) return;
     drag.moved = true;
     if (mode === 'draw') { drawAt(event); return; }
+    if (!anchor) return;
     const p = pointer(event), previous = points[selectedPoint];
     // The handle follows the pointer: its own gain is the remainder after the
     // basis and the other points' shape at the new position. F09-S06 (live
@@ -318,7 +355,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     // centre reaches the limit; a band already at ±15 elsewhere never blocks it.
     const rest = centreRest(selectedPoint, p.x);
     points[selectedPoint] = { ...previous, x: p.x, gainDb: pointCentreGainLimit(rest, clamp(p.db - rest, -12, 12), previous.gainDb) };
-    if (previewIntent(requestedPointSamples(points, gesture.basis))) drag.changed = true;
+    if (previewIntent(requestedPointSamples(points, anchor.base))) drag.changed = true;
     else points[selectedPoint] = { ...previous, x: p.x }; // keep following horizontally
     syncParams();
   }
@@ -351,7 +388,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
       hideConfirm(true);
       if (!editable) return;
       if (!owned(session.snapshot().control)) session.selectEqTarget(auxIndex);
-      neutralize(); session.resetEqBands(); render();
+      dropAnchor(); session.resetEqBands(); render(); // Points restart from the reset curve.
     }
   }
   function hideConfirm(focusReset) { confirmRow.hidden = true; if (focusReset) resetButton.focus?.(); }
@@ -376,7 +413,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     const current = controller.context();
     if (current.selectedAux === null) return false;
     auxIndex = current.selectedAux; binding = { profileId: current.profileId, revision: current.revision, selectedAux: current.selectedAux };
-    focusBefore = document.activeElement; open = true; mode = 'points'; selectedPoint = 0; points = flatPoints(); previewValues = null; gesture = null;
+    focusBefore = document.activeElement; open = true; mode = 'points'; selectedPoint = 0; points = flatPoints(); anchor = null; previewValues = null; gesture = null;
     section.hidden = false; root.dataset.eqOpen = 'true';
     if (mixButton) { mixButton.setAttribute('aria-pressed', 'true'); mixButton.classList?.add('mm-active'); }
     session.selectEqTarget(auxIndex);

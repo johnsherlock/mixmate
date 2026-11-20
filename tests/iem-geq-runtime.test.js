@@ -313,26 +313,99 @@ test('points are a relative Δ: bands outside influence keep exact raw values; z
   app.session.disconnect();
 });
 
-test('EQ view: points adjust relative to a native edit made while open, then return to 0 dB Δ; notes describe the editable basis', () => {
+// F09-S07 (user decision 2026-11-20; root's live finding: FREQ/WIDTH sent nothing because every point gain
+// reset to 0 after each release): points are persistent parametric drawing aids over an anchored base.
+const dbOf = message => auxEqPositionToDb(Number(message.split('^')[2]));
+const lastDb = (list, path) => { const hit = list.filter(message => bandOf(message) === path).at(-1); return hit === undefined ? undefined : dbOf(hit); };
+const keyOn = (ui, input, name) => input.emit('keydown', { key: name, target: input, preventDefault() {} });
+const keyUp = (ui, input, name) => input.emit('keyup', { key: name, target: input, preventDefault() {} });
+function stepGain(ui, steps) {
+  const gain = ui.find('[data-eq-param="gain"]'); gain.focus();
+  for (let n = 0; n < steps; n++) { keyOn(ui, gain, 'PageUp'); ui.advance(300); }
+  keyUp(ui, gain, 'PageUp'); ui.advance(300); return gain;
+}
+const capOf = (ui, id) => ui.find(`[data-eq-param="${id}"]`).parentElement.querySelector('.mm-fader-hit');
+function dragCap(ui, id, dy) { const cap = capOf(ui, id); press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 100 - dy }); ui.advance(300); press(cap, 'pointerup', { clientY: 100 - dy }); ui.advance(300); }
+
+test('EQ view (F09-S07): with all point gains at 0, FREQ/WIDTH correctly send nothing and say so; notes describe persistent points', () => {
   const ui = uiFixture(); ui.eq.open(0);
-  assert.match(ui.find('.mm-live-eq-mode-note').textContent, /relative Δ adjustment on top of the current editable basis/);
-  const freq = ui.find('[data-eq-param="freq"]'), freqCap = freq.parentElement.querySelector('.mm-fader-hit');
-  press(freqCap, 'pointerdown'); press(freqCap, 'pointermove', { clientY: 140 }); press(freqCap, 'pointerup', { clientY: 140 });
-  assert.equal(ui.writes().length, 0); assert.match(ui.find('.mm-live-eq-status').textContent, /No change sent: adjust GAIN Δ/);
-  ui.receiver.receive('3:::SETD^a.0.eq.peak.26^0.2\nSETD^a.1.eq.peak.26^0.2'); // native −9 dB at 3.15 kHz while open
-  const gain = ui.find('[data-eq-param="gain"]'), cap = gain.parentElement.querySelector('.mm-fader-hit');
-  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); press(cap, 'pointerup', { clientY: 60 });
-  const first = ui.writes(), at = (list, path) => list.find(message => bandOf(message) === path);
-  assert.ok(first.length > 0 && first.length < 62);
-  assert.equal(at(first, 'a.0.eq.peak.26'), undefined, 'native −9 dB band outside the point influence is never overwritten');
-  assert.ok(at(first, 'a.0.eq.peak.3'));
-  assert.equal(gain.value, '0'); assert.match(gain.closest('.mm-eq-param').querySelector('output').textContent, /Δ 0\.0 dB/);
-  for (const message of first) ui.receiver.receive(message);
-  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 }); press(cap, 'pointerup', { clientY: 60 });
-  const second = ui.writes().slice(first.length); assert.ok(second.length > 0);
-  const firstDb = auxEqPositionToDb(Number(at(first, 'a.0.eq.peak.3').split('^')[2])), secondDb = auxEqPositionToDb(Number(at(second, 'a.0.eq.peak.3').split('^')[2]));
-  assert.ok(Math.abs((secondDb - firstDb) - (firstDb - 0)) < 1e-9, 'the second gesture adds one fresh Δ on top of the new basis, not the previous bump twice');
+  assert.match(ui.find('.mm-live-eq-mode-note').textContent, /persistent shape points/);
+  dragCap(ui, 'freq', 79); dragCap(ui, 'q', 79);
+  assert.equal(ui.writes().length, 0); assert.match(ui.find('.mm-live-eq-status').textContent, /every point gain is 0 dB/);
+  assert.doesNotMatch(ui.eq.section.textContent, /only shape the next adjustment|return to 0 dB Δ/);
   ui.find('[data-eq-mode="draw"]').emit('click'); assert.equal(ui.find('.mm-live-eq-mode-note').textContent, EQ_MODE_NOTES.draw); assert.match(EQ_MODE_NOTES.draw, /last requested curve if the desk has not echoed/);
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07): a boosted point keeps its gain; moving FREQ moves the bump (old centre returns to base, new centre rises); WIDTH changes send', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const gain = ui.find('[data-eq-param="gain"]'), output = gain.closest('.mm-eq-param').querySelector('output');
+  dragCap(ui, 'gain', 79); // +10.8 dB on point 1 (about 100 Hz)
+  const first = ui.writes(); ui.deskEcho();
+  assert.ok(first.length > 0); assert.ok(Math.abs(lastDb(first, 'a.0.eq.peak.7') - 10.8) < 0.1, 'point 1 boosts 100 Hz');
+  assert.equal(gain.value, '10.8', 'the gain persists after release'); assert.match(output.textContent, /Δ \+10\.8 dB/);
+  dragCap(ui, 'freq', 79); // x 0.233 -> 0.683 (about 2.2 kHz)
+  const moved = ui.writes().slice(first.length); ui.deskEcho();
+  assert.ok(moved.length > 0, 'FREQ with a non-zero gain sends');
+  assert.ok(Math.abs(lastDb(moved, 'a.0.eq.peak.7')) < 0.05, 'bands the bump leaves go back to the base');
+  assert.ok(lastDb(moved, 'a.0.eq.peak.20') > 10, 'the new centre (2 kHz) rises');
+  assert.equal(lastDb(moved, 'a.0.eq.peak.26') === undefined || lastDb(moved, 'a.0.eq.peak.26') > 0, true);
+  assert.deepEqual(pathsOf(moved).filter(path => path.startsWith('a.1.')).map(path => path.replace('a.1.', 'a.0.')), pathsOf(moved).filter(path => path.startsWith('a.0.')), 'both linked sides');
+  assert.equal(gain.value, '10.8', 'gain still persists');
+  const before = ui.writes().length; dragCap(ui, 'q', 79); // narrower bump
+  const narrowed = ui.writes().slice(before); assert.ok(narrowed.length > 0, 'a WIDTH change sends');
+  assert.ok(lastDb(narrowed, 'a.0.eq.peak.23') < lastDb(moved, 'a.0.eq.peak.23'), 'a narrower bump lowers its flanks');
+  assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /Unchanged requested coordinate|restarted/);
+  assert.ok(ui.writes().every(message => GEQ_WRITE.test(message)));
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07): gains persist across gestures without double counting; a native band change re-anchors with no stale re-send', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const gain = stepGain(ui, 3); const first = ui.writes(); ui.deskEcho();
+  const unit = lastDb(first, 'a.0.eq.peak.7') / 3; assert.ok(unit > 0.9 && unit <= 1);
+  assert.equal(Number(gain.value), 3);
+  stepGain(ui, 2); const second = ui.writes().slice(first.length); ui.deskEcho();
+  assert.equal(Number(gain.value), 5);
+  assert.ok(Math.abs(lastDb(second, 'a.0.eq.peak.7') - 5 * unit) < 1e-6, 'second gesture builds base + the 5 dB point, not 3 + 5');
+  // A native edit (another editor / the desk) between gestures.
+  ui.receiver.receive('3:::SETD^a.0.eq.peak.26^0.2\nSETD^a.1.eq.peak.26^0.2');
+  const echoed7 = lastDb(second, 'a.0.eq.peak.7'), count = ui.writes().length;
+  stepGain(ui, 1); const third = ui.writes().slice(count);
+  assert.match(ui.find('.mm-live-eq-status').textContent, /Curve changed on the desk; points restarted from the current curve/);
+  assert.equal(Number(gain.value), 1, 'gains restart at 0, then this gesture adds 1');
+  assert.ok(Math.abs(lastDb(third, 'a.0.eq.peak.7') - (echoed7 + unit)) < 1e-6, 'base is the new received coordinate (with the applied boost); no double bump');
+  assert.equal(lastDb(third, 'a.0.eq.peak.26'), undefined, 'the native band is never overwritten');
+  assert.ok(third.length < 62, 'no stale whole-curve re-send');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07): a draw commit or confirmed reset re-anchors the points silently at 0 dB from the new curve', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const gain = stepGain(ui, 3); ui.deskEcho();
+  const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg');
+  ui.find('[data-eq-mode="draw"]').emit('click');
+  press(svg, 'pointerdown', { clientX: 30, clientY: 20 }); press(svg, 'pointermove', { clientX: 130, clientY: 20 }); ui.advance(300); press(svg, 'pointerup', { clientX: 130, clientY: 20 }); ui.advance(300); ui.deskEcho();
+  ui.find('[data-eq-mode="points"]').emit('click');
+  assert.equal(Number(gain.value), 0, 'points restart at 0 dB after a draw');
+  const coordinate = control(ui).eqCoordinate.map(auxEqPositionToDb), count = ui.writes().length;
+  stepGain(ui, 1); const after = ui.writes().slice(count);
+  assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /Curve changed on the desk/, 'own draw is not an outside change');
+  const unit = auxEqPointGain([{ x: 0.233, gainDb: 1, q: 0.5 }], auxEqCentreX(100));
+  assert.ok(Math.abs(lastDb(after, 'a.0.eq.peak.7') - Math.min(15, coordinate[7] + unit)) < 1e-6, 'builds on the drawn curve');
+  ui.deskEcho(); ui.find('[data-eq-reset]').emit('click'); ui.find('[data-eq-reset-confirm]').emit('click'); ui.deskEcho();
+  assert.equal(Number(gain.value), 0, 'points restart at 0 dB after a reset');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07): persistent points still saturate at ±15 dB per band and are never rejected whole', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  ui.receiver.receive('3:::' + Array.from({ length: 31 }, (_, band) => `SETD^a.0.eq.peak.${band}^${auxEqDbToPosition(10)}\nSETD^a.1.eq.peak.${band}^${auxEqDbToPosition(10)}`).join('\n'));
+  stepGain(ui, 12); ui.deskEcho();
+  ui.find('[data-eq-point="1"]').emit('click'); const gain = stepGain(ui, 12);
+  assert.ok(Number(gain.value) > 0, 'point 2 still moves');
+  assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /rejected/);
+  assert.ok(ui.writes().length > 0 && ui.writes().every(message => GEQ_WRITE.test(message) && Number(message.split('^')[2]) <= 1));
   ui.eq.destroy(); ui.session.disconnect();
 });
 

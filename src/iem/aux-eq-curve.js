@@ -31,10 +31,13 @@ export function mapRequestedAuxEqCurve(input) {
   return Object.freeze({ mode, basis: 'native-display-centres', values: Object.freeze(values) });
 }
 
-// Point intent is a RELATIVE adjustment: three user shape points (log-frequency
-// position 0..1 over the display range, requested gain change and normalized
-// narrowness 0..1) form a smooth bump sum added to the caller-supplied basis
-// (the session's current editable coordinate in dB, captured at gesture start).
+// Point intent: three user shape points (log-frequency position 0..1 over the
+// display range, gain and normalized narrowness 0..1) form a smooth bump sum
+// added to the caller-supplied basis. Since F09-S07 (user decision 2026-11-20)
+// the live editor keeps the points persistent, like the Demo, over an anchored
+// base (the session coordinate in dB captured when point editing starts, and
+// re-captured with gains 0 after an outside change, draw or reset), so every
+// gesture requests base + bumps of ALL points and FREQ/WIDTH move a bump.
 // It is sampled ONLY at the 31 native display centres. It is a requested-curve
 // drawing aid, not three parametric hardware filters and never an inverse fit
 // of native bands. A band whose bump is negligible keeps its exact basis dB, so
@@ -70,7 +73,8 @@ export function requestedPointSamples(input, basisInput) {
 // session itself never clips. Draw mode is unaffected.
 export const AUX_EQ_GAIN_LIMIT_DB = 15;
 // The dragged handle follows vertically only until its OWN centre reaches the
-// limit: the gain that puts basis + other points + gain at ±15 at x = point.x.
+// limit: the gain that puts basis + other points' persistent bumps + gain at
+// ±15 at x = point.x.
 // The range is widened by the point's current gain, so when a neighbour has
 // already pushed the centre past the limit the clamp only stops further
 // outward movement and never pulls the gain inward (re-review P2).
