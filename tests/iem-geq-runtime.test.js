@@ -211,12 +211,13 @@ test('processing detector is bounded, opaque and excludes modelled fields', () =
   assert.deepEqual(parseAuxProcessingFrame('SETD^a.0.x^1'), []);
 });
 
-function uiFixture(options = {}) {
+// Existing diagnostic assertions mount with ?debug; default-UI tests pass debug: false.
+function uiFixture({ debug = true, ...options } = {}) {
   const dom = domFixture(), tabs = dom.root.querySelector('.mm-local-tabs'), mix = dom.document.createElement('button');
   mix.dataset.mode = 'eq'; tabs.append(mix);
   const app = fixture(options), contexts = new Set(), context = { profileId: null, revision: 1, selectedAux: 0, sources: [] };
   const controller = { context: () => context, selectAux: () => false, clearLevelContext() { app.session.invalidateLevelContext(); }, subscribeContext(fn) { contexts.add(fn); fn(context); return () => contexts.delete(fn); } };
-  const eq = mountEqControls({ root: dom.root, session: app.session, controller, window: new Node(dom.document) });
+  const eq = mountEqControls({ root: dom.root, session: app.session, controller, window: new Node(dom.document), debug });
   for (const fn of contexts) fn(context);
   return { ...dom, ...app, eq, mix, context, contexts, find: selector => eq.section.querySelector(selector), all: selector => eq.section.querySelectorAll(selector) };
 }
@@ -250,21 +251,19 @@ test('EQ view: explicit open, visible approximation/bypass status, mutually excl
   ui.eq.destroy(); ui.session.disconnect();
 });
 
-test('EQ view: unequal readback disables controls; context change closes; reset is scoped and explicit', () => {
+test('EQ view: unequal readback disables controls; context change closes; one reset click resets immediately (scoped, sparse)', () => {
   const ui = uiFixture(); ui.eq.open(0);
   ui.receiver.receive('3:::SETD^a.1.eq.peak.7^0.9');
   assert.equal(ui.find('[data-eq-param="gain"]').disabled, true); assert.equal(ui.find('[data-eq-reset]').disabled, true);
   assert.match(ui.find('.mm-live-eq-status').textContent, /Unequal linked EQ profiles/); assert.match(ui.find('.mm-live-eq-details').textContent, /raw 0\.9/);
   ui.receiver.receive('3:::SETD^a.1.eq.peak.7^0.5'); assert.equal(ui.find('[data-eq-reset]').disabled, false);
   ui.receiver.receive('3:::SETD^a.0.eq.peak.7^0.8\nSETD^a.1.eq.peak.7^0.8');
-  const reset = ui.find('[data-eq-reset]'), confirm = ui.find('.mm-live-eq-reset-confirm');
-  reset.emit('click'); assert.equal(confirm.hidden, false); assert.equal(ui.writes().length, 0, 'first tap only asks');
-  assert.match(confirm.textContent, /Reset all 31 GEQ bands of Output 1 and 2/); assert.equal(ui.document.activeElement, ui.find('[data-eq-reset-cancel]'), 'focus moves to the safe choice');
-  ui.document.activeElement.emit('keydown', { key: 'Escape' }); assert.equal(confirm.hidden, true); assert.equal(ui.eq.section.hidden, false, 'Escape closes the confirm, not the view');
-  assert.equal(ui.document.activeElement, reset); assert.equal(ui.writes().length, 0);
-  reset.emit('click'); ui.find('[data-eq-reset-cancel]').emit('click'); assert.equal(confirm.hidden, true); assert.equal(ui.writes().length, 0);
-  reset.emit('click'); ui.find('[data-eq-reset-confirm]').emit('click');
-  assert.equal(confirm.hidden, true); assert.deepEqual(ui.writes(), ['3:::SETD^a.0.eq.peak.7^0.5', '3:::SETD^a.1.eq.peak.7^0.5']);
+  const reset = ui.find('[data-eq-reset]');
+  assert.equal(ui.find('.mm-live-eq-reset-confirm'), null); assert.equal(ui.find('[data-eq-reset-confirm]'), null, 'no confirmation UI (user decision 2026-11-20)');
+  reset.emit('click');
+  assert.deepEqual(ui.writes(), ['3:::SETD^a.0.eq.peak.7^0.5', '3:::SETD^a.1.eq.peak.7^0.5'], 'one click: sparse L/R reset of the bands not already 0.5');
+  reset.emit('click'); assert.equal(ui.writes().length, 2, 'a second click before the echo sends nothing (no queue)');
+  ui.deskEcho(); ui.advance(300); reset.emit('click'); assert.equal(ui.writes().length, 2, 'all bands at 0.5: a further click sends nothing');
   ui.context.revision++; for (const fn of ui.contexts) fn(ui.context); assert.equal(ui.eq.section.hidden, true);
   ui.eq.destroy(); ui.session.disconnect();
 });
@@ -425,7 +424,7 @@ test('EQ view (F09-S07 review): the owner ending a gesture mid-drag shows its re
   ui.eq.destroy(); ui.session.disconnect();
 });
 
-test('EQ view (F09-S07): a draw commit or confirmed reset re-anchors the points silently at 0 dB from the new curve', () => {
+test('EQ view (F09-S07): a draw commit or a reset re-anchors the points silently at 0 dB from the new curve', () => {
   const ui = uiFixture(); ui.eq.open(0);
   const gain = stepGain(ui, 3); ui.deskEcho();
   const svg = ui.eq.section.querySelectorAll('*').find(node => node.tag === 'svg');
@@ -438,7 +437,7 @@ test('EQ view (F09-S07): a draw commit or confirmed reset re-anchors the points 
   assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /Curve changed on the desk/, 'own draw is not an outside change');
   const unit = auxEqPointGain([{ x: 0.233, gainDb: 1, q: 0.5 }], auxEqCentreX(100));
   assert.ok(Math.abs(lastDb(after, 'a.0.eq.peak.7') - Math.min(15, coordinate[7] + unit)) < 1e-6, 'builds on the drawn curve');
-  ui.deskEcho(); ui.find('[data-eq-reset]').emit('click'); ui.find('[data-eq-reset-confirm]').emit('click'); ui.deskEcho();
+  ui.deskEcho(); ui.find('[data-eq-reset]').emit('click'); ui.deskEcho();
   assert.equal(Number(gain.value), 0, 'points restart at 0 dB after a reset');
   ui.eq.destroy(); ui.session.disconnect();
 });
@@ -456,7 +455,7 @@ test('EQ view (F09-S07): persistent points still saturate at ±15 dB per band an
 
 test('EQ view: handles are keyboard reachable; L/R readback is distinct and labelled; meter-only emits skip rendering', () => {
   const ui = uiFixture(); let checks = 0; const original = ui.session.canEditEqTarget;
-  ui.eq.destroy(); ui.eq = mountEqControls({ root: ui.root, session: { ...ui.session, canEditEqTarget(index) { checks++; return original(index); } }, controller: { context: () => ui.context, selectAux: () => false, clearLevelContext() {}, subscribeContext(fn) { fn(ui.context); return () => {}; } }, window: new Node(ui.document) });
+  ui.eq.destroy(); ui.eq = mountEqControls({ root: ui.root, session: { ...ui.session, canEditEqTarget(index) { checks++; return original(index); } }, controller: { context: () => ui.context, selectAux: () => false, clearLevelContext() {}, subscribeContext(fn) { fn(ui.context); return () => {}; } }, window: new Node(ui.document), debug: true });
   ui.eq.open(0);
   const handle = ui.eq.section.querySelectorAll('[data-eq-handle]').find(node => node.dataset.eqHandle === '2');
   assert.equal(handle.attributes.tabindex, '0'); handle.emit('keydown', { key: 'Enter' });
@@ -799,4 +798,44 @@ test('EQ graph (F09-S08 review): touch near a handle grabs only through its own 
   press(svg, 'pointermove', { pointerType: 'touch', clientX: cx - 5, clientY: cy - 40 }); assert.ok(ui.writes().length > 0);
   press(svg, 'pointerup', { pointerType: 'touch', clientX: cx - 5, clientY: cy - 40 });
   ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S09): without ?debug no diagnostics are created below the graph; the compact state sits in the head; aria labels stay', () => {
+  const ui = uiFixture({ debug: false }); ui.eq.open(0);
+  for (const selector of ['.mm-live-eq-status', '.mm-live-eq-mode-note', '.mm-live-eq-legend', '.mm-live-eq-approximation', '.mm-live-eq-details', '.mm-live-eq-readbacks', '.mm-live-eq-requested-text', '.mm-live-eq-reset-confirm'])
+    assert.equal(ui.find(selector), null, `${selector} is not rendered`);
+  assert.deepEqual(ui.eq.section.children.map(node => node.className), ['mm-live-eq-head', 'mm-eq-shell mm-eq-native'], 'only head and graph/sidebar');
+  assert.doesNotMatch(ui.eq.section.textContent, /not verified DSP centres|Band readback|Requested \(not proof|Received band values/);
+  const state = ui.find('.mm-live-eq-state');
+  assert.equal(state.hidden, true, 'editable: no state text');
+  ui.receiver.receive('3:::SETD^a.1.eq.peak.7^0.9');
+  assert.equal(state.hidden, false); assert.equal(state.textContent, 'Read-only · L/R GEQ unequal'); assert.match(state.attributes.title, /Unequal linked/);
+  assert.equal(state.attributes.role, 'status'); assert.equal(ui.find('.mm-live-eq-hint').attributes.role, 'status');
+  assert.match(svgOf(ui).attributes['aria-label'], /^AUX GEQ graph\. .*Unequal linked/);
+  assert.match(ui.find('[data-eq-param="gain"]').attributes['aria-label'], /gain/); assert.match(ui.find('[data-eq-reset]').attributes['aria-label'], /Reset/);
+  ui.receiver.receive('3:::SETD^a.1.eq.peak.7^0.5'); assert.equal(state.hidden, true);
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S09): reset during an active gesture cancels the gesture first and never queues; Enter autorepeat cannot repeat resets', () => {
+  const ui = uiFixture({ debug: false }); ui.eq.open(0);
+  ui.receiver.receive('3:::SETD^a.0.eq.peak.3^0.7\nSETD^a.1.eq.peak.3^0.7'); ui.desk.set('a.0.eq.peak.3', 0.7); ui.desk.set('a.1.eq.peak.3', 0.7);
+  const handle = ui.find('[data-eq-handle="0"]'); handle.focus(); handleKey(handle, 'keydown', 'ArrowUp');
+  assert.equal(control(ui).gestureActive, true); const streamed = ui.writes().length; assert.ok(streamed > 0);
+  ui.find('[data-eq-reset]').emit('click');
+  assert.equal(control(ui).gestureActive, false, 'the gesture is cancelled first');
+  assert.ok(ui.writes().slice(streamed).every(message => message.endsWith('^0.5')), 'anything sent after the cancel is only the scoped reset');
+  const afterFirst = ui.writes().length;
+  ui.find('[data-eq-reset]').emit('click'); assert.equal(ui.writes().length, afterFirst, 'no second reset while the first is outstanding');
+  let prevented = 0; ui.find('[data-eq-reset]').emit('keydown', { key: 'Enter', repeat: true, preventDefault() { prevented++; } });
+  ui.find('[data-eq-reset]').emit('keydown', { key: 'Enter', repeat: false, preventDefault() { prevented += 10; } });
+  assert.equal(prevented, 1, 'only the auto-repeated Enter is suppressed');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('live entry passes the tested ?debug flag to the EQ view; reset confirm CSS is gone', async () => {
+  const read = file => readFile(new URL('../' + file, import.meta.url), 'utf8');
+  assert.match(await read('src/iem/live-entry.js'), /mountEqControls\(\{ root, session, controller, debug \}\)/);
+  assert.doesNotMatch(await read('src/iem/iem.css'), /mm-live-eq-reset-confirm/);
+  assert.doesNotMatch(await read('src/iem/eq-controls.js'), /Reset bands|Keep bands|eqResetConfirm/);
 });

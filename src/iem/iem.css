@@ -2588,11 +2588,13 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle circle,#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle text{pointer-events:visible}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle:active{cursor:grabbing}
-#mixmate-iem-concept[data-mode="live"] .mm-live-eq-hint{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#e5c97a}
-#mixmate-iem-concept[data-mode="live"] .mm-live-eq-hint[hidden]{display:none}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq-hint,#mixmate-iem-concept[data-mode="live"] .mm-live-eq-state{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#e5c97a}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq-state{color:#b5c0c8}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq-hint[hidden],#mixmate-iem-concept[data-mode="live"] .mm-live-eq-state[hidden]{display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-requested{fill:none;stroke:#ecd3a7;stroke-width:2;stroke-dasharray:6 4}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-shape{fill:none;stroke:#9fb0b8;stroke-width:1.5;stroke-dasharray:2 3}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-unverified{margin:0;font-size:10px;color:#b5c0c8;align-self:stretch}
+/* F09-S09: the status/notes/legend/band readback below the graph exist only with ?debug (never created otherwise). */
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq-status{margin:0;font-size:11px}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-caption{margin:0;font-size:10px;color:#b5c0c8}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq-details{font-size:10px;color:#b5c0c8;overflow-wrap:anywhere}
@@ -2603,9 +2605,6 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-plot,#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg{touch-action:pan-x pan-y}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-svg[data-draw="true"]{touch-action:none;cursor:crosshair}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-handle:focus-visible{outline:2px solid var(--mm-yellow)}
-#mixmate-iem-concept[data-mode="live"] .mm-live-eq-reset-confirm{flex-wrap:wrap;margin:0;flex:0 0 auto}
-#mixmate-iem-concept[data-mode="live"] .mm-live-eq-reset-confirm>p{flex:1 1 100%;margin:0;font-size:11px;overflow-wrap:anywhere}
-#mixmate-iem-concept[data-mode="live"] .mm-live-eq-reset-confirm[hidden]{display:none}
 /* Compact landscape (e.g. 844×390): the graph fills the remaining travel instead of scrolling below the viewport. */
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq{overflow:hidden;gap:2px;padding:3px 8px 4px}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-eq .mm-eq-native{flex:1 1 0;min-height:0;height:auto}
