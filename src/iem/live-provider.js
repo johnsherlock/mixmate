@@ -1,5 +1,6 @@
 import { faderValueToDB, vuValueToDB } from 'soundcraft-ui-connection';
 import { parseIemStateFrame, receivedAuxMode, receivedIemField, stereoRelationship, observedAuxSources } from './protocol.js';
+import { commonPanWire } from './pan-display.js';
 
 // Definitions/profile bounds never manufacture received availability.
 export function createEmptyLiveProvider() {
@@ -137,6 +138,8 @@ export function projectLiveState(session, selectedAux = null) {
       detail: `${sourceLabel(source.sourceId)} · AUX ${selectedAux + 1} SEND · ${relationshipText(state, source.sourceId)}`,
       ...level(state.get(`${prefix}.value`)),
       panText: state.has(`${prefix}.pan`) ? `Pan ${state.get(`${prefix}.pan`).toFixed(3)} · normalized` : 'Pan not received',
+      // F09-S09 Pan button: one shared received wire value (every side exactly equal), else none.
+      panWire: commonPanWire(sides.map(side => side.panPosition)),
       ...(sides.length === 2 ? { sides,
         levelText: commonLevel(sides), actualLevelText: sideActuals(sides),
         panText: sides.every(side => typeof side.panPosition === 'number' && side.panPosition === sides[0].panPosition) ? sides[0].panText : sides.map(side => `${side.auxIndex + 1}: ${side.panText}`).join(' · ') } : {}),

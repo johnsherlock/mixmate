@@ -2517,7 +2517,6 @@ body {
 /* Enlarged normalized pan uses the accepted horizontal surface; no extra bank row. */
 #mixmate-iem-concept[data-mode="live"] .mm-pan-short{display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 8px;min-width:0}
-#mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls>.mm-caption,
 #mixmate-iem-concept[data-mode="live"] .mm-pan-readbacks,
 #mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls>.mm-pan-labels,
 #mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls>.mm-fader-control,
@@ -2531,7 +2530,6 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls>.mm-pan-presets{margin:0}
 #mixmate-iem-concept[data-mode="live"] .mm-pan-dialog .mm-dialog-head h3{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-pan-controls{gap:3px 7px}
-#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-pan-controls>.mm-caption{margin:0;font-size:10px}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-pan-readbacks,
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-pan-status{font-size:10px}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-live-pan-controls>.mm-pan-value{font-size:16px;line-height:20px}
@@ -2571,6 +2569,14 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-pan-details .mm-caption {margin:6px 0}
 #mixmate-iem-concept[data-mode="live"] .mm-pan-details .mm-pan-readbacks {display:block;font-size:12px}
 #mixmate-iem-concept[data-mode="live"] .mm-pan-status {margin:0}
+/* F09-S09 prototype pan: LEFT/CENTRE/RIGHT, large L/CENTRE/R readout, Hard L/Centre/Hard R and a one-line footer
+   (also the compact read-only reason). Raw values/status/Details exist only with ?debug. */
+#mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls > .mm-pan-keys {margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mixmate-iem-concept[data-mode="live"] .mm-live-pan-controls > .mm-pan-diagnostic {margin:0;font-size:11px;color:#b5c0c8;overflow-wrap:anywhere}
+/* Strip Pan button: "PAN · L 30"; ultra-compact strips drop the "PAN · " prefix. Requested values while live are dashed. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-pan-button {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-pan-button[data-pan-requested="true"] {outline:1px dashed currentColor;outline-offset:-3px}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-pan-known="true"] .mm-pan-prefix {display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-strip > span.mm-pan-button {display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-group > .mm-group-control-note {display:none}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan] {inset:auto 3px 2px 3px;width:auto;height:22px;min-height:22px;max-height:22px;line-height:18px;padding:1px 3px;font-size:10px}

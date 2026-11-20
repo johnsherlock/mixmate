@@ -836,6 +836,7 @@ test('EQ view (F09-S09): reset during an active gesture cancels the gesture firs
 test('live entry passes the tested ?debug flag to the EQ view; reset confirm CSS is gone', async () => {
   const read = file => readFile(new URL('../' + file, import.meta.url), 'utf8');
   assert.match(await read('src/iem/live-entry.js'), /mountEqControls\(\{ root, session, controller, debug \}\)/);
+  assert.match(await read('src/iem/live-entry.js'), /mountPanControls\(\{ root, session, controller, dialogOwner, debug \}\)/);
   assert.doesNotMatch(await read('src/iem/iem.css'), /mm-live-eq-reset-confirm/);
   assert.doesNotMatch(await read('src/iem/eq-controls.js'), /Reset bands|Keep bands|eqResetConfirm/);
 });

@@ -1,5 +1,9 @@
 # AUX send pan evidence and safety — F06-S01
 
+## Current F09-S09 display labels — 2026-11-20
+
+User decision 2026-11-20 ([F09-S09](stories/F09-S09.md)) allows L/CENTRE/R **display** labels (wire 0 = `L 100`, 0.5 = `CENTRE`, 1 = `R 100`, linear integer, the Demo convention), superseding the park on directional labels below for presentation only. No primary source is added: root verifies the physical direction against the native app on the desk. The guard, strict 0..1 prevalidation, three-decimal command normalization, exact raw readbacks and the no linked-source/FX balance boundary are unchanged.
+
 ## Current F09-S04 peer-editor reconciliation — 2026-11-17
 
 The [current runtime](iem-control-runtime.md) and [ADR-0008](adr/0008-control-state-model.md#current-f09-s04-peer-editor-decision--2026-11-17) supersede historical manual arming/rearming, cumulative old-anchor groups, one-socket actual state and observation-window input blocking below. Qualified connected controls accept direct cap/key gestures without Enable/Disable or prior name selection. A private receive-only companion is the sole actual journal; existing typed writer classes remain unchanged. Native/precision changes cancel obsolete intent and update raw actual; the next deliberate gesture automatically uses current compatible state. Groups reanchor per gesture only after complete overlapping local-write basis receipts. Incomplete dispatch still requires full touched-closure post-floor recovery, then a new gesture without manual rearm. No retry/replay/rollback, new fields, generic sender or EQ runtime. Old sections/evidence describe their attributed historical builds; current exact-head delivery and firmware acceptance belong to [F09-S04](stories/F09-S04.md).

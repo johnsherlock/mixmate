@@ -1,5 +1,9 @@
 # Owned level, group and pan peer runtime — F09-S04
 
+## Immediate GEQ reset and prototype pan presentation — F09-S09 (2026-11-20)
+
+GEQ reset (user decision 2026-11-20) is an immediate deliberate one-shot: one ↺ click calls the existing typed scoped `resetEqBands` (sparse, L/R pair, bypass/filters untouched, never native `resetGraphEQ`, never streamed) with no confirmation step. A gesture active at the click is cancelled first; a click the owner refuses (cannot arm, own echoes outstanding, already flat) sends nothing and is not queued. Pan presentation now uses display-only L/CENTRE/R text (user decision 2026-11-20); pan wire values, the typed guard, three-decimal normalization, live throttling and the preset one-shots are unchanged. EQ and pan diagnostics render only with `?debug`.
+
 ## Bounded basis wait and gesture rendering — F09-S06 (2026-11-19)
 
 | Aspect | Rule |

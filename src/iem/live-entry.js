@@ -25,7 +25,7 @@ controller = mountLiveController({ session, repository, view, ui: connectionUI }
 mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connectionUI), setEnabled: value => view.groupEditing(value),
   confirmClear: () => window.confirm('Clear all source selections from this group draft? Save group to apply the change.') });
 channelDetail = mountChannelDetail({ root, dialogOwner, onOpen: model => { controller.clearLevelContext(); return view.detailModel(model.id); } });
-panControls = mountPanControls({ root, session, controller, dialogOwner });
+panControls = mountPanControls({ root, session, controller, dialogOwner, debug });
 eqControls = mountEqControls({ root, session, controller, debug });
 prepareEntryOffline(root.querySelector('.mm-offline-state'));
 
