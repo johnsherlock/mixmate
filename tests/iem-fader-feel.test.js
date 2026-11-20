@@ -18,7 +18,7 @@ const FRAME = '3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.1.matrix^0\nSETD^a
   Array.from({ length: 31 }, (_, band) => `SETD^a.0.eq.peak.${band}^0.5\nSETD^a.1.eq.peak.${band}^0.5`).join('\n') + '\nSETD^a.0.eq.bypass^0\nSETD^a.1.eq.bypass^0';
 async function groups(members = ['i.0', 'f.0']) {
   const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
-  settings.profiles = [{ id: 'rig', name: 'rig', address: '192.168.0.60', groups: [{ id: 'band', name: 'Band', members }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }];
+  settings.profiles = [{ id: 'rig', name: 'rig', groups: [{ id: 'band', name: 'Band', members }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }];
   await repository.replace(settings);
   let clock = 0, next = 0; const jobs = new Map(), sockets = [];
   const timers = { setTimeout(fn, delay) { const id = ++next; jobs.set(id, { fn, at: clock + delay }); return id; }, clearTimeout(id) { jobs.delete(id); }, setInterval() { return ++next; }, clearInterval() {} };

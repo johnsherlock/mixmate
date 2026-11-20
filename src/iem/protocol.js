@@ -28,6 +28,9 @@ function sourceDescriptor(family, rawIndex) {
 }
 function describePath(path) {
   if (path === 'model' || path === 'firmware') return { kind: 'device', field: path, path };
+  // F02-S05: receive-only current snapshot name (observed in the 3.0.7865 INIT
+  // dump as `SETS^var.currentSnapshot^<name>`). It identifies the local rig only.
+  if (path === 'var.currentSnapshot') return { kind: 'device', field: 'currentSnapshot', path };
   const aux = /^a\.([0-9])\.(name|mix|pan|mute|stereoIndex|matrix)$/.exec(path);
   if (aux) return { kind: 'aux', auxIndex: Number(aux[1]), field: AUX_FIELDS[aux[2]], path };
   const source = /^([ilpf])\.(0|[1-9][0-9]?)\.(name|stereoIndex)$/.exec(path);
@@ -43,8 +46,8 @@ function describePath(path) {
   return descriptor ? { kind: 'send', ...descriptor, auxIndex: Number(send[3]), field: SEND_FIELDS[send[4]], path } : null;
 }
 function decodeValue(command, raw, field) {
-  if (field === 'name' || field === 'firmware' || field === 'model') {
-    if (command !== 'SETS' || !sizeWithin(raw, field === 'name' ? IEM_RECEIVE_LIMITS.nameBytes : IEM_RECEIVE_LIMITS.metadataBytes)) return undefined;
+  if (field === 'name' || field === 'firmware' || field === 'model' || field === 'currentSnapshot') {
+    if (command !== 'SETS' || !sizeWithin(raw, field === 'name' || field === 'currentSnapshot' ? IEM_RECEIVE_LIMITS.nameBytes : IEM_RECEIVE_LIMITS.metadataBytes)) return undefined;
     if (field === 'model' && !['ui12', 'ui16', 'ui24'].includes(raw)) return undefined;
     return raw;
   }

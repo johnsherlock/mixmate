@@ -138,7 +138,7 @@ test('pan streams within its guard (normalized, both linked outputs); EQ streams
 
 async function groups(members = ['i.0', 'f.0']) {
   const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
-  settings.profiles = [{ id: 'rig', name: 'rig', address: '192.168.0.60', groups: [{ id: 'band', name: 'Band', members }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }];
+  settings.profiles = [{ id: 'rig', name: 'rig', groups: [{ id: 'band', name: 'Band', members }], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }];
   await repository.replace(settings);
   const app = setup(createAuxControlSession, { settingsRepository: repository }); app.session.bindGroupProfile('rig');
   return { ...app, repository };

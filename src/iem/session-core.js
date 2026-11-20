@@ -211,6 +211,8 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (auxControl) for (const update of parseAuxEqStateFrame(frame)) updates.push({ path: update.path, value: update.value, auxIndex: update.auxIndex, field: update.field === 'bypass' ? 'eqBypass' : 'eqBand' });
     for (const { path, value, field, auxIndex } of updates) {
       const actual = !observed.has(path) || observed.get(path) !== value;
+      // F02-S05: a desk snapshot recall changes the rig context; the socket stays.
+      if (actual && field === 'currentSnapshot' && observed.has(path)) { cancelControl('Desk snapshot changed; obsolete adjustment cancelled.', 'profile'); selected = null; }
       observed.set(path, value); receipts.set(path, ++sequence);
       if (dispatchWatch?.paths.has(path)) dispatchWatch.hit = true;
       if (field === 'eqBand' || field === 'eqBypass') { eqObserved.set(path, value); controlsChanged = true; }

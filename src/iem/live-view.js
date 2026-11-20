@@ -445,12 +445,16 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       }
       return null;
     },
-    groupEditing(enabled) {
+    groupEditing(enabled, reason = '') {
       groupEditing = enabled;
       root.dataset.groupEditing = String(enabled);
       const button = root.querySelector('[data-action="edit-groups"]');
-      if (button) { button.disabled = false; button.title = enabled ? 'Edit groups kept on this device' : 'Local group settings are loading'; }
+      if (button) { button.disabled = false; button.title = enabled ? 'Edit groups for this snapshot, kept on this device' : reason || 'Local group settings are loading'; }
       $('.mm-local-tabs').hidden = false;
+    },
+    // F02-S05: the desk's received current snapshot name, as text only.
+    snapshotName(text) {
+      for (const node of root.querySelectorAll('.mm-snapshot-name, .mm-native-snapshot')) if (node.textContent !== text) node.textContent = text;
     },
     preferences(preferences) { root.dataset.preferredOrientation = preferences.orientation; root.dataset.showMeters = String(preferences.showMeters); layout.apply(); },
     clear() { gestures.cancel(); render({ status: 'Not connected — no received mixer state', mixes: [] }); },
