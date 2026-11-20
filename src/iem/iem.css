@@ -2563,7 +2563,7 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-strip-detail,
 #mixmate-iem-concept[data-mode="live"] .mm-live-meter-caption,
 #mixmate-iem-concept[data-mode="live"] .mm-strip:not([data-actionable="true"]) > .mm-live-strip-state {display:none}
-#mixmate-iem-concept[data-mode="live"] .mm-strip {position:relative;padding-bottom:24px}
+#mixmate-iem-concept[data-mode="live"] .mm-strip {position:relative;padding-bottom:24px;isolation:isolate}
 #mixmate-iem-concept[data-mode="live"] .mm-detail-button {position:absolute;bottom:2px;right:3px;min-height:22px;height:22px;padding:1px 4px;font-size:10px;z-index:2}
 #mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-pan-button {position:absolute;inset:auto auto 2px 3px;width:calc(100% - 58px);min-height:22px;height:22px;max-height:22px;margin:0;padding:1px 3px;clip:auto;clip-path:none;line-height:18px}
 #mixmate-iem-concept[data-mode="live"] .mm-pan-readout {display:none}
@@ -2638,7 +2638,9 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{display:block;visibility:hidden;position:absolute;left:3px;right:3px;bottom:24px;z-index:1;pointer-events:none;box-sizing:border-box;width:auto;height:12px;min-height:12px;max-height:12px;flex:none;margin:0;padding:1px 6px;font-size:9px;line-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal;clip:auto;clip-path:none;background:#13191b99;border-radius:2px}
 /* The overlay sits in the fader space's bottom padding band just above the
    Pan/Details row; caps always paint above it, so a cap at the bottom of travel
-   is never hidden. */
+   is never hidden. Live strips are isolated stacking contexts, so this z-index
+   (and the overlay/Details z-indexes) never leak above the sticky group strip
+   of an expanded group. */
 #mixmate-iem-concept[data-mode="live"] .mm-strip .mm-fader-control{z-index:2}
 #mixmate-iem-concept[data-mode="live"] .mm-strip[data-actionable="true"] > .mm-live-strip-state{visibility:visible}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-strip > .mm-live-strip-state,

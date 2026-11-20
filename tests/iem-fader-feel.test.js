@@ -178,7 +178,8 @@ test('stable strip/header geometry rules: fixed single-line strip state toggled 
   assert.doesNotMatch(block.split('[data-ultra-compact')[0], /\.mm-live-strip-state\{[^}]*position:static/, 'never back in the flex flow');
   // The strip reserves 24px at the bottom for Pan/Details; the 12px overlay sits directly above it, in the fader
   // space's bottom padding band, translucent, and every fader control (cap) paints above it (z-index 2 > 1).
-  assert.match(css, /#mixmate-iem-concept\[data-mode="live"\] \.mm-strip \{position:relative;padding-bottom:24px\}/);
+  assert.match(css, /#mixmate-iem-concept\[data-mode="live"\] \.mm-strip \{position:relative;padding-bottom:24px;isolation:isolate\}/, 'each live strip is its own stacking context: inner z-indexes cannot paint over the sticky expanded-group strip');
+  assert.match(css, /\.mm-strip-scroll\.mm-expanded > \.mm-group \{\s*position: sticky;\s*left: 0;\s*z-index: 1;/, 'the sticky group strip stays above scrolled member strips');
   assert.match(block, /\.mm-strip \.mm-fader-control\{z-index:2\}/, 'caps are never hidden by the overlay');
   assert.match(block, /background:#13191b99/, 'semi-transparent');
   assert.match(block, /\.mm-strip\[data-actionable="true"\] > \.mm-live-strip-state\{visibility:visible\}/, 'actionable toggles visibility, never display or height');

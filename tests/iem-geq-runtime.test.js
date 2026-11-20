@@ -570,7 +570,7 @@ test('point centre limit is widened by the current gain: a step outward stops, n
   assert.equal(pointCentreGainLimit(10, 15 - 10, 12), 5, 'a drag into a higher-basis region follows the pointer');
 });
 
-test('EQ view: GAIN key steps only move outward until the centre limit and never step back; a drag into a raised region keeps following x', () => {
+test('EQ view: GAIN key steps rise monotonically to the centre limit; a drag into a raised region keeps following x', () => {
   const ui = uiFixture(); ui.eq.open(0);
   ui.receiver.receive('3:::' + Array.from({ length: 31 }, (_, band) => `SETD^a.0.eq.peak.${band}^${auxEqDbToPosition(band >= 17 ? 10 : 0)}\nSETD^a.1.eq.peak.${band}^${auxEqDbToPosition(band >= 17 ? 10 : 0)}`).join('\n'));
   ui.find('[data-eq-point="2"]').emit('click'); // point 3 sits in the +10 dB region

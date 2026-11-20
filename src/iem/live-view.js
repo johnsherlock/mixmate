@@ -58,7 +58,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (target?.kind === 'send' && ids.includes(target.sourceId) && target.auxIndex === selectedAux && !strip.input.disabled) strip.input.value = String(value);
     }
   }
-  const deltaText = value => `Δ ${value > 0 ? '+' : ''}${value.toFixed(2)} dB`;
+  // One decimal so the group Δ fits a compact landscape strip; two in the title.
+  const deltaText = (value, digits = 1) => `Δ ${value > 0 ? '+' : ''}${value.toFixed(digits)} dB`;
   // F09-S06 dB-linear level display: input values are scale units (dB from
   // -60 to +10, plus a short bottom segment down to -inf); the private session
   // still receives and returns desk positions 0..1.
@@ -261,7 +262,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           strip.unavailable.hidden = Boolean(eligible);
         }
         strip.note.textContent = chosen && control?.gestureActive ? 'Live Δ · sending while you drag' : chosen && control?.lastDelta !== null ? 'Last requested gesture Δ' : 'Gesture Δ · starts at zero';
-        strip.output.textContent = eligible ? deltaText(chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0) : 'Δ —';
+        const delta = chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0;
+        strip.output.textContent = eligible ? deltaText(delta) : 'Δ —';
+        strip.output.setAttribute('title', eligible ? deltaText(delta, 2) : 'Group adjustment unavailable');
         strip.output.setAttribute('aria-label', eligible ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
         setState(strip, chosen ? control.reason || control.status : model.stateText);
         strip.article.dataset.actionable = String(!eligible || chosen && (control?.pending || !control?.eligible));

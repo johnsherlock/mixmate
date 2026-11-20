@@ -381,14 +381,14 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     const bank = root.querySelector('.mm-strip-scroll'), article = bank.children[0], input = article.querySelector('input'), cap = article.querySelector('.mm-fader-hit');
     assert.equal(article.querySelector('.mm-meter-pair'), undefined); assert.equal(input.disabled, false); assert.equal(input.min, String(FADER_SCALE_MIN)); assert.equal(input.max, String(FADER_SCALE_TOP_DB)); assert.equal(input.step, 'any'); assert.equal(input.dataset.keyStep, '0.5'); assert.equal(Number(input.value), positionToScale(0.4), 'cap starts at the loudest member level on the dB scale');
     assert.deepEqual(article.querySelector('.mm-ruler').children.map(node => node.textContent), ['+10', '0', '−12', '−24', '−40', '−60', '−∞'], 'dB ticks replace the POSITION label');
-    assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.match(article.querySelector('.mm-value').textContent, /Δ 0.00/);
+    assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.match(article.querySelector('.mm-value').textContent, /Δ 0\.0 dB/);
     assert.equal(root.querySelector('.mm-pinned').children.length, 0); assert.equal(root.querySelector('.mm-level-enable'), undefined);
     const name = article.querySelector('.mm-strip-name'), select = article.querySelector('.mm-group-level-select');
     root.emit('click', { target: { closest: selector => selector === 'button' ? name : null } }); root.emit('click', { target: { closest: selector => selector === 'button' ? select : null } }); assert.deepEqual(actions, ['nav:band', 'level:band']);
     const wrap = input.parentElement, event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
     root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60)); assert.equal(Number(input.value), positionToScale(0.523456));
     bank.scrollLeft = 87; control.previewDelta = 0.523456; control.groupRequested = [{ sourceId: 'i.0', auxIndex: 0, value: 0.45 }]; view.render(model); view.renderMeters(model);
-    assert.match(article.querySelector('.mm-value').textContent, /\+0.52/);
+    assert.match(article.querySelector('.mm-value').textContent, /^Δ \+0\.5 dB$/);
     const member = bank.children[1];
     assert.equal(Number(member.querySelector('input').value), positionToScale(0.45), 'member cap previews the requested common delta'); assert.equal(member.dataset.groupRequested, 'true');
     assert.match(member.querySelector('.mm-live-strip-state').textContent, /^Last received Received · Group requested -[0-9]+\.[0-9] dB$/, 'formatted dB, no raw full-precision value');
@@ -399,9 +399,9 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     profile.groups.push({ id: 'other', name: 'Other', members: ['i.0'] });
     control.eligible = true; control.lastDelta = 3;
     view.render(projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: null }));
-    assert.match(bank.children[0].querySelector('.mm-value').textContent, /3.00/);
+    assert.match(bank.children[0].querySelector('.mm-value').textContent, /Δ \+3\.0 dB/);
     assert.equal(bank.children[1].querySelector('input').disabled, false);
-    assert.match(bank.children[1].querySelector('.mm-value').textContent, /0.00/);
+    assert.match(bank.children[1].querySelector('.mm-value').textContent, /Δ 0\.0 dB/);
     assert.match(bank.children[1].querySelector('.mm-pan-button').textContent, /starts at zero/);
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
 });
