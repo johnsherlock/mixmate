@@ -132,8 +132,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
     group.dataset.eqSide = String(index); actualGroup.append(group); return { group, path, label, dots };
   });
   const handles = Array.from({ length: AUX_EQ_POINT_COUNT }, (_, index) => {
-    // F09-S08 review: a transparent r=24 hit circle belongs to the handle itself
-    // (touch-action:none), so a touch near the handle is a grab, never a pan.
+    // F09-S08 review: a transparent r=24 hit circle belongs to the handle itself,
+    // so a touch near the handle is a grab. F09-S10: the <svg> (not the handle)
+    // must be touch-action:none — Chrome uses the svg's value for its children.
     const group = svgNode('g', 'mm-eq-handle'), hit = svgNode('circle'), halo = svgNode('circle'), dot = svgNode('circle'), label = svgNode('text');
     hit.setAttribute('r', String(HANDLE_GRAB_PX)); hit.setAttribute('class', 'mm-eq-handle-hit'); hit.setAttribute('fill', 'transparent');
     halo.setAttribute('r', String(HANDLE_RADIUS)); halo.setAttribute('class', 'mm-eq-handle-halo'); halo.setAttribute('fill-opacity', '.18'); dot.setAttribute('r', '12'); label.setAttribute('text-anchor', 'middle'); label.textContent = String(index + 1);
@@ -395,10 +396,11 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function onPointerDown(event) {
     if (event.button !== 0 || !open || !editable || gesture) return;
     const handle = event.target.closest?.('[data-eq-handle]');
-    // The background keeps touch panning: only a mouse press there may grab a
-    // nearby handle; touch/pen grabs come from the handle's own hit circle.
+    // Only a mouse press on the background may grab a nearby handle; touch/pen
+    // grabs come from the handle's own hit circle (the svg is touch-action:none,
+    // so a background touch neither pans nor starts a gesture).
     const index = handle ? Number(handle.dataset.eqHandle) : mode === 'points' && event.pointerType === 'mouse' ? nearHandle(event) : -1;
-    if (mode === 'points' && index < 0) return; // Background touches scroll; no write.
+    if (mode === 'points' && index < 0) return; // Background touch/pen: no gesture, no write.
     if (mode === 'points') { selectedPoint = index; syncParams(); handles[index].group.focus?.({ preventScroll: true }); }
     if (!begin()) return;
     if (mode === 'draw' && !gesture.draw) { finish(false); return; }

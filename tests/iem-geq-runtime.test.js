@@ -789,15 +789,27 @@ test('EQ graph (F09-S08 review): touch near a handle grabs only through its own 
   const svg = svgOf(ui), handle = ui.find('[data-eq-handle="1"]'), hit = handle.children[0], cx = Number(hit.attributes.cx), cy = Number(hit.attributes.cy);
   assert.equal(hit.attributes.r, '24'); assert.equal(hit.attributes.class, 'mm-eq-handle-hit'); assert.equal(hit.attributes.fill, 'transparent');
   for (const pointerType of ['touch', 'pen']) {
-    press(svg, 'pointerdown', { pointerType, clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, false, `${pointerType} on the background near a handle: no gesture (the page may pan)`);
+    press(svg, 'pointerdown', { pointerType, clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, false, `${pointerType} on the background near a handle: no gesture`);
     press(svg, 'pointermove', { pointerType, clientX: cx - 5, clientY: cy + 12 }); press(svg, 'pointercancel', { pointerType });
-    assert.equal(ui.writes().length, 0, 'a pan that ends in pointercancel never sends a leading write');
+    assert.equal(ui.writes().length, 0, 'a background press (even one ending in pointercancel) never sends a leading write');
   }
-  press(hit, 'pointerdown', { pointerType: 'touch', clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, true, 'the hit circle (touch-action:none) grabs');
+  press(hit, 'pointerdown', { pointerType: 'touch', clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, true, 'the hit circle grabs');
   assert.equal(ui.find('[data-eq-point="1"]').attributes['aria-pressed'], 'true');
   press(svg, 'pointermove', { pointerType: 'touch', clientX: cx - 5, clientY: cy - 40 }); assert.ok(ui.writes().length > 0);
   press(svg, 'pointerup', { pointerType: 'touch', clientX: cx - 5, clientY: cy - 40 });
   ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ graph CSS (F09-S10): the live svg/plot are touch-action:none in points mode too, so Chrome never pans and pointercancels a handle drag', async () => {
+  const css = await readFile(new URL('../src/iem/iem.css', import.meta.url), 'utf8');
+  const rules = [...css.matchAll(/([^{}]*\.mm-live-eq [^{}]*)\{([^}]*)\}/g)].map(([, selector, body]) => ({ selector, body }));
+  const touch = rules.filter(rule => /touch-action/.test(rule.body));
+  const base = touch.filter(rule => rule.selector.split(',').some(sel => /\.mm-eq-svg\s*$/.test(sel.trim())));
+  assert.equal(base.length, 1, 'one unconditional (points mode) live svg touch-action rule');
+  assert.match(base[0].body, /touch-action:\s*none/);
+  assert.ok(base[0].selector.split(',').some(sel => /\.mm-eq-plot\s*$/.test(sel.trim())), 'the plot shares the rule');
+  for (const rule of touch) assert.match(rule.body, /touch-action:\s*none/, `${rule.selector.trim()} never allows panning`);
+  assert.doesNotMatch(css, /mm-live-eq[^{}]*\{[^}]*touch-action:\s*pan/);
 });
 
 test('EQ view (F09-S09): without ?debug no diagnostics are created below the graph; the compact state sits in the head; aria labels stay', () => {

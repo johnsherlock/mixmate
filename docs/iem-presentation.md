@@ -2,6 +2,10 @@
 
 Date: 2026-11-09. Story: [F03-S02](stories/F03-S02.md). Baseline: reviewed `main` at `c721b9f` (F03-S01 / PR #16). No mixer connection, writer, meter decoder or active wire-permission change is part of this story.
 
+## Current F09-S10 GEQ graph touch policy — 2026-11-20
+
+The live GEQ `<svg>` (and its `.mm-eq-plot`) is `touch-action: none` in points mode as well as draw mode, as the prototype's `.mm-eq-svg`. Chrome ignores `touch-action` on SVG child elements and uses the `<svg>`'s value, so the previous points-mode `pan-x pan-y` let the browser start a pan and `pointercancel` a handle drag ("The last point change was interrupted"). Handles, including their r=24 hit circle, grab and drag on touch; a touch/pen press on empty graph space in points mode starts no gesture and sends nothing; the near-handle grab stays mouse-only; draw mode is unchanged. **Trade-off:** a swipe that starts on the graph no longer scrolls the page (the prototype behaves the same). See [F09-S10](stories/F09-S10.md).
+
 ## Current F09-S09 EQ/pan prototype match — 2026-11-20
 
 - **Live EQ.** The panel is the head line plus graph/sidebar only, as the prototype and Demo EQ. Status, mode notes, legend, approximation note, band readback and requested row render only with `?debug` (never created otherwise), so the graph takes the freed height (desktop/tablet/compact landscape: `flex: 1`; phone portrait keeps the Demo's fixed graph row). Read-only reasons are one compact ellipsised line in the EQ head (`.mm-live-eq-state`, e.g. "Read-only · L/R GEQ unequal") with the full text in its title, the graph's aria-label and the app's single-line header/footer status. ↺ resets immediately (user decision 2026-11-20); the confirmation row is removed.
