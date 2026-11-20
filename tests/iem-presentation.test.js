@@ -412,6 +412,37 @@ test('group controls keep navigation separate, show a full-range loudest-member 
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
 });
 
+test('F09-S08: the group strip tracks member gestures and silent members, never flickering "Level unavailable"', () => {
+  const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
+  const document = documentFixture(), root = new Node(document);
+  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-group-switches', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app']) { const node = document.createElement('div'); node.className = name; root.append(node); }
+  Object.assign(globalThis, { document, window: new Node(document), matchMedia: () => ({ matches: true }), innerHeight: 844, ResizeObserver: class { observe() {} disconnect() {} } });
+  let view, editable = false;
+  try {
+    // The session refuses group edits while the member gesture/own echoes run.
+    view = mountReadOnlyView(root, { canEditLevel: target => target.kind === 'group' ? editable : true, onBeginLevel: () => null });
+    const profile = { id: 'rig', groups: [{ id: 'band', name: 'Band', members: ['i.0', 'i.1'] }] };
+    const mix = { id: 'a.0', auxIndex: 0, name: 'AUX', position: 0.5 };
+    const sources = [{ id: 'i.0@0', auxIndex: 0, sourceId: 'i.0', name: 'Kick', position: 0.7, levelText: 'K' }, { id: 'i.1@0', auxIndex: 0, sourceId: 'i.1', name: 'Snare', position: 0.4, levelText: 'S' }];
+    const control = { selected: { kind: 'send', sourceId: 'i.0', auxIndex: 0 }, eligible: true, armed: true, gestureActive: true, pending: false, requestedValue: 0.9, status: 'Live' };
+    const render = () => { const model = projectGroupNavigation({ control, status: 'Live', mixes: [mix], selectedAux: 0, selectedMix: mix, sources }, profile, { view: 'groups', expandedGroupId: 'band' }); view.render(model); return model; };
+    let model = render();
+    const group = root.querySelector('.mm-strip-scroll').children[0], input = group.querySelector('input'), placeholder = group.querySelector('.mm-group-level-placeholder');
+    const check = (position, label) => {
+      assert.equal(placeholder.hidden, true, `${label}: no "Level unavailable"`); assert.equal(group.dataset.unknown, 'false', `${label}: group fader stays visible`);
+      assert.equal(input.disabled, false, `${label}: not disabled`); assert.equal(Number(input.value), positionToScale(position), `${label}: cap`);
+    };
+    check(0.9, 'member drag up: the cap follows the requested member preview');
+    control.requestedValue = 0; model = render(); check(0.4, 'member dragged to −∞: cap = loudest remaining member');
+    assert.equal(model.sources[0].referencePosition, 0.4);
+    control.gestureActive = false; control.pending = true; render(); check(0.4, 'own-echo window after release');
+    control.pending = false; sources[0].position = 0; sources[1].position = 0; editable = true; model = render(); check(0, 'all members at −∞: cap at the bottom, still available');
+    assert.equal(model.sources[0].referencePosition, 0);
+    sources.forEach(source => { delete source.position; }); render();
+    assert.equal(placeholder.hidden, false, 'no member has any finite position: unavailable'); assert.equal(input.disabled, true);
+  } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
+});
+
 test('terminal dispatch details remain visible and accessible rather than generic no-selection feedback', () => {
   const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
   const document = documentFixture(), root = new Node(document);

@@ -77,7 +77,7 @@ export function createControlScope(input) {
   } else throw Error('Unsupported control scope.');
   const members = resolved.members.map(x => {
     if (!uint(receipts.get(x.path)) || receipts.get(x.path) === 0) throw Error('Actual per-path receipts required.');
-    return { path: x.path, target: { ...x.target }, value: x.value, receipt: receipts.get(x.path), ...(kind === 'group' ? { db: x.db } : {}) };
+    return { path: x.path, target: { ...x.target }, value: x.value, receipt: receipts.get(x.path), ...(kind === 'group' ? { scale: x.scale } : {}) };
   });
   if (!members.length || members.length > 128 || new Set(members.map(x => x.path)).size !== members.length) throw Error('Bounded deduplicated scope required.');
   closures ??= kind === 'geq' ? members.slice(0, 31).map((x, i) => members.length === 62 ? [x.path, members[i + 31].path] : [x.path]) : [members.map(x => x.path)];

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createAuxControlSession } from '../src/iem/aux-control-session.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
-import { continuousFaderDB, continuousDBToFader, GROUP_FLOOR_DB, GROUP_MAX_DB, groupTravel } from '../src/iem/relative-groups.js';
+import { continuousFaderDB, continuousDBToFader, GROUP_FLOOR_SCALE, GROUP_MAX_DB, groupTravel } from '../src/iem/relative-groups.js';
 import { FADER_FLOOR_POSITION, FADER_SCALE_FLOOR_DB, FADER_SCALE_MIN, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleToPosition, dbToScale } from '../src/iem/fader-scale.js';
 import { installFaderGestures } from '../src/iem/gestures.js';
 import { mountLiveController } from '../src/iem/live-controller.js';
@@ -42,7 +42,7 @@ const sent = message => parseIemStateFrame(message)[0];
 const control = app => app.session.snapshot().control;
 
 test('dB-linear display scale: equal dB is equal distance above -70 dB (F09-S07), the bottom segment reaches -inf, and round trips are exact enough', () => {
-  assert.equal(FADER_SCALE_FLOOR_DB, GROUP_FLOOR_DB, 'group floor is the bottom of the dB-linear scale');
+  assert.equal(FADER_SCALE_MIN, GROUP_FLOOR_SCALE, 'group floor is the bottom of the scale (-inf, F09-S08)');
   assert.equal(positionToScale(1), FADER_SCALE_TOP_DB); assert.equal(scaleToPosition(FADER_SCALE_TOP_DB), 1);
   assert.equal(positionToScale(0), FADER_SCALE_MIN); assert.equal(scaleToPosition(FADER_SCALE_MIN), 0, 'an individual fader reaches desk position 0 (-inf)');
   assert.ok(Math.abs(positionToScale(FADER_FLOOR_POSITION) - FADER_SCALE_FLOOR_DB) < 1e-9, 'continuous at the floor');
@@ -66,11 +66,11 @@ test('dB-linear display scale: equal dB is equal distance above -70 dB (F09-S07)
   assert.throws(() => positionToScale(1.2)); assert.throws(() => scaleToPosition(Number.NaN));
 });
 
-test('group: -70 dB floor (F09-S07) for the quietest member, equal dB (equal scale distance) for every member, never position 0; a member below -70 dB stops downward travel', async () => {
+test('group (F09-S08): one common scale delta, equal dB above -70 dB, the quietest member travels to -inf (position 0); a member at -inf stops downward travel but can rise', async () => {
   const app = await groups();
   try {
-    const anchor = { members: [0.35, 0.65].map(value => ({ db: continuousFaderDB(value) })) };
-    assert.equal(GROUP_FLOOR_DB, -70); assert.equal(groupTravel(anchor).lower, -70 - continuousFaderDB(0.35));
+    const anchor = { members: [0.35, 0.65].map(value => ({ scale: positionToScale(value) })) };
+    assert.equal(GROUP_FLOOR_SCALE, -75); assert.equal(groupTravel(anchor).lower, -75 - positionToScale(0.35));
     assert.equal(app.session.selectGroupTarget('band', 0), true);
     let token = app.session.beginLevelGesture();
     assert.ok(Math.abs(positionToScale(control(app).groupReference) - continuousFaderDB(0.65)) < 1e-9, 'cap starts at the loudest member on the dB scale');
@@ -84,13 +84,13 @@ test('group: -70 dB floor (F09-S07) for the quietest member, equal dB (equal sca
       const before = command.path.startsWith('i.0') ? 0.35 : 0.65;
       assert.ok(Math.abs((positionToScale(command.value) - positionToScale(before)) + 6) < 1e-9, `${command.path} moves the same scale distance`);
     }
-    // Full-down (scale minimum / Home): quietest stops at -70 dB, loudest keeps its gap; nothing at 0.
+    // Full-down (scale minimum / Home): quietest reaches position 0 (-inf); the loudest keeps its on-screen gap.
     app.advance(60); app.session.previewLevelGesture(token, scaleToPosition(FADER_SCALE_MIN)); app.advance(60);
     const bottom = app.writes().slice(4).map(sent);
-    assert.equal(bottom.length, 4); assert.ok(bottom.every(command => command.value > 0), 'a group never writes position 0');
-    const quietest = Math.min(...bottom.map(command => continuousFaderDB(command.value))), loudest = Math.max(...bottom.map(command => continuousFaderDB(command.value)));
-    assert.ok(Math.abs(quietest - GROUP_FLOOR_DB) < 1e-9, 'quietest exactly at the -70 dB floor');
-    assert.ok(Math.abs((loudest - quietest) - (continuousFaderDB(0.65) - continuousFaderDB(0.35))) < 1e-9, 'gap preserved');
+    assert.equal(bottom.length, 4); assert.equal(Math.min(...bottom.map(command => command.value)), 0, 'the quietest member reaches -inf');
+    const quietest = Math.min(...bottom.map(command => positionToScale(command.value))), loudest = Math.max(...bottom.map(command => positionToScale(command.value)));
+    assert.ok(Math.abs(quietest - GROUP_FLOOR_SCALE) < 1e-9, 'quietest exactly at the bottom of the scale');
+    assert.ok(Math.abs((loudest - quietest) - (positionToScale(0.65) - positionToScale(0.35))) < 1e-9, 'on-screen gap preserved');
     app.session.commitLevelGesture(token, scaleToPosition(FADER_SCALE_MIN)); app.echo();
     // Top: loudest exactly at desk position 1.
     token = app.session.beginLevelGesture(); assert.ok(token);
@@ -101,8 +101,10 @@ test('group: -70 dB floor (F09-S07) for the quietest member, equal dB (equal sca
   const below = await groups(['i.0', 'i.1']);
   try {
     below.session.selectGroupTarget('band', 0); const token = below.session.beginLevelGesture(), start = control(below).groupReference;
-    assert.equal(below.session.previewLevelGesture(token, 0), start, 'a member at about -73 dB (below the -70 floor) allows no downward travel');
-    below.advance(100); assert.equal(below.writes().length, 0, 'nothing sent'); below.session.cancelLevelGesture();
+    const returned = below.session.previewLevelGesture(token, 0);
+    assert.ok(returned < start, 'a member at about -73 dB (bottom segment) still travels down (F09-S08)');
+    below.advance(100); const sentDown = below.writes().map(sent); assert.equal(Math.min(...sentDown.map(command => command.value)), 0, 'it stops at -inf');
+    below.session.cancelLevelGesture();
   } finally { below.session.disconnect(); await below.repository.close(); }
 });
 
