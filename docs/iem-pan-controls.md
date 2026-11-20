@@ -1,5 +1,9 @@
 # Normalized AUX send pan controls — F06-S02
 
+## Current F09-S09 prototype dialog and direction labels — 2026-11-20
+
+User decision 2026-11-20 ([F09-S09](stories/F09-S09.md)) supersedes the numeric-only labels below for **display**: the dialog is titled `MIX · CHANNEL · PAN`, shows LEFT / CENTRE / RIGHT, a large `L 30` / `CENTRE` / `R 30` readout, the full-width slider and Hard L / Centre / Hard R presets, with the footer "Fine control · full-width travel" (the compact read-only reason when disabled). Strip Pan buttons read `PAN · L 30` / `PAN · CENTRE` / `PAN · R 30`, or `Pan` when unknown/unequal. Mapping: wire 0 = `L 100`, 0.5 = `CENTRE`, 1 = `R 100`, linear integer (`src/iem/pan-display.js`, the Demo convention). Raw received values, the status line and Details are `?debug` only. Write semantics are unchanged: typed guard, strict 0..1, three-decimal normalization, live throttled gestures and presets 0/0.5/1 as deliberate one-shots through the same path. Physical direction is to be verified by root against the native app; no linked-source/FX balance.
+
 ## Current F09-S05 live-write reconciliation — 2026-11-18
 
 By explicit user decision the release-only rule is reversed: deliberate gestures stream throttled typed writes while dragging and release sends the final exact value only if it differs ([ADR-0008 F09-S05](adr/0008-control-state-model.md#current-f09-s05-live-write-decision--2026-11-18)). Wire forms, allowlist and factories are unchanged; only timing changes. Pan cap drag / key repeat / presets: same 50 ms throttle within the existing guard (eligible mono source into a verified reciprocal stereo AUX pair, strict 0..1 validation before three-decimal normalization, both outputs the same value). Normalized-equal previews are not resent. A 3-decimal native edit equal to a value MixMate sent within 2.5 s is indistinguishable from an own echo (documented limit).

@@ -14,7 +14,7 @@ const root = mountShell(document.getElementById('iem-root'), 'live');
 const repository = new SettingsRepository(), session = createAuxControlSession({ settingsRepository: repository });
 let controller, panControls, eqControls, channelDetail;
 const dialogOwner = createDialogOwner();
-// F09-S07: per-strip Details diagnostics are development-only (index.html?debug).
+// F09-S07/S09: per-strip Details and the EQ diagnostics below the graph are development-only (index.html?debug).
 const debug = debugFlag(window.location.search);
 if (debug) root.dataset.debug = 'true';
 const view = mountReadOnlyView(root, { debug, onOpenPan: target => panControls.open(target), onOpenEq: auxIndex => eqControls.open(auxIndex), onOpenDetail: model => channelDetail.open(model), onDetailUpdate: models => channelDetail?.update(models), onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllChannels: () => controller.allChannels(),
@@ -25,8 +25,8 @@ controller = mountLiveController({ session, repository, view, ui: connectionUI }
 mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connectionUI), setEnabled: value => view.groupEditing(value),
   confirmClear: () => window.confirm('Clear all source selections from this group draft? Save group to apply the change.') });
 channelDetail = mountChannelDetail({ root, dialogOwner, onOpen: model => { controller.clearLevelContext(); return view.detailModel(model.id); } });
-panControls = mountPanControls({ root, session, controller, dialogOwner });
-eqControls = mountEqControls({ root, session, controller });
+panControls = mountPanControls({ root, session, controller, dialogOwner, debug });
+eqControls = mountEqControls({ root, session, controller, debug });
 prepareEntryOffline(root.querySelector('.mm-offline-state'));
 
 root.addEventListener('click', event => { if (event.target.closest('[data-action="edit-groups"], .mm-connect-toggle, .mm-brand, .mm-desk')) controller.clearLevelContext(); }, true);

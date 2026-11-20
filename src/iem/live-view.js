@@ -4,6 +4,7 @@ import { observeIemLayout } from './layout.js';
 import { startLocalClock } from './clock.js';
 import { sourceLabel } from './live-provider.js';
 import { outputColour, overviewColour } from './theme.js';
+import { panDisplayText } from './pan-display.js';
 import { FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
@@ -216,13 +217,16 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     const meterCaption = element('span', 'mm-live-meter-caption'), meterLabel = element('span', 'mm-live-meter-label'), meterStatus = element('span', 'mm-live-meter-status');
     meterCaption.append(meterLabel, meterStatus);
     const pan = element(control?.panCapable && kind === 'source' ? 'button' : 'span', 'mm-pan-button');
-    let panReadout;
+    let panReadout, panPrefix, panValue;
     if (control?.panCapable && kind === 'source') {
-      panReadout = element('span', 'mm-pan-readout'); pan.append(element('span', 'mm-pan-short', 'Pan'), panReadout);
+      // F09-S09: "PAN · L 30" / "PAN · CENTRE" / "PAN · R 30" as in the prototype;
+      // the prefix is a separate span so ultra-compact strips can drop it.
+      const short = element('span', 'mm-pan-short'); panPrefix = element('span', 'mm-pan-prefix', 'Pan'); panValue = element('span', 'mm-pan-amount'); short.append(panPrefix, panValue);
+      panReadout = element('span', 'mm-pan-readout'); pan.append(short, panReadout);
       article.dataset.panBrowse = 'true';
     }
     space.append(scale, input, meter); article.append(head, output, space, pan, meterCaption);
-    return { kind, article, name, description, output, space, input, pan, panReadout, meter, tracks, meterCaption, meterLabel, meterStatus, status: statusNode(article, input) };
+    return { kind, article, name, description, output, space, input, pan, panReadout, panPrefix, panValue, meter, tracks, meterCaption, meterLabel, meterStatus, status: statusNode(article, input) };
   }
   function updateMeter(strip, model) {
     if (strip.kind === 'group') return;
@@ -315,7 +319,19 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         continue;
       }
       (strip.panReadout || strip.pan).textContent = model.panText ?? 'Pan unavailable';
-      if (control?.panCapable && model.sourceId && model.auxIndex !== undefined) { strip.pan.type = 'button'; strip.pan.disabled = false; strip.pan.dataset.openPan = model.sourceId; strip.pan.dataset.panAux = String(model.auxIndex); strip.pan.setAttribute('aria-label', `Inspect normalized AUX pan for ${model.name}`); strip.pan.setAttribute('aria-haspopup', 'dialog'); }
+      if (strip.panValue) {
+        // This owner's requested pan while its gesture or own echoes are live,
+        // else the shared received value; unknown/unequal shows just "Pan".
+        const own = control?.selected?.kind === 'pan' && control.selected.sourceId === model.sourceId && control.selected.auxIndex === model.auxIndex
+          && (typeof control.previewPan === 'number' || control.pending && typeof control.requestedValue === 'number');
+        const label = panDisplayText(own ? control.previewPan ?? control.requestedValue : model.panWire);
+        const prefix = label ? 'PAN · ' : 'Pan', amount = label ?? '';
+        if (strip.panPrefix.textContent !== prefix) strip.panPrefix.textContent = prefix;
+        if (strip.panValue.textContent !== amount) strip.panValue.textContent = amount;
+        strip.pan.dataset.panRequested = String(own);
+        strip.pan.dataset.panKnown = String(Boolean(label));
+      }
+      if (control?.panCapable && model.sourceId && model.auxIndex !== undefined) { strip.pan.type = 'button'; strip.pan.disabled = false; strip.pan.dataset.openPan = model.sourceId; strip.pan.dataset.panAux = String(model.auxIndex); strip.pan.setAttribute('aria-label', `AUX send pan for ${model.name}: ${strip.panValue?.textContent || 'unknown'}; opens the pan dialog`); strip.pan.setAttribute('aria-haspopup', 'dialog'); }
       else if (strip.panReadout) { strip.pan.disabled = true; delete strip.pan.dataset.openPan; delete strip.pan.dataset.panAux; strip.pan.setAttribute('aria-label', 'Pan unavailable for unresolved member'); }
       setState(strip, model.stateText ?? '');
       strip.pan.setAttribute('title', model.panText ?? 'Pan unavailable');

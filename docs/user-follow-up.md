@@ -394,3 +394,24 @@ Implementation on `codex/f09-s08-group-silence-nav` (from main `dc371cb`, F09-S0
   - removed import/export lifecycle tests, with reset variants kept.
 
 Live checks outstanding: listed in [F09-S08](stories/F09-S08.md#live-acceptance-pending-root). F08-S01 remains parked.
+
+## F09-S09 EQ cleanup, immediate GEQ reset, prototype pan — 2026-11-20
+
+Implementation on `codex/f09-s09-eq-cleanup` (from main `9527f91`, F09-S08 merged in PR #54). User feedback after F09-S08.
+
+- **User decisions (2026-11-20, recorded by root):**
+  - ↺ resets the GEQ immediately, with no confirmation. This supersedes the F06-S04 two-step confirm; the reset stays a sparse deliberate one-shot through the private owner and never calls native `resetGraphEQ`.
+  - Pan display uses L/CENTRE/R text: wire 0 = `L 100`, 0.5 = `CENTRE`, 1 = `R 100`, linear integer. This supersedes the "no direction labels" rule for display only. **Root must verify the physical direction** on the desk against the native app.
+  - EQ and pan diagnostics appear only with `?debug`.
+- **Story-agent routine decisions, for review:**
+  - Reset during an active gesture cancels the gesture first (existing behaviour); the owner then refuses the reset while it cannot arm (own echoes outstanding), so such a click may only cancel. Nothing is queued.
+  - An auto-repeated Enter keydown on ↺ is suppressed (`event.repeat`).
+  - The EQ read-only state is a compact head line (`.mm-live-eq-state`) with the full reason in its title; the sidebar's "Shelves / cuts: unverified" note is kept.
+  - "CENTRE" (the Demo's text) is used rather than "C". Rounding is symmetric about centre (0.4975 → `L 1`, 0.4976 → `CENTRE`).
+  - The strip button and dialog readout show the owner's requested pan while its gesture **or own echoes** are live, so the label does not jump back before the desk reports; the strip button gets a dashed outline then.
+  - The pan dialog footer doubles as the compact read-only reason ("Read-only · L/R pan unequal", "Pan not received").
+  - Ultra-compact strips drop the `PAN · ` prefix to fit the 36 px button.
+- **Fixed accepted F09-S08 doc leftovers:** ADR-0008 and `iem-relative-groups.md` silent-anchor wording; F09-S08 decision 3 (near-handle grab is mouse-only).
+- **Not verified:** browser layout of the live EQ/pan dialog (needs a connected session; no desk used).
+
+Live checks outstanding: listed in [F09-S09](stories/F09-S09.md#live-acceptance-pending-root). F08-S01 remains parked.

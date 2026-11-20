@@ -55,8 +55,19 @@ function unavailableReason(readback) {
   if (!readback.equal) return 'Unequal linked GEQ profiles stay read-only; MixMate never equalizes sides.';
   return 'GEQ adjustment unavailable.';
 }
+// F09-S09: the compact one-line head state (full text in its title/aria and the
+// app's header/footer status), never a multi-line block below the graph.
+export function eqCompactState(readback) {
+  if (!['mono', 'linked'].includes(readback.link)) return 'Read-only · output link unknown';
+  if (!readback.complete) return 'Read-only · waiting for bands';
+  if (!readback.equal) return 'Read-only · L/R GEQ unequal';
+  return 'Read-only';
+}
 
-export function mountEqControls({ root, session, controller, window = globalThis.window }) {
+// `debug` (live-entry's `?debug` flag, F09-S09): the status/notes/legend/band
+// readback diagnostics below the graph exist only in development; otherwise
+// they are never created, so they take no layout space.
+export function mountEqControls({ root, session, controller, window = globalThis.window, debug = false }) {
   const document = root.ownerDocument;
   const make = (tag, className = '', text = '') => { const node = document.createElement(tag); if (className) node.className = className; if (text) node.textContent = text; return node; };
   const svgNode = (tag, className) => {
@@ -67,10 +78,11 @@ export function mountEqControls({ root, session, controller, window = globalThis
   const button = (text, label) => { const node = make('button', '', text); node.type = 'button'; if (label) node.setAttribute('aria-label', label); return node; };
   const section = make('section', 'mm-live-eq'); section.hidden = true; section.setAttribute('aria-label', 'AUX graphic EQ');
   const head = make('div', 'mm-live-eq-head'), back = button('← Mix', 'Close EQ and return to the mix'), title = make('strong', 'mm-live-eq-title'), bypassBadge = make('span', 'mm-live-eq-bypass');
-  // F09-S08: local restart/no-op hints also show in the head, so they stay
-  // visible even where the status line below the graph is clipped or scrolled.
-  const hintBadge = make('span', 'mm-live-eq-hint'); hintBadge.setAttribute('aria-hidden', 'true');
-  head.append(back, title, hintBadge, bypassBadge);
+  // F09-S08/S09: local restart/no-op hints and the compact read-only state show
+  // in the head line. Without ?debug they are the panel's own live regions.
+  const hintBadge = make('span', 'mm-live-eq-hint'), stateBadge = make('span', 'mm-live-eq-state');
+  for (const badge of [hintBadge, stateBadge]) { badge.hidden = true; if (debug) badge.setAttribute('aria-hidden', 'true'); else { badge.setAttribute('role', 'status'); badge.setAttribute('aria-live', 'polite'); } }
+  head.append(back, title, hintBadge, stateBadge, bypassBadge);
   const shell = make('div', 'mm-eq-shell mm-eq-native'), plot = make('div', 'mm-eq-plot'), svg = svgNode('svg', 'mm-eq-svg');
   svg.setAttribute('role', 'img');
   const grid = svgNode('g', 'mm-eq-grid'), actualGroup = svgNode('g', 'mm-eq-actual'), shapePath = svgNode('path', 'mm-eq-shape'), requestedPath = svgNode('path', 'mm-eq-requested'), handleGroup = svgNode('g', 'mm-eq-handles');
@@ -91,17 +103,19 @@ export function mountEqControls({ root, session, controller, window = globalThis
   }
   const unverified = make('p', 'mm-eq-cut-bank mm-eq-unverified', 'Shelves / cuts: unverified · not available');
   sidebar.append(modes, tabs, bank, unverified); shell.append(plot, sidebar);
-  const status = make('p', 'mm-live-eq-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  const modeNote = make('p', 'mm-caption mm-live-eq-mode-note');
   const legendText = 'Received band values: L filled green dots, R hollow magenta dots (one green line when both sides are equal). Dashed: requested curve at the 31 band centres. Dotted: point base plus every point\'s bump.';
-  const legend = make('p', 'mm-caption mm-live-eq-legend', legendText);
-  const approximation = make('p', 'mm-caption mm-live-eq-approximation', EQ_APPROXIMATION_NOTE); approximation.setAttribute('title', EQ_APPROXIMATION_NOTE);
-  // Explicit two-step reset, like Delete group: the first tap only asks.
-  const confirmRow = make('div', 'mm-dialog-actions mm-live-eq-reset-confirm'), confirmText = make('p'), confirmReset = button('Reset bands', 'Confirm: reset every GEQ band of this mix to 0 dB'), keepBands = button('Keep bands', 'Cancel reset; send nothing');
-  confirmReset.dataset.eqResetConfirm = ''; keepBands.dataset.eqResetCancel = ''; confirmReset.className = 'mm-danger'; confirmRow.hidden = true; confirmRow.append(confirmText, confirmReset, keepBands);
-  const details = make('details', 'mm-live-eq-details'), summary = make('summary', '', 'Band readback'), readbackRows = make('div', 'mm-live-eq-readbacks'), requestedRow = make('p', 'mm-live-eq-requested-text'), detailNotes = make('p', '', legendText);
-  details.append(summary, detailNotes, readbackRows, requestedRow);
-  section.append(head, shell, confirmRow, status, modeNote, legend, approximation, details);
+  section.append(head, shell);
+  // Development-only diagnostics (?debug): never created otherwise.
+  let diag = null;
+  if (debug) {
+    const status = make('p', 'mm-live-eq-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    const modeNote = make('p', 'mm-caption mm-live-eq-mode-note'), legend = make('p', 'mm-caption mm-live-eq-legend', legendText);
+    const approximation = make('p', 'mm-caption mm-live-eq-approximation', EQ_APPROXIMATION_NOTE); approximation.setAttribute('title', EQ_APPROXIMATION_NOTE);
+    const details = make('details', 'mm-live-eq-details'), summary = make('summary', '', 'Band readback'), readbackRows = make('div', 'mm-live-eq-readbacks'), requestedRow = make('p', 'mm-live-eq-requested-text'), detailNotes = make('p', '', legendText);
+    details.append(summary, detailNotes, readbackRows, requestedRow);
+    section.append(status, modeNote, legend, approximation, details);
+    diag = { status, modeNote, detailNotes, readbackRows, requestedRow, rows: new Map() };
+  }
   const content = root.querySelector('.mm-content');
   if (content?.insertAdjacentElement) content.insertAdjacentElement('afterend', section); else (content?.parentElement || root).append(section);
   const mixButton = root.querySelector('.mm-local-tabs [data-mode="eq"]');
@@ -125,7 +139,6 @@ export function mountEqControls({ root, session, controller, window = globalThis
     halo.setAttribute('r', String(HANDLE_RADIUS)); halo.setAttribute('class', 'mm-eq-handle-halo'); halo.setAttribute('fill-opacity', '.18'); dot.setAttribute('r', '12'); label.setAttribute('text-anchor', 'middle'); label.textContent = String(index + 1);
     group.dataset.eqHandle = String(index); group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.append(hit, halo, dot, label); handleGroup.append(group); return { group, hit, halo, dot, label, cx: NaN, cy: NaN };
   });
-  const readbackNodes = new Map();
 
   let open = false, auxIndex = null, binding = null, destroyed = false, mode = 'points', selectedPoint = 0, points = flatPoints();
   // F09-S07 point anchor (in memory only, never persisted): base = the session
@@ -183,7 +196,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
     });
     return path.trim();
   };
-  function paint(readback) {
+  let paintNote = '';
+  function paint(readback, note = paintNote) {
+    paintNote = note;
     const g = geometry();
     svg.setAttribute('viewBox', `0 0 ${g.w} ${g.h}`);
     for (const { db, line, label } of gridLines) {
@@ -224,7 +239,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
       handle.label.setAttribute('x', x.toFixed(2)); handle.label.setAttribute('y', (y + 4).toFixed(2));
       handle.group.setAttribute('aria-label', `Requested point ${index + 1}, ${hzText(20 * Math.pow(1000, point.x))}, Δ ${dbText(point.gainDb)}; Enter or Space selects it for the sliders; arrow keys move it (Shift for larger steps)`);
     });
-    svg.setAttribute('aria-label', `AUX GEQ graph. ${readback ? readback.sides.map(eqSideText).join('. ') : 'No received bands.'} ${requested ? 'Requested curve shown dashed.' : 'No requested curve.'}`);
+    svg.setAttribute('aria-label', `AUX GEQ graph. ${readback ? readback.sides.map(eqSideText).join('. ') : 'No received bands.'} ${requested ? 'Requested curve shown dashed.' : 'No requested curve.'}${paintNote ? ` ${paintNote}` : ''}`);
     svg.dataset.draw = String(mode === 'draw' && editable);
   }
   function syncParams() {
@@ -268,25 +283,32 @@ export function mountEqControls({ root, session, controller, window = globalThis
       else if (coordinate) anchor.interrupted = false;
     }
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
-    if (!editable && !confirmRow.hidden) hideConfirm(false);
-    confirmText.textContent = `Reset all ${BANDS} GEQ bands of Output ${readback.sides.map(side => side.auxIndex + 1).join(' and ')} to 0 dB? Bypass, filters and other processing are untouched.`;
     // A local hint is shown alongside the owner's status, never in place of it.
     const ownerText = owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Changes are sent live while you drag (throttled).' : unavailableReason(readback);
     const showHint = Boolean(hint) && (editable || owned(control));
-    status.textContent = showHint ? `${hint} ${ownerText}` : ownerText;
     hintBadge.textContent = showHint ? hint : ''; hintBadge.hidden = !showHint; hintBadge.setAttribute('title', showHint ? hint : '');
-    modeNote.textContent = EQ_MODE_NOTES[mode]; detailNotes.textContent = `${EQ_MODE_NOTES[mode]} ${legendText}`;
+    // Compact read-only state: a readback reason, else the owner's one-line reason
+    // (the full text also stays in the app's header/footer status and the title).
+    const readbackOk = ['mono', 'linked'].includes(readback.link) && readback.complete && readback.equal;
+    const stateText = editable ? '' : readbackOk && owned(control) ? control.reason || control.status : eqCompactState(readback);
+    stateBadge.textContent = stateText; stateBadge.hidden = !stateText; stateBadge.setAttribute('title', editable ? '' : ownerText);
+    stateBadge.dataset.state = editable ? 'editable' : 'read-only';
+    if (diag) renderDiagnostics(readback, control, showHint ? `${hint} ${ownerText}` : ownerText);
+    syncParams(); paint(readback, editable ? '' : ownerText);
+  }
+  function renderDiagnostics(readback, control, statusText) {
+    diag.status.textContent = statusText;
+    diag.modeNote.textContent = EQ_MODE_NOTES[mode]; diag.detailNotes.textContent = `${EQ_MODE_NOTES[mode]} ${legendText}`;
     const sides = new Set(readback.sides.map(side => side.auxIndex));
-    for (const [key, row] of readbackNodes) if (!sides.has(key)) { row.remove(); readbackNodes.delete(key); }
+    for (const [key, row] of diag.rows) if (!sides.has(key)) { row.remove(); diag.rows.delete(key); }
     readback.sides.forEach((side, index) => {
-      let row = readbackNodes.get(side.auxIndex); if (!row) { row = make('p'); readbackNodes.set(side.auxIndex, row); readbackRows.append(row); }
-      if (readbackRows.children[index] !== row) readbackRows.insertBefore(row, readbackRows.children[index] || null);
+      let row = diag.rows.get(side.auxIndex); if (!row) { row = make('p'); diag.rows.set(side.auxIndex, row); diag.readbackRows.append(row); }
+      if (diag.readbackRows.children[index] !== row) diag.readbackRows.insertBefore(row, diag.readbackRows.children[index] || null);
       row.textContent = `${readback.sides.length === 2 ? index ? 'R · ' : 'L · ' : ''}${eqSideText(side)}: ${side.bands.map((value, band) => `${hzText(AUX_EQ_DISPLAY_CENTRES[band])} ${value === undefined ? 'not received' : `${dbText(auxEqPositionToDb(value))} (raw ${value})`}`).join(' · ')}`;
     });
     const requested = owned(control) ? control.eqRequested : null;
-    requestedRow.textContent = requested ? `Requested (not proof of application): ${requested.map((value, band) => `${hzText(AUX_EQ_DISPLAY_CENTRES[band])} ${dbText(auxEqPositionToDb(value))}`).join(' · ')}`
+    diag.requestedRow.textContent = requested ? `Requested (not proof of application): ${requested.map((value, band) => `${hzText(AUX_EQ_DISPLAY_CENTRES[band])} ${dbText(auxEqPositionToDb(value))}`).join(' · ')}`
       : owned(control) && control.requestedDiagnostic?.length ? `Last requested (inactive): ${control.requestedDiagnostic.length} band values · ${control.status}` : 'No requested GEQ curve in this connection.';
-    syncParams(); paint(readback);
   }
   // Gesture authority: begin always (re)selects this output's typed GEQ target,
   // so selection/native changes never need a manual Enable or re-arm.
@@ -428,7 +450,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function setMode(next) {
     if (mode === next) return;
     if (gesture) { gestures.cancel(); finish(false); }
-    hideConfirm(false); mode = next; render(); // Mutually exclusive intents; switching sends nothing.
+    mode = next; render(); // Mutually exclusive intents; switching sends nothing.
   }
   function onClick(event) {
     const target = event.target.closest?.('button');
@@ -436,20 +458,22 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (target === back) { close(); return; }
     if (target.dataset.eqMode) { setMode(target.dataset.eqMode); return; }
     if (target.dataset.eqPoint !== undefined && mode === 'points') { if (gesture) { gestures.cancel(); finish(false); } selectedPoint = Number(target.dataset.eqPoint); render(); return; }
+    // F09-S09 (user decision 2026-11-20): one click is one immediate, deliberate
+    // scoped reset through the private owner (sparse; bypass/filters untouched;
+    // never native resetGraphEQ). An active gesture is cancelled first (its live
+    // steps stay applied); the owner then refuses the reset while it cannot arm
+    // (e.g. its own echoes are outstanding), so nothing is queued or replayed.
     if (target === resetButton && editable) {
       if (gesture) { gestures.cancel(); finish(false); }
-      confirmRow.hidden = false; render(); keepBands.focus?.(); return;
-    }
-    if (target === keepBands) { hideConfirm(true); return; }
-    if (target === confirmReset) {
-      hideConfirm(true);
       if (!editable) return;
       if (!owned(session.snapshot().control)) session.selectEqTarget(auxIndex);
       dropAnchor(); session.resetEqBands(); render(); // Points restart from the reset curve.
     }
   }
-  function hideConfirm(focusReset) { confirmRow.hidden = true; if (focusReset) resetButton.focus?.(); }
   section.addEventListener('click', onClick);
+  // Holding Enter on the focused reset button must not auto-repeat resets.
+  const onResetKey = event => { if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault?.(); };
+  resetButton.addEventListener('keydown', onResetKey);
   // Deliberate keyboard gesture on a focused handle: the first arrow keydown
   // begins, each press previews through the same private path, keyup commits
   // (like faders); Escape or leaving the handle cancels.
@@ -492,7 +516,6 @@ export function mountEqControls({ root, session, controller, window = globalThis
       selectedPoint = Number(handle.dataset.eqHandle); render(); return;
     }
     if (event.key !== 'Escape' || gesture || event.target?.closest?.('.mm-fader-control')) return;
-    if (!confirmRow.hidden) { event.preventDefault?.(); hideConfirm(true); return; }
     close();
   }
   section.addEventListener('keydown', onKey); section.addEventListener('keyup', onKeyUp); section.addEventListener('focusout', onFocusOut);
@@ -514,7 +537,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function close() {
     if (!open) return;
     if (gesture) { gestures.cancel(); finish(false); }
-    confirmRow.hidden = true; open = false; binding = null; section.hidden = true; root.dataset.eqOpen = 'false';
+    open = false; binding = null; section.hidden = true; root.dataset.eqOpen = 'false';
     if (mixButton) { mixButton.setAttribute('aria-pressed', 'false'); mixButton.classList?.remove('mm-active'); }
     session.closeEq?.();
     if (focusBefore?.isConnected !== false && !focusBefore?.disabled) focusBefore?.focus?.();
@@ -531,6 +554,6 @@ export function mountEqControls({ root, session, controller, window = globalThis
   return {
     open: show, close, section,
     get mode() { return mode; },
-    destroy() { close(); destroyed = true; unsubscribe(); unsubscribeContext(); gestures.destroy(); section.removeEventListener('click', onClick); section.removeEventListener('keydown', onKey); section.removeEventListener('keyup', onKeyUp); section.removeEventListener('focusout', onFocusOut); svg.removeEventListener('dragstart', suppress); svg.removeEventListener('selectstart', suppress); mixButton?.removeEventListener('click', onMixButton); window?.removeEventListener?.('resize', resize); section.remove(); },
+    destroy() { close(); destroyed = true; unsubscribe(); unsubscribeContext(); gestures.destroy(); section.removeEventListener('click', onClick); section.removeEventListener('keydown', onKey); section.removeEventListener('keyup', onKeyUp); section.removeEventListener('focusout', onFocusOut); resetButton.removeEventListener('keydown', onResetKey); svg.removeEventListener('dragstart', suppress); svg.removeEventListener('selectstart', suppress); mixButton?.removeEventListener('click', onMixButton); window?.removeEventListener?.('resize', resize); section.remove(); },
   };
 }
