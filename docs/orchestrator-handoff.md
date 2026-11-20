@@ -116,6 +116,7 @@ These supersede older wording wherever the two conflict. Each is recorded in its
   - A held pan grab that spans the expiry of the 2.5 s window makes the readout jump.
   - The pre-existing level cap shows the retained request after the window, although it is labelled separately from received.
   - The F09-S10 CSS test scans only `.mm-live-eq` rules.
+- **Accepted P3s later fixed:** the F09-S07 `anchor.interrupted` hint wording (fixed in F09-S08) and the F09-S08 docs leftovers (fixed in F09-S09).
 - **Parked:**
   - the unknown tablet group-save issue (no device evidence yet);
   - the dependency audit (development-chain advisories only).
