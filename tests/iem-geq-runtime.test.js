@@ -371,12 +371,57 @@ test('EQ view (F09-S07): gains persist across gestures without double counting; 
   // A native edit (another editor / the desk) between gestures.
   ui.receiver.receive('3:::SETD^a.0.eq.peak.26^0.2\nSETD^a.1.eq.peak.26^0.2');
   const echoed7 = lastDb(second, 'a.0.eq.peak.7'), count = ui.writes().length;
+  assert.match(ui.find('.mm-live-eq-status').textContent, /Curve changed on the desk; points restarted from the current curve/, 'restarted at render time, before any touch');
+  assert.equal(Number(gain.value), 0, 'handles/sliders restart between gestures');
   stepGain(ui, 1); const third = ui.writes().slice(count);
-  assert.match(ui.find('.mm-live-eq-status').textContent, /Curve changed on the desk; points restarted from the current curve/);
   assert.equal(Number(gain.value), 1, 'gains restart at 0, then this gesture adds 1');
   assert.ok(Math.abs(lastDb(third, 'a.0.eq.peak.7') - (echoed7 + unit)) < 1e-6, 'base is the new received coordinate (with the applied boost); no double bump');
   assert.equal(lastDb(third, 'a.0.eq.peak.26'), undefined, 'the native band is never overwritten');
   assert.ok(third.length < 62, 'no stale whole-curve re-send');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07 review): a cancelled points gesture keeps its points when the desk holds the last sent curve, restarts as interrupted when it does not', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const gain = ui.find('[data-eq-param="gain"]'); gain.focus();
+  keyOn(ui, gain, 'PageUp'); assert.ok(ui.writes().length > 0, 'leading step streams');
+  keyOn(ui, gain, 'Escape'); ui.deskEcho();
+  assert.equal(Number(gain.value), 1, 'matching: the moved point is kept'); assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /restarted/);
+  stepGain(ui, 1); assert.equal(Number(gain.value), 2); assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /restarted/);
+  ui.deskEcho(); ui.advance(300);
+  keyOn(ui, gain, 'PageUp'); ui.advance(10); keyOn(ui, gain, 'PageUp'); // second step throttled, never sent
+  assert.equal(Number(gain.value), 4); keyOn(ui, gain, 'Escape'); ui.deskEcho();
+  assert.match(ui.find('.mm-live-eq-status').textContent, /last point change was interrupted; points restarted/);
+  assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /Curve changed on the desk/);
+  assert.equal(Number(gain.value), 0, 'mismatch: points restart from the curve the desk holds');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07 review): own echoes still pending never restart the points; the next gesture builds on the requested curve', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const gain = stepGain(ui, 3); const first = ui.writes(), unit = lastDb(first, 'a.0.eq.peak.7') / 3;
+  assert.equal(Number(gain.value), 3, 'no echo yet: no render-time restart');
+  stepGain(ui, 1); const second = ui.writes().slice(first.length);
+  assert.equal(Number(gain.value), 4); assert.doesNotMatch(ui.find('.mm-live-eq-status').textContent, /restarted/);
+  assert.ok(Math.abs(lastDb(second, 'a.0.eq.peak.7') - 4 * unit) < 1e-6);
+  ui.deskEcho(); assert.equal(Number(gain.value), 4, 'matching echoes keep the points');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ view (F09-S07 review): the owner ending a gesture mid-drag shows its reason next to any hint; points restart from the desk curve once editable', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  stepGain(ui, 2); ui.deskEcho();
+  ui.receiver.receive('3:::SETD^a.0.eq.peak.27^0.3\nSETD^a.1.eq.peak.27^0.3'); // native edit: restart hint
+  assert.match(ui.find('.mm-live-eq-status').textContent, /Curve changed on the desk/);
+  const gain = ui.find('[data-eq-param="gain"]'), cap = capOf(ui, 'gain');
+  press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 40 }); assert.ok(control(ui).gestureActive);
+  ui.receiver.receive('3:::SETD^a.0.eq.peak.26^0.2\nSETD^a.1.eq.peak.26^0.2'); // native edit mid-drag
+  assert.equal(control(ui).gestureActive, false, 'owner stopped the stream');
+  const reason = control(ui).reason || control(ui).status;
+  assert.ok(ui.find('.mm-live-eq-status').textContent.includes(reason), 'owner status is never masked by a hint');
+  press(cap, 'pointerup', { clientY: 40 }); ui.deskEcho(); ui.advance(2600);
+  assert.equal(Number(gain.value), 0, 'points restart from the desk curve');
+  assert.match(ui.find('.mm-live-eq-status').textContent, /restarted from the current curve/);
   ui.eq.destroy(); ui.session.disconnect();
 });
 

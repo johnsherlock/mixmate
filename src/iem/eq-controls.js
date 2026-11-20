@@ -134,7 +134,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
     try { expected = mapRequestedAuxEqCurve(requestedPointSamples(points, anchor.base)).values; } catch { return false; }
     return coordinate.length === expected.length && coordinate.every((value, index) => Math.abs(value - expected[index]) < ANCHOR_EPSILON || deskFormat(value) === deskFormat(expected[index]));
   }
-  let gesture = null, drag = null, previewValues = null, snapshot = null, editable = false, focusBefore = null, hint = '';
+  // `settling` suppresses the render-time anchor check while begin/finish run
+  // (the owner emits synchronously inside them); finish renders once afterwards.
+  let gesture = null, drag = null, previewValues = null, snapshot = null, editable = false, focusBefore = null, hint = '', settling = false;
   const RESTART_OUTSIDE = 'Curve changed on the desk; points restarted from the current curve.';
   const RESTART_INTERRUPTED = 'The last point change was interrupted; points restarted from the current curve.';
   const ZERO_GAIN_HINT = 'No change sent: every point gain is 0 dB, so frequency and width have no bump to move yet.';
@@ -239,10 +241,21 @@ export function mountEqControls({ root, session, controller, window = globalThis
     // The owner ended the gesture (native change, revalidation): the points stay;
     // the next gesture re-anchors if the curve no longer matches them.
     if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; gestures?.cancel(); drag = null; }
+    // Between gestures, keep handles/shape over the curve the next gesture will
+    // edit: when the editable coordinate (requested values while own echoes are
+    // pending, else complete equal received bands once the owner allows editing)
+    // no longer matches base + bumps, restart the points from it (F09-S07 review).
+    if (!gesture && !settling && mode === 'points' && anchor && editable) {
+      const coordinate = owned(control) && control.eqCoordinate ? control.eqCoordinate
+        : readback.complete && readback.equal ? readback.sides[0].bands : null;
+      if (coordinate && !anchorMatches(coordinate)) { hint = anchor.interrupted ? RESTART_INTERRUPTED : RESTART_OUTSIDE; reanchor(coordinate); }
+    }
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
     if (!editable && !confirmRow.hidden) hideConfirm(false);
     confirmText.textContent = `Reset all ${BANDS} GEQ bands of Output ${readback.sides.map(side => side.auxIndex + 1).join(' and ')} to 0 dB? Bypass, filters and other processing are untouched.`;
-    status.textContent = editable && hint ? hint : owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Changes are sent live while you drag (throttled).' : unavailableReason(readback);
+    // A local hint is shown alongside the owner's status, never in place of it.
+    const ownerText = owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Changes are sent live while you drag (throttled).' : unavailableReason(readback);
+    status.textContent = hint && (editable || owned(control)) ? `${hint} ${ownerText}` : ownerText;
     modeNote.textContent = EQ_MODE_NOTES[mode]; detailNotes.textContent = `${EQ_MODE_NOTES[mode]} ${legendText}`;
     const sides = new Set(readback.sides.map(side => side.auxIndex));
     for (const [key, row] of readbackNodes) if (!sides.has(key)) { row.remove(); readbackNodes.delete(key); }
@@ -260,8 +273,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
   // so selection/native changes never need a manual Enable or re-arm.
   function begin(input = null) {
     if (!open || destroyed || !editable) return null;
-    if (!owned(session.snapshot().control)) session.selectEqTarget(auxIndex);
-    const token = session.beginEqGesture();
+    settling = true;
+    let token;
+    try { if (!owned(session.snapshot().control)) session.selectEqTarget(auxIndex); token = session.beginEqGesture(); } finally { settling = false; }
     if (!token) { render(); return null; }
     const coordinate = session.snapshot().control?.eqCoordinate;
     if (!coordinate) { session.cancelEqGesture(); render(); return null; }
@@ -286,14 +300,19 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function finish(commit) {
     const active = gesture; gesture = null; drag = null;
     if (!active) return;
-    if (commit) {
-      session.commitEqGesture(active.token);
-      // Sparse dispatch: a release whose bands all match sends nothing; say so.
-      if (mode === 'points' && session.snapshot().control?.outcome === 'no-op') hint = points.every(point => point.gainDb === 0) ? ZERO_GAIN_HINT : 'No change sent: every band already matches the requested curve.';
-    } else {
-      session.cancelEqGesture();
-      if (mode === 'points' && anchor) anchor.interrupted = true;
-    }
+    settling = true;
+    try {
+      if (commit) {
+        const sent = session.commitEqGesture(active.token), outcome = session.snapshot().control?.outcome;
+        // Sparse dispatch: a release whose bands all match sends nothing; say so.
+        if (mode === 'points' && outcome === 'no-op') hint = points.every(point => point.gainDb === 0) ? ZERO_GAIN_HINT : 'No change sent: every band already matches the requested curve.';
+        // A failed or partial release is our interruption, not a desk change.
+        else if (mode === 'points' && anchor && !sent) anchor.interrupted = true;
+      } else {
+        if (mode === 'points' && anchor) anchor.interrupted = true;
+        session.cancelEqGesture();
+      }
+    } finally { settling = false; }
     // A draw gesture (committed or not) changes the curve under the points.
     if (mode === 'draw') dropAnchor();
     previewValues = null; render();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createDemoProvider } from '../src/iem/demo-provider.js';
 import { createEmptyLiveProvider } from '../src/iem/live-provider.js';
 import { installFaderGestures } from '../src/iem/gestures.js';
-import { mountReadOnlyView } from '../src/iem/live-view.js';
+import { mountReadOnlyView, debugFlag } from '../src/iem/live-view.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
@@ -395,6 +395,9 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     assert.equal(member.querySelector('.mm-live-strip-state'), undefined, 'F09-S07: no per-strip state line');
     assert.equal(member.querySelector('.mm-detail-button'), undefined, 'F09-S07: Details only with ?debug');
     assert.match(member.querySelector('.mm-fader-space').attributes.title, /^Last received Received · Group requested -[0-9]+\.[0-9] dB \(raw 0\.45\)$/, 'status stays in the tooltip');
+    const described = member.querySelector('.mm-sr-only');
+    assert.equal(described.textContent, member.querySelector('.mm-fader-space').attributes.title, 'screen readers get the same status');
+    assert.equal(member.querySelector('input').attributes['aria-describedby'], described.id);
     assert.equal(article.querySelector('.mm-pan-button'), undefined, 'no group bottom note');
     assert.equal(bank.children[0], article); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(bank.scrollLeft, 87);
     control.armed = false; control.eligible = false; control.gestureActive = false; control.groupRequested = null; view.render(model); assert.equal(Number(input.value), positionToScale(0.4));
@@ -540,4 +543,9 @@ test('logical sends retain both raw processing sides and expose different or unk
   assert.equal(project(1).stateText, 'Send mute: Unmuted · Pre-fader · Post-processing');
   observations.delete('i.0.aux.0.post'); observations.delete('i.0.aux.1.post');
   assert.match(project(0).stateText, /Output 1: .*Unknown.*Output 2: .*Unknown/);
+});
+
+test('F09-S07: only an enabling ?debug value shows development Details', () => {
+  for (const search of ['?debug', '?debug=1', '?debug=true', '?x=1&debug=yes']) assert.equal(debugFlag(search), true, search);
+  for (const search of ['', '?debug=0', '?debug=false', '?debug=FALSE', '?debug=no', '?debug=off', '?debugx']) assert.equal(debugFlag(search), false, search);
 });

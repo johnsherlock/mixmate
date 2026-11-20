@@ -8,6 +8,11 @@ import { FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, 
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
+// F09-S07: `?debug` (or any value except 0/false/no/off) shows development-only Details.
+export function debugFlag(search = '') {
+  const value = new URLSearchParams(search).get('debug');
+  return value !== null && !['0', 'false', 'no', 'off'].includes(value.trim().toLowerCase());
+}
 export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
@@ -89,7 +94,17 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   // strips jitter mid-drag). The text lives only in the fader space's title
   // tooltip and the debug-only Details; header/footer keep the single status.
   // Attribute-only, so it never changes layout during a gesture.
-  const setState = (strip, text, title = text) => { if (strip.space.getAttribute?.('title') !== title) strip.space.setAttribute('title', title); strip.stateFull = title; };
+  // Screen readers get the same text through a visually hidden description
+  // referenced by the fader (aria-describedby); it occupies no layout.
+  const setState = (strip, text, title = text) => {
+    if (strip.stateFull === title) return;
+    strip.space.setAttribute('title', title); strip.status.textContent = title; strip.stateFull = title;
+  };
+  let statusIds = 0;
+  function statusNode(article, control) {
+    const node = element('span', 'mm-sr-only'); node.id = `mm-strip-status-${++statusIds}`; article.append(node);
+    control?.setAttribute('aria-describedby', node.id); return node;
+  }
   const selectedTarget = target => control?.selected && JSON.stringify(target) === JSON.stringify(control.selected);
   function renderShortcuts(model, selected) {
     if (!shortcuts) return;
@@ -180,7 +195,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         selection.setAttribute('title', 'Group master · cap follows the loudest member · one common Δ per gesture · no aggregate level or VU');
         article.append(head, output, space, selection);
       } else article.append(head, output, space);
-      const strip = { kind, article, name, description, output, delta, space, input, select, unavailable };
+      const strip = { kind, article, name, description, output, delta, space, input, select, unavailable, status: statusNode(article, input || output) };
       if (input) groupInputs.set(input, strip);
       return strip;
     }
@@ -200,7 +215,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       article.dataset.panBrowse = 'true';
     }
     space.append(scale, input, meter); article.append(head, output, space, pan, meterCaption);
-    return { kind, article, name, description, output, space, input, pan, panReadout, meter, tracks, meterCaption, meterLabel, meterStatus };
+    return { kind, article, name, description, output, space, input, pan, panReadout, meter, tracks, meterCaption, meterLabel, meterStatus, status: statusNode(article, input) };
   }
   function updateMeter(strip, model) {
     if (strip.kind === 'group') return;

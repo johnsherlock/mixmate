@@ -2624,10 +2624,23 @@ body {
 /* Development-only Details (?debug): Pan shares the bottom row with it. */
 #mixmate-iem-concept[data-mode="live"][data-debug="true"] .mm-strip > .mm-pan-button,
 #mixmate-iem-concept[data-mode="live"][data-debug="true"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan]{right:auto;width:calc(100% - 58px)}
-/* Compact landscape group readout: drop the "Δ " prefix so "+10.4 dB" fits; geometry unchanged. */
+/* Group Δ readout fits at every size (root 1280×800 finding): the readout box is
+   its own inline-size container; narrow boxes drop the "Δ " prefix, narrower ones
+   shrink the font. Box and fader geometry are unchanged. */
+#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value{container:mm-delta / inline-size;min-width:0}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group > .mm-value .mm-delta-prefix{display:none}
-/* -70 and -inf ruler labels are 5/85 of travel apart: compact strips drop the -inf label rather than overlap. */
+@container mm-delta (max-width: 104px){#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value .mm-delta-prefix{display:none}}
+@container mm-delta (max-width: 80px){#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value .mm-delta-amount{font-size:12px}}
+@container mm-delta (max-width: 64px){#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value .mm-delta-amount{font-size:10px}}
+/* Ruler labels never overlap: the ruler is a size container as tall as the
+   travel. -70/-inf are 5/85 of it apart and -60/-70 10/85 (+10/0 too); below
+   ~11px of spacing drop the -inf label first, then the -70 label. */
+#mixmate-iem-concept[data-mode="live"] .mm-ruler{container:mm-ruler / size}
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-ruler span[data-tick="off"]{display:none}
+@container mm-ruler (max-height: 190px){#mixmate-iem-concept[data-mode="live"] .mm-ruler span[data-tick="off"]{display:none}}
+@container mm-ruler (max-height: 95px){#mixmate-iem-concept[data-mode="live"] .mm-ruler span[data-tick="-70"]{display:none}}
+/* Visually hidden strip status for assistive technology (no layout, no paint). */
+#mixmate-iem-concept .mm-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}
 #mixmate-iem-concept[data-mode="live"] .mm-preview .mm-feedback{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mixmate-iem-concept[data-mode="live"][data-orientation="portrait"] .mm-preview .mm-feedback{flex:1 1 100%;white-space:nowrap}
 #mixmate-iem-concept[data-mode="live"] .mm-mode-label{white-space:nowrap;flex-shrink:0;min-width:27ch}

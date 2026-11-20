@@ -1,6 +1,6 @@
 import { mountChannelDetail } from './channel-detail.js';
 import { mountShell } from './shell.js';
-import { mountReadOnlyView } from './live-view.js';
+import { debugFlag, mountReadOnlyView } from './live-view.js';
 import { createAuxControlSession } from './aux-control-session.js';
 import { createDialogOwner } from './dialog-owner.js';
 import { mountPanControls } from './pan-controls.js';
@@ -15,7 +15,7 @@ const repository = new SettingsRepository(), session = createAuxControlSession({
 let controller, panControls, eqControls, channelDetail;
 const dialogOwner = createDialogOwner();
 // F09-S07: per-strip Details diagnostics are development-only (index.html?debug).
-const debug = new URLSearchParams(window.location.search).has('debug');
+const debug = debugFlag(window.location.search);
 if (debug) root.dataset.debug = 'true';
 const view = mountReadOnlyView(root, { debug, onOpenPan: target => panControls.open(target), onOpenEq: auxIndex => eqControls.open(auxIndex), onOpenDetail: model => channelDetail.open(model), onDetailUpdate: models => channelDetail?.update(models), onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllChannels: () => controller.allChannels(),
   canEditLevel: target => session.canEditLevelTarget(target), onSelectGroupLevel: id => controller.selectGroupLevel(id), onSelectLevel: target => controller.selectLevel(target), onToggleLevel: () => controller.toggleLevel(),
