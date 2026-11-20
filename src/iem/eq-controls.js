@@ -118,9 +118,12 @@ export function mountEqControls({ root, session, controller, window = globalThis
     group.dataset.eqSide = String(index); actualGroup.append(group); return { group, path, label, dots };
   });
   const handles = Array.from({ length: AUX_EQ_POINT_COUNT }, (_, index) => {
-    const group = svgNode('g', 'mm-eq-handle'), halo = svgNode('circle'), dot = svgNode('circle'), label = svgNode('text');
+    // F09-S08 review: a transparent r=24 hit circle belongs to the handle itself
+    // (touch-action:none), so a touch near the handle is a grab, never a pan.
+    const group = svgNode('g', 'mm-eq-handle'), hit = svgNode('circle'), halo = svgNode('circle'), dot = svgNode('circle'), label = svgNode('text');
+    hit.setAttribute('r', String(HANDLE_GRAB_PX)); hit.setAttribute('class', 'mm-eq-handle-hit'); hit.setAttribute('fill', 'transparent');
     halo.setAttribute('r', String(HANDLE_RADIUS)); halo.setAttribute('class', 'mm-eq-handle-halo'); halo.setAttribute('fill-opacity', '.18'); dot.setAttribute('r', '12'); label.setAttribute('text-anchor', 'middle'); label.textContent = String(index + 1);
-    group.dataset.eqHandle = String(index); group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.append(halo, dot, label); handleGroup.append(group); return { group, halo, dot, label, cx: NaN, cy: NaN };
+    group.dataset.eqHandle = String(index); group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.append(hit, halo, dot, label); handleGroup.append(group); return { group, hit, halo, dot, label, cx: NaN, cy: NaN };
   });
   const readbackNodes = new Map();
 
@@ -215,7 +218,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     handles.forEach((handle, index) => {
       const point = points[index], x = xPixel(g, point.x), y = yPixel(g, (basis ? basisAt(basis, point.x) : 0) + auxEqPointGain(points, point.x));
       handle.group.setAttribute('visibility', mode === 'points' ? 'visible' : 'hidden');
-      for (const circle of [handle.halo, handle.dot]) { circle.setAttribute('cx', x.toFixed(2)); circle.setAttribute('cy', y.toFixed(2)); }
+      for (const circle of [handle.hit, handle.halo, handle.dot]) { circle.setAttribute('cx', x.toFixed(2)); circle.setAttribute('cy', y.toFixed(2)); }
       handle.cx = x; handle.cy = y;
       handle.halo.setAttribute('fill', '#abbea0'); handle.dot.setAttribute('fill', index === selectedPoint ? '#ecd3a7' : '#bcc7a8'); handle.dot.setAttribute('stroke', '#879b80');
       handle.label.setAttribute('x', x.toFixed(2)); handle.label.setAttribute('y', (y + 4).toFixed(2));
@@ -370,9 +373,11 @@ export function mountEqControls({ root, session, controller, window = globalThis
   function onPointerDown(event) {
     if (event.button !== 0 || !open || !editable || gesture) return;
     const handle = event.target.closest?.('[data-eq-handle]');
-    const index = handle ? Number(handle.dataset.eqHandle) : mode === 'points' ? nearHandle(event) : -1;
+    // The background keeps touch panning: only a mouse press there may grab a
+    // nearby handle; touch/pen grabs come from the handle's own hit circle.
+    const index = handle ? Number(handle.dataset.eqHandle) : mode === 'points' && event.pointerType === 'mouse' ? nearHandle(event) : -1;
     if (mode === 'points' && index < 0) return; // Background touches scroll; no write.
-    if (mode === 'points') { selectedPoint = index; syncParams(); handles[index].group.focus?.(); }
+    if (mode === 'points') { selectedPoint = index; syncParams(); handles[index].group.focus?.({ preventScroll: true }); }
     if (!begin()) return;
     if (mode === 'draw' && !gesture.draw) { finish(false); return; }
     drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, changed: false };

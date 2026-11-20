@@ -735,13 +735,13 @@ test('EQ graph (F09-S08): pressing a handle selects and focuses it; arrow keys m
   ui.eq.destroy(); ui.session.disconnect();
 });
 
-test('EQ graph (F09-S08): a press within 24 px of a handle grabs the nearest one; farther presses still never begin', () => {
+test('EQ graph (F09-S08): a mouse press within 24 px of a handle grabs the nearest one; farther presses still never begin', () => {
   const ui = uiFixture(); ui.eq.open(0);
   const svg = svgOf(ui), handle = ui.find('[data-eq-handle="1"]'), cx = Number(handle.children[0].attributes.cx), cy = Number(handle.children[0].attributes.cy);
-  assert.equal(handle.children[0].attributes.r, '20', 'the halo is the hit target');
-  press(svg, 'pointerdown', { clientX: cx, clientY: cy - 30 }); assert.equal(control(ui).gestureActive, false, '30 px away: background, no gesture');
-  press(svg, 'pointerup', { clientX: cx, clientY: cy - 30 });
-  press(svg, 'pointerdown', { clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, true, '≈21 px away grabs point 2');
+  assert.equal(handle.children[1].attributes.r, '20'); assert.equal(handle.children[0].attributes.r, '24', 'the handle owns an r=24 hit circle');
+  press(svg, 'pointerdown', { pointerType: 'mouse', clientX: cx, clientY: cy - 30 }); assert.equal(control(ui).gestureActive, false, '30 px away: background, no gesture');
+  press(svg, 'pointerup', { pointerType: 'mouse', clientX: cx, clientY: cy - 30 });
+  press(svg, 'pointerdown', { pointerType: 'mouse', clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, true, '≈21 px away grabs point 2');
   assert.equal(ui.find('[data-eq-point="1"]').attributes['aria-pressed'], 'true'); assert.equal(ui.document.activeElement, handle);
   press(svg, 'pointermove', { clientX: cx - 5, clientY: cy - 40 }); assert.ok(ui.writes().length > 0, 'and drags it');
   press(svg, 'pointerup', { clientX: cx - 5, clientY: cy - 40 }); assert.equal(control(ui).gestureActive, false);
@@ -754,7 +754,7 @@ test('EQ graph (F09-S08): point 1 pinned at +15 dB still moves horizontally, and
   const handle = ui.find('[data-eq-handle="0"]'), gain = ui.find('[data-eq-param="gain"]'); handle.focus();
   for (let n = 0; n < 6; n++) { handleKey(handle, 'keydown', 'ArrowUp', { shiftKey: true }); ui.advance(300); }
   assert.ok(Math.abs(Number(gain.value) - 10) < 1e-9, 'own centre stops at +15 dB (base +5)');
-  const svg = svgOf(ui), [, , w, h] = svg.attributes.viewBox.split(' ').map(Number), halo = handle.children[0];
+  const svg = svgOf(ui), [, , w, h] = svg.attributes.viewBox.split(' ').map(Number), halo = handle.children[1];
   assert.ok(Number(halo.attributes.cy) - 20 >= 0, `halo top inside (${halo.attributes.cy})`);
   const before = ui.writes().length, x = xOf(handle);
   handleKey(handle, 'keydown', 'ArrowRight', { shiftKey: true }); ui.advance(300);
@@ -782,5 +782,21 @@ test('EQ view (F09-S07 follow-ups): a no-move release or Escape never leaves the
   assert.doesNotMatch(status, /interrupted/);
   assert.equal(hint.hidden, false); assert.equal(hint.textContent, 'Curve changed on the desk; points restarted from the current curve.');
   stepGain(ui, 1); assert.equal(ui.find('.mm-live-eq-hint').hidden, true, 'a new deliberate gesture clears the hint');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
+test('EQ graph (F09-S08 review): touch near a handle grabs only through its own r=24 hit circle; a background touch that pans (pointercancel) sends nothing', () => {
+  const ui = uiFixture(); ui.eq.open(0);
+  const svg = svgOf(ui), handle = ui.find('[data-eq-handle="1"]'), hit = handle.children[0], cx = Number(hit.attributes.cx), cy = Number(hit.attributes.cy);
+  assert.equal(hit.attributes.r, '24'); assert.equal(hit.attributes.class, 'mm-eq-handle-hit'); assert.equal(hit.attributes.fill, 'transparent');
+  for (const pointerType of ['touch', 'pen']) {
+    press(svg, 'pointerdown', { pointerType, clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, false, `${pointerType} on the background near a handle: no gesture (the page may pan)`);
+    press(svg, 'pointermove', { pointerType, clientX: cx - 5, clientY: cy + 12 }); press(svg, 'pointercancel', { pointerType });
+    assert.equal(ui.writes().length, 0, 'a pan that ends in pointercancel never sends a leading write');
+  }
+  press(hit, 'pointerdown', { pointerType: 'touch', clientX: cx - 5, clientY: cy + 20 }); assert.equal(control(ui).gestureActive, true, 'the hit circle (touch-action:none) grabs');
+  assert.equal(ui.find('[data-eq-point="1"]').attributes['aria-pressed'], 'true');
+  press(svg, 'pointermove', { pointerType: 'touch', clientX: cx - 5, clientY: cy - 40 }); assert.ok(ui.writes().length > 0);
+  press(svg, 'pointerup', { pointerType: 'touch', clientX: cx - 5, clientY: cy - 40 });
   ui.eq.destroy(); ui.session.disconnect();
 });

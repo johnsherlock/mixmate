@@ -133,6 +133,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     onMasterEQ(_, input) { const target = levelTargets.get(input); if (onOpenEq && target?.kind === 'master') onOpenEq(target.auxIndex); },
     onBegin(input) {
       const target = levelTargets.get(input);
+      // F09-S08 review: a visible-but-not-yet-editable group cap (member echoes
+      // outstanding, another target dispatching) never steals the selection;
+      // it says why and starts nothing.
+      if (target?.kind === 'group' && canEditLevel && !canEditLevel(target)) {
+        $('.mm-feedback').textContent = 'Group not editable yet: waiting for the desk to report the last member change. Try again in a moment.';
+        $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
+        return null;
+      }
       if (target && !selectedTarget(target)) {
         if (target.kind === 'group') onSelectGroupLevel(target.groupId);
         else onSelectLevel(target);

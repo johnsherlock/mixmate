@@ -420,7 +420,8 @@ test('F09-S08: the group strip tracks member gestures and silent members, never 
   let view, editable = false;
   try {
     // The session refuses group edits while the member gesture/own echoes run.
-    view = mountReadOnlyView(root, { canEditLevel: target => target.kind === 'group' ? editable : true, onBeginLevel: () => null });
+    const selections = [];
+    view = mountReadOnlyView(root, { canEditLevel: target => target.kind === 'group' ? editable : true, onBeginLevel: () => null, onSelectGroupLevel: id => selections.push(id) });
     const profile = { id: 'rig', groups: [{ id: 'band', name: 'Band', members: ['i.0', 'i.1'] }] };
     const mix = { id: 'a.0', auxIndex: 0, name: 'AUX', position: 0.5 };
     const sources = [{ id: 'i.0@0', auxIndex: 0, sourceId: 'i.0', name: 'Kick', position: 0.7, levelText: 'K' }, { id: 'i.1@0', auxIndex: 0, sourceId: 'i.1', name: 'Snare', position: 0.4, levelText: 'S' }];
@@ -433,6 +434,12 @@ test('F09-S08: the group strip tracks member gestures and silent members, never 
       assert.equal(input.disabled, false, `${label}: not disabled`); assert.equal(Number(input.value), positionToScale(position), `${label}: cap`);
     };
     check(0.9, 'member drag up: the cap follows the requested member preview');
+    // Pressing the visible-but-not-yet-editable group cap keeps the member selection and says why.
+    const cap = group.querySelector('.mm-fader-hit'), wrap = input.parentElement;
+    const capEvent = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
+    root.querySelector('.mm-content').emit('pointerdown', capEvent(100)); root.querySelector('.mm-content').emit('pointerup', capEvent(100));
+    assert.deepEqual(selections, [], 'an ineligible group press never steals the member selection');
+    assert.match(root.querySelector('.mm-feedback').textContent, /Group not editable yet/);
     control.requestedValue = 0; model = render(); check(0.4, 'member dragged to −∞: cap = loudest remaining member');
     assert.equal(model.sources[0].referencePosition, 0.4);
     control.gestureActive = false; control.pending = true; render(); check(0.4, 'own-echo window after release');
