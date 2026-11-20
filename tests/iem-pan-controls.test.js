@@ -227,6 +227,52 @@ test('F09-S09 review P1: after an unechoed preset and the 2.5 s window, the dial
     assert.equal(value.textContent, 'L 50'); assert.equal(input.attributes['aria-valuetext'], 'Pan L 50'); assert.equal(input.value, '0.25');
     assert.equal(strip.querySelector('.mm-pan-short').textContent, 'PAN · L 50');
     app.socket.receive('3:::SETD^i.0.aux.1.pan^0.3');
-    assert.equal(value.textContent, '—', 'unequal sides: no shared value');
+    assert.equal(value.textContent, '—', 'unequal sides: no shared value'); assert.equal(input.value, '0.25', 'slider falls back to the first received side');
+    assert.equal(input.attributes['aria-valuetext'], 'Pan unknown or unequal');
+  } finally { app.close(); }
+});
+
+test('F09-S09 re-review P1: after an unechoed preset and the window, grabbing the cap or stepping a key starts from the received 0.25, never the retained request', () => {
+  const pans = list => list.map(message => Number(message.split('^')[2]));
+  const settle = app => {
+    app.pan.open(target); app.root.querySelector('.mm-pan-presets').children[2].emit('click');
+    app.advance(2600); app.socket.receive('3:::SETS^i.23.name^Unrelated');
+    assert.equal(app.engine.snapshot().control.requestedValue, 1); return { input: app.root.querySelector('.mm-pan-large'), value: app.root.querySelector('.mm-pan-value'), sent: app.writes().length };
+  };
+  const drag = fixture(true, false);
+  try {
+    const { input, value, sent } = settle(drag), cap = input.parentElement.querySelector('.mm-fader-hit');
+    cap.emit('pointerdown', { pointerId: 1, button: 0, clientX: 80, clientY: 100 });
+    assert.equal(drag.engine.snapshot().control.gestureActive, true); assert.equal(input.value, '0.25', 'begin does not snap the cap to the retained request'); assert.equal(value.textContent, 'L 50');
+    cap.emit('pointermove', { pointerId: 1, clientX: 60, clientY: 100 }); cap.emit('pointerup', { pointerId: 1, clientX: 60, clientY: 100 });
+    const moved = pans(drag.writes().slice(sent)); assert.ok(moved.length > 0);
+    assert.ok(moved.every(wire => wire < 0.25 && wire > 0.1), `drag left is relative to 0.25: ${moved}`);
+  } finally { drag.close(); }
+  const key = fixture(false, false);
+  try {
+    const { input, sent } = settle(key);
+    input.emit('keydown', { key: 'ArrowLeft' }); input.emit('keyup', { key: 'ArrowLeft' });
+    const stepped = pans(key.writes().slice(sent)); assert.ok(stepped.length > 0);
+    assert.ok(stepped.every(wire => wire < 0.25 && wire >= 0.2), `ArrowLeft steps from 0.25: ${stepped}`);
+  } finally { key.close(); }
+});
+
+test('F09-S09 re-review: level begin after an unechoed send and the window never reports a different start than before begin (no retained-request snap)', () => {
+  const app = fixture();
+  try {
+    const send = { kind: 'send', sourceId: 'i.0', auxIndex: 0 }, control = () => app.engine.snapshot().control;
+    app.engine.selectLevelTarget(send);
+    let token = app.engine.beginLevelGesture(); assert.ok(token); app.engine.previewLevelGesture(token, 0.6); app.engine.commitLevelGesture(token, 0.6);
+    assert.ok(app.writes().length > 0);
+    app.advance(2600); app.socket.receive('3:::SETS^i.23.name^Unrelated');
+    const before = control().requestedValue;
+    token = app.engine.beginLevelGesture(); assert.ok(token);
+    assert.equal(control().requestedValue, before, 'same target: the cap start shown before begin is unchanged at begin');
+    app.engine.cancelLevelGesture();
+    app.pan.open(target); app.pan.close(); app.engine.selectLevelTarget(send);
+    assert.equal(control().requestedValue, null, 'after selecting away and back the cap shows received actual');
+    token = app.engine.beginLevelGesture();
+    assert.equal(control().requestedValue, 0.3, 'begin starts from the received 0.3, not the retained 0.6');
+    app.engine.cancelLevelGesture();
   } finally { app.close(); }
 });

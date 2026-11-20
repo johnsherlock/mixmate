@@ -323,8 +323,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         // This owner's requested pan while its gesture or own echoes are live,
         // else the shared received value; unknown/unequal shows just "Pan".
         const own = control?.selected?.kind === 'pan' && control.selected.sourceId === model.sourceId && control.selected.auxIndex === model.auxIndex
-          && (control.gestureActive || control.pending) && typeof control.requestedValue === 'number';
-        const label = panDisplayText(own ? control.requestedValue : model.panWire);
+          && (typeof control.previewPan === 'number' || control.pending && typeof control.requestedValue === 'number');
+        const label = panDisplayText(own ? control.previewPan ?? control.requestedValue : model.panWire);
         const prefix = label ? 'PAN · ' : 'Pan', amount = label ?? '';
         if (strip.panPrefix.textContent !== prefix) strip.panPrefix.textContent = prefix;
         if (strip.panValue.textContent !== amount) strip.panValue.textContent = amount;

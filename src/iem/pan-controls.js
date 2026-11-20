@@ -54,7 +54,7 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
   const showValue = wire => {
     const text = panDisplayText(wire);
     valueLabel.textContent = text ?? '—';
-    if (text) input.setAttribute('aria-valuetext', `Pan ${text}`); else input.removeAttribute?.('aria-valuetext');
+    input.setAttribute('aria-valuetext', text ? `Pan ${text}` : 'Pan unknown or unequal');
   };
   let lease = null, target = null, binding = null, focusBefore, gestures = null, preview = false, destroyed = false, boundListeners = [];
   const owns = token => !destroyed && lease === token && dialogOwner.owns(token);
@@ -84,13 +84,17 @@ export function mountPanControls({ root, session, controller, dialogOwner, windo
     input.disabled = !enabled;
     for (const button of presetButtons) button.disabled = !enabled;
     if (!preview) {
-      // Same rule as the strip Pan button (F09-S09 review P1): this owner's
-      // requested value only while its gesture or own echoes are live. After an
+      // F09-S09 review P1: this owner's requested value only while it is live
+      // (a current-gesture preview or own echoes pending). After an
       // unconfirmed send's window the retained chain is not shown as the value:
       // readout, aria-valuetext and slider show the shared received value, else
       // a dash (unknown or unequal sides).
-      const live = selected && (control.gestureActive || control.pending) && typeof control.requestedValue === 'number';
-      const shown = live ? control.requestedValue : commonPanWire(actual.values.map(item => item.value));
+      // gestureActive alone does not count (re-review P1): begin emits before any
+      // preview, when requestedValue falls back to the retained chain, and the
+      // gesture/arrow start is read from input.value. Only the session's own
+      // current-gesture preview (`previewPan`) or a pending own send shows requested.
+      const live = selected && (typeof control.previewPan === 'number' || control.pending && typeof control.requestedValue === 'number');
+      const shown = live ? control.previewPan ?? control.requestedValue : commonPanWire(actual.values.map(item => item.value));
       input.value = shown !== undefined ? String(shown) : actual.values[0].known ? String(actual.values[0].value) : '0';
       showValue(shown);
     }
