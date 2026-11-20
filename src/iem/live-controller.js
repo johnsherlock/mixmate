@@ -6,8 +6,10 @@ import { createAutoConnect, AUTO_CONNECT_ATTEMPT_MS } from './auto-connect.js';
 
 export const DEFAULT_MIXER_ADDRESS = '192.168.0.60';
 // A drop that recurs this soon after an automatic reconnection opens the
-// Connect dialog instead of starting another pass (no endless retry loop).
-export const AUTO_RECONNECT_MIN_INTERVAL_MS = 10000;
+// Connect dialog instead of starting another pass (no endless retry loop). It
+// is at least the session's own qualification (15 s) and idle (30 s) deadlines,
+// so a session that fails one of them after an automatic success cannot loop.
+export const AUTO_RECONNECT_MIN_INTERVAL_MS = 30000;
 const SNAPSHOT_PATH = 'var.currentSnapshot';
 
 // F02-S05 (user decision 2026-11-20): the live Connect dialog is only the mixer
@@ -90,11 +92,18 @@ export function mountLiveController({ session, repository, view, ui, document = 
   autoConnect: autoConnectEnabled = false, timers = globalThis, now = () => Date.now(), attemptMs = AUTO_CONNECT_ATTEMPT_MS }) {
   let destroyed = false, settings = null, settingsReady = false, selectedAux = null;
   let boundProfileId = null, contextRevision = 0, previousPhase = 'idle', rigMessage = '', creating = null, failedName = null;
+  let previousObserved = false;
   let projected = { selectedAux: null, sources: [] }, requestedNavigation = null, restoreCandidate = null, receivedCatalog = [];
   let navIntent = 0, navPending = Promise.resolve(), rigPending = Promise.resolve(), navigationMessage = '', previousExpanded = null, previousControl = null;
   // Automatic connection state: an explicit Disconnect suppresses every
   // automatic trigger until the next explicit Connect or app open.
   let suppressed = false, addressTouched = false, attempt = null, reachedLive = false, lastAutoSuccess = -Infinity, autoMessage = '';
+  // Work deferred while another dialog (groups, pan, EQ, detail) is open.
+  let pendingTrigger = null, pendingDialog = false, lastSnapshotName, statusNotice = '';
+  // Full readiness: received Ui24 AUX state and, for a control session, an open
+  // writer as well as the qualified companion (snapshot `qualified`).
+  const fullyReady = snapshot => snapshot.phase === 'live' && snapshot.qualified !== false;
+  const otherDialog = () => Boolean(ui.dialogOwner?.active()) && !ui.visible?.();
   const feedback = message => { if (ui.feedback) ui.feedback.textContent = message; };
   const profiles = () => settings?.profiles || [];
   const profile = () => profiles().find(rig => rig.id === boundProfileId);
@@ -198,6 +207,9 @@ export function mountLiveController({ session, repository, view, ui, document = 
   }
   function applyRig(snapshot) {
     if (!settingsReady) return;
+    // A rig-creation failure applies to that snapshot name only.
+    const current = receivedSnapshot(snapshot);
+    if (current.name !== lastSnapshotName) { lastSnapshotName = current.name; failedName = null; }
     const want = desiredRig(snapshot);
     rigMessage = want.reason || '';
     if (want.create && creating !== want.create) createRig(want.create);
@@ -205,7 +217,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (want.persist && want.id && settings.selectedProfileId !== want.id) { settings = { ...settings, selectedProfileId: want.id }; persistSelection(want.id); }
   }
   function recordAddress(snapshot) {
-    if (!attempt || attempt.recorded || snapshot.phase !== 'live') return;
+    if (!attempt || attempt.recorded || !fullyReady(snapshot)) return;
     attempt.recorded = true;
     const address = attempt.address;
     // Already the most recent known address: nothing to promote or write.
@@ -214,16 +226,19 @@ export function mountLiveController({ session, repository, view, ui, document = 
       .catch(() => { /* Storage status reports the problem; the connection stays. */ });
   }
   function statusSuffix() {
-    const notes = [navigationMessage, autoMessage];
+    const notes = [navigationMessage, autoMessage || statusNotice];
     if (!owner() && rigMessage && (settingsReady || isActive(previousPhase))) notes.unshift(rigMessage);
     return notes.filter(Boolean).join(' · ');
   }
   function render(snapshot = session.snapshot(), kind) {
     if (destroyed) return;
     if (kind !== 'meters') {
-      autoConnect?.observe(snapshot.phase);
-      if (isActive(previousPhase) && !isActive(snapshot.phase)) contextRevision++;
-      if (snapshot.phase === 'live') reachedLive = true;
+      autoConnect?.observe(snapshot.phase, fullyReady(snapshot));
+      // Losing a connection that never received state (a failed attempt) does
+      // not change any context an open dialog depends on.
+      if (isActive(previousPhase) && !isActive(snapshot.phase) && previousObserved) contextRevision++;
+      previousObserved = isActive(snapshot.phase) && snapshot.observations?.size > 0;
+      if (fullyReady(snapshot)) reachedLive = true;
       const dropped = reachedLive && ['closed', 'error', 'timeout'].includes(snapshot.phase);
       if (!isActive(snapshot.phase)) reachedLive = false;
       recordAddress(snapshot);
@@ -278,19 +293,23 @@ export function mountLiveController({ session, repository, view, ui, document = 
 
   // Every connection, manual or automatic, starts from a cleared selection and
   // records its address only after received Ui24 readiness.
-  function startConnection(address) {
+  function startConnection(address, { automatic = false } = {}) {
     if (destroyed || document.hidden) return false;
-    selectedAux = null; requestedNavigation = null; restoreCandidate = null; navIntent++; navigationMessage = ''; failedName = null;
+    // An automatic attempt changes context only when there was a selection.
+    const changed = !automatic || selectedAux !== null || requestedNavigation !== null;
+    selectedAux = null; requestedNavigation = null; restoreCandidate = null; navIntent++; navigationMessage = ''; failedName = null; statusNotice = '';
     const last = profile();
     if (last?.navigation.mixId) restoreCandidate = structuredClone(last.navigation);
-    invalidateDraft();
+    if (changed) invalidateDraft();
     const target = String(address).trim();
     attempt = { address: target, recorded: false };
     return session.connect(target);
   }
   const autoConnect = autoConnectEnabled ? createAutoConnect({
     timers, attemptMs,
-    connect: address => startConnection(address),
+    // Never start, retire or replace an attempt behind an open dialog.
+    canAdvance: () => !destroyed && !document.hidden && !ui.dialogOwner?.active(),
+    connect: address => startConnection(address, { automatic: true }),
     disconnect: () => session.disconnect(),
     onProgress: ({ address, index, total }) => { autoMessage = `Connecting automatically to ${address} (${index + 1} of ${total})…`; feedback(autoMessage); },
     // Called from render's observation step; that render shows the result.
@@ -298,14 +317,18 @@ export function mountLiveController({ session, repository, view, ui, document = 
     onExhausted: ({ tried }) => {
       autoMessage = '';
       if (destroyed) return;
-      feedback(tried ? `No known desk address answered (${tried} tried). Enter the mixer address and Connect.` : 'Enter the mixer address and Connect.');
-      render();
+      notify(tried ? `No known desk address answered (${tried} tried). Enter the mixer address and Connect.` : 'Enter the mixer address and Connect.');
       openDialog();
     },
   }) : null;
+  // Shown in the Connect form and, until the next connection, the status line,
+  // so it is visible even when another dialog keeps the Connect form closed.
+  function notify(message) { feedback(message); statusNotice = message; render(); }
+  // Opens the Connect dialog now, or once any other open dialog closes.
   function openDialog() {
-    if (destroyed || document.hidden || ui.visible?.() || ui.dialogOwner?.active()) return;
-    ui.show();
+    if (destroyed || document.hidden || ui.visible?.()) return;
+    if (ui.dialogOwner?.active()) { pendingDialog = true; return; }
+    pendingDialog = false; ui.show();
   }
   // One pass per trigger, never while connected, hidden, suppressed or while
   // the Connect dialog is in use, and never overlapping another pass.
@@ -313,11 +336,27 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (!autoConnect || destroyed || !settingsReady || document.hidden || suppressed || autoConnect.running()) return false;
     if (isActive(session.snapshot().phase) || ui.visible?.()) return false;
     if (reason === 'drop' && now() - lastAutoSuccess < AUTO_RECONNECT_MIN_INTERVAL_MS) {
-      feedback('The desk connection dropped again soon after reconnecting. Check the network, then Connect.');
+      notify('The desk connection dropped again soon after reconnecting. Check the network, then Connect.');
       openDialog(); return false;
     }
+    // Another dialog (groups, pan, EQ, detail) is open: start when it closes.
+    if (otherDialog()) { pendingTrigger = reason; return false; }
+    pendingTrigger = null;
     return autoConnect.start(settings.knownAddresses, reason);
   }
+  // When the last dialog closes, continue deferred automatic work.
+  let idleQueued = false;
+  const offDialogs = ui.dialogOwner?.subscribe?.(lease => {
+    if (lease || idleQueued || !autoConnect) return;
+    idleQueued = true;
+    timers.setTimeout(() => {
+      idleQueued = false;
+      if (destroyed || ui.dialogOwner?.active()) return;
+      if (autoConnect.paused()) autoConnect.resume();
+      else if (pendingTrigger) { const reason = pendingTrigger; pendingTrigger = null; trigger(reason); }
+      if (pendingDialog && !autoConnect.running()) openDialog();
+    }, 0);
+  }) || (() => {});
   let triggerQueued = false;
   // A drop is noticed inside a session emission; start the pass afterwards.
   function queueTrigger(reason) {
@@ -326,9 +365,10 @@ export function mountLiveController({ session, repository, view, ui, document = 
     timers.setTimeout(() => { triggerQueued = false; trigger(reason); }, 0);
   }
   function cancelAuto({ retire = false } = {}) {
+    pendingTrigger = null; pendingDialog = false;
     if (!autoConnect?.running()) return false;
     autoConnect.cancel(); autoMessage = '';
-    if (retire && !['live'].includes(session.snapshot().phase)) session.disconnect();
+    if (retire && !fullyReady(session.snapshot())) session.disconnect();
     return true;
   }
   function invalidate() {
@@ -451,7 +491,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     destroy() {
       if (framePending) { framePending = false; window?.cancelAnimationFrame?.(frameId); }
       autoConnect?.cancel(); boundProfileId = null; invalidateDraft(); destroyed = true; contextListeners.clear(); navIntent++;
-      offOpen(); unsubscribeSettings(); unsubscribe(); session.disconnect();
+      offOpen(); offDialogs(); unsubscribeSettings(); unsubscribe(); session.disconnect();
       for (const [target, type, callback] of handlers) target.removeEventListener(type, callback);
       ui.destroy?.(); view.destroy();
     },

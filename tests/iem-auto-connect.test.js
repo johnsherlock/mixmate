@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAutoConnect, AUTO_CONNECT_ATTEMPT_MS } from '../src/iem/auto-connect.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
+import { createAuxControlSession } from '../src/iem/aux-control-session.js';
+import { createDialogOwner } from '../src/iem/dialog-owner.js';
 import { mountLiveController, AUTO_RECONNECT_MIN_INTERVAL_MS } from '../src/iem/live-controller.js';
 import { parseIemStateFrame, IEM_RECEIVE_LIMITS } from '../src/iem/protocol.js';
 import { SettingsRepository, emptySettings, KNOWN_ADDRESS_LIMIT } from '../src/settings.js';
@@ -38,7 +40,7 @@ class Events {
 const field = value => Object.assign(new Events(), { value, textContent: '', disabled: false, hidden: false, setCustomValidity(text) { this.validity = text; }, reportValidity() {} });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-async function liveApp({ known = ['10.0.0.1', '10.0.0.2'], autoConnect = true, settings: seeded } = {}) {
+async function liveApp({ known = ['10.0.0.1', '10.0.0.2'], autoConnect = true, settings: seeded, control = false, dialogOwner } = {}) {
   const sockets = [], timers = new Clock();
   class FakeSocket {
     readyState = 0; sent = [];
@@ -49,16 +51,17 @@ async function liveApp({ known = ['10.0.0.1', '10.0.0.2'], autoConnect = true, s
     receive(data) { this.onmessage?.({ data }); }
     drop() { this.readyState = 3; this.onclose?.(); }
   }
-  const session = createReadOnlySession({ WebSocketClass: FakeSocket, timers, now: () => timers.now, wallNow: () => timers.now });
+  const options = { WebSocketClass: FakeSocket, timers, now: () => timers.now, wallNow: () => timers.now, settingsRepository: undefined };
+  const session = control ? createAuxControlSession(options) : createReadOnlySession(options);
   const repository = new SettingsRepository({ indexedDB: undefined }), settings = seeded || emptySettings();
   if (!seeded) settings.knownAddresses = known;
   await repository.replace(settings);
   const openListeners = new Set();
   const ui = {
     address: field('192.168.0.60'), connect: field(''), disconnect: field(''), dialogDisconnect: field(''), note: field(''), settings: field(''), feedback: field(''), form: new Events(), navigation: [],
-    shown: 0, open: false,
-    show() { this.shown++; const was = this.open; this.open = true; if (!was) for (const listener of openListeners) listener(); },
-    close() { this.open = false; }, visible() { return this.open; },
+    shown: 0, open: false, dialogOwner, lease: null,
+    show() { if (dialogOwner) { this.lease = dialogOwner.claim('connection', () => { this.open = false; }); } this.shown++; const was = this.open; this.open = true; if (!was) for (const listener of openListeners) listener(); },
+    close() { this.open = false; if (dialogOwner) dialogOwner.release(this.lease); }, visible() { return this.open; },
     onOpen(listener) { openListeners.add(listener); return () => openListeners.delete(listener); },
     knownAddresses(list) { this.known = [...list]; }, connected() {},
   };
@@ -258,4 +261,100 @@ test('the live Connect dialog is only the address, Connect, Disconnect while con
   let opened = 0; ui.onOpen(() => opened++);
   ui.show(); ui.show(); assert.equal(opened, 1); assert.equal(ui.visible(), true);
   ui.close(); assert.equal(ui.visible(), false); ui.destroy();
+});
+
+// Review P2-1: a control session is ready only when the writer is open as well
+// as the receive-only companion qualifying.
+test('control session: a qualified companion with a stalled writer is not success, records nothing and never loops; the pass ends in the dialog', async () => {
+  const app = await liveApp({ control: true });
+  try {
+    for (const [index, address] of ['10.0.0.1', '10.0.0.2'].entries()) {
+      const writer = app.sockets[index * 2], companion = app.sockets[index * 2 + 1];
+      assert.equal(writer.url, `ws://${address}/`); assert.equal(companion.url, `ws://${address}/`);
+      companion.open(); companion.receive(LIVE); // Companion qualifies; writer never opens.
+      assert.equal(app.session.snapshot().phase, 'live'); assert.equal(app.session.snapshot().qualified, false);
+      assert.equal(app.controller.autoConnecting(), true, 'not counted as success');
+      app.timers.tick(AUTO_CONNECT_ATTEMPT_MS);
+      assert.equal(writer.readyState, 3); assert.equal(companion.readyState, 3);
+    }
+    assert.equal(app.sockets.length, 4); assert.equal(app.ui.shown, 1); assert.match(app.ui.feedback.textContent, /No known desk address answered/);
+    await app.controller.whenRigIdle(); await flush();
+    assert.deepEqual(app.repository.snapshot().settings.knownAddresses, ['10.0.0.1', '10.0.0.2'], 'nothing promoted');
+    app.timers.tick(120000); assert.equal(app.sockets.length, 4, 'no automatic loop');
+  } finally { await app.close(); }
+});
+
+test('control session: success needs writer and companion; a companion drop reconnects once, a quick repeat drop opens the dialog', async () => {
+  const app = await liveApp({ control: true, known: ['10.0.0.2', '10.0.0.1'] });
+  try {
+    const [writer, companion] = app.sockets;
+    companion.open(); companion.receive(LIVE); assert.equal(app.controller.autoConnecting(), true);
+    writer.open(); assert.equal(app.session.snapshot().qualified, true); assert.equal(app.controller.autoConnecting(), false);
+    // Keep both sockets alive (heartbeats) past the reconnection guard.
+    for (let elapsed = 0; elapsed <= AUTO_RECONNECT_MIN_INTERVAL_MS; elapsed += 10000) { app.timers.tick(10000); writer.receive('2::'); companion.receive('2::'); }
+    assert.equal(app.session.snapshot().qualified, true);
+    companion.drop(); app.timers.tick(0);
+    assert.equal(writer.readyState, 3); assert.equal(app.sockets.length, 4, 'one pass after an unexpected drop');
+    const [writer2, companion2] = app.sockets.slice(2);
+    companion2.open(); companion2.receive(LIVE); writer2.open(); assert.equal(app.controller.autoConnecting(), false);
+    app.timers.tick(1000); companion2.drop(); app.timers.tick(0);
+    assert.equal(app.sockets.length, 4); assert.equal(app.ui.shown, 1); assert.match(app.ui.feedback.textContent, /dropped again soon/);
+    assert.match(app.view.renders.at(-1).status, /dropped again soon/);
+  } finally { await app.close(); }
+});
+
+// Review P2-2 / P3-1: automatic work never disturbs another open dialog.
+test('an open Edit Groups (or other) dialog pauses the pass without changing context, defers triggers and shows exhaustion in the status line', async () => {
+  const dialogOwner = createDialogOwner(), seeded = emptySettings(); seeded.knownAddresses = ['10.0.0.1', '10.0.0.2'];
+  seeded.profiles = [{ id: 'r1', name: 'Snap', groups: [], navigation: { mixId: null, view: 'groups', expandedGroupId: null } }]; seeded.selectedProfileId = 'r1';
+  const app = await liveApp({ dialogOwner, settings: seeded });
+  try {
+    assert.equal(app.sockets.length, 1);
+    const editor = dialogOwner.claim('groups', () => {}); const revision = app.controller.context().revision;
+    app.timers.tick(AUTO_CONNECT_ATTEMPT_MS * 2); // Past our deadline, inside the session's own 15 s one.
+    assert.equal(app.sockets.length, 1, 'no next attempt behind the dialog'); assert.equal(app.sockets[0].readyState, 0, 'the attempt is not retired behind the dialog');
+    app.sockets[0].drop(); app.timers.tick(0);
+    assert.equal(app.sockets.length, 1); assert.equal(app.controller.context().revision, revision, 'a failed attempt never invalidates the open editor');
+    assert.equal(app.controller.context().profileId, 'r1');
+    dialogOwner.release(editor); app.timers.tick(0);
+    assert.equal(app.sockets.length, 2, 'the pass resumes when the dialog closes'); assert.equal(app.sockets[1].url, 'ws://10.0.0.2/');
+    // The last failure behind another dialog waits; the pass ends (and the
+    // Connect dialog opens) only once that dialog closes.
+    const pan = dialogOwner.claim('pan', () => {});
+    app.sockets[1].drop(); app.timers.tick(0);
+    assert.equal(app.ui.shown, 0); assert.equal(app.controller.autoConnecting(), true);
+    dialogOwner.release(pan); app.timers.tick(0);
+    assert.equal(app.ui.shown, 1); assert.match(app.view.renders.at(-1).status, /No known desk address answered \(2 tried\)/);
+    app.ui.close(); app.timers.tick(0);
+    // A trigger while another dialog is open is deferred until it closes.
+    const detail = dialogOwner.claim('detail', () => {});
+    app.window.emit('online'); assert.equal(app.sockets.length, 2);
+    dialogOwner.release(detail); app.timers.tick(0);
+    assert.equal(app.sockets.length, 3);
+    // A quick repeat drop while another dialog is open: the reason goes to the
+    // status line at once and the Connect dialog opens after that dialog closes.
+    app.sockets[2].open(); app.sockets[2].receive(LIVE); assert.equal(app.controller.autoConnecting(), false);
+    const groups = dialogOwner.claim('groups', () => {}), shown = app.ui.shown;
+    app.sockets[2].drop(); app.timers.tick(0);
+    assert.equal(app.ui.shown, shown); assert.match(app.view.renders.at(-1).status, /dropped again soon/);
+    dialogOwner.release(groups); app.timers.tick(0);
+    assert.equal(app.ui.shown, shown + 1); assert.equal(app.sockets.length, 3);
+  } finally { await app.close(); }
+});
+
+test('a rig-creation failure is forgotten when the snapshot name changes', async () => {
+  const navigation = { mixId: null, view: 'groups', expandedGroupId: null };
+  const settings = emptySettings(); settings.knownAddresses = ['10.0.0.1'];
+  settings.profiles = Array.from({ length: 128 }, (_, n) => ({ id: `r${n}`, name: `Snap ${n}`, groups: [{ id: 'g', name: 'G', members: ['i.0'] }], navigation })); settings.selectedProfileId = 'r0';
+  const app = await liveApp({ settings });
+  try {
+    app.sockets[0].open(); app.sockets[0].receive(LIVE); await app.controller.whenRigIdle(); await flush();
+    assert.match(app.controller.context().unavailableReason, /128 snapshot rigs/);
+    app.sockets[0].receive('3:::SETS^var.currentSnapshot^Snap 3'); assert.equal(app.controller.context().profileId, 'r3');
+    await app.repository.update(draft => { draft.profiles[5].groups = []; });
+    // Back to the failed name: retried, and now there is room.
+    app.sockets[0].receive('3:::SETS^var.currentSnapshot^IMGL FIBBERS'); await app.controller.whenRigIdle(); await flush();
+    assert.equal(app.repository.snapshot().settings.profiles.at(-1).name, 'IMGL FIBBERS');
+    assert.equal(app.controller.context().profileId, app.repository.snapshot().settings.profiles.at(-1).id);
+  } finally { await app.close(); }
 });

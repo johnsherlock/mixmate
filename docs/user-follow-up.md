@@ -446,7 +446,7 @@ Routine decisions, for review:
 
 - **Known-address cap 8**, most recently successful first, deduplicated; written only after received Ui24 AUX readiness and skipped when already first.
 - **Per-attempt timeout 5 s**; one pass per trigger; triggers are app open, visible again, `pageshow` (persisted), `online` and an unexpected drop (a `live` connection ending `closed`/`error`/`timeout`).
-- **Drop loop guard:** a drop within 10 s of an automatic reconnection opens the Connect dialog instead of another pass.
+- **Drop loop guard:** a drop within 30 s of an automatic reconnection opens the Connect dialog instead of another pass (raised from 10 s after review).
 - **Opening the Connect dialog cancels a pass** and retires an unqualified in-flight attempt.
 - **Rig cap 128; overflow** removes only the first stored rig with no groups that is not the last-used rig; if all rigs have groups, the new snapshot gets no rig with a visible reason. No silent group loss.
 - **Last-used rig stays bound while connecting** until the snapshot name arrives; a qualified connection without a name has no rig.
@@ -462,3 +462,14 @@ Risks / not verified by the story agent (fake transports only):
 - Snapshot names longer than 80 characters or containing control characters give no rig (by design).
 - Real-device wake/visibility/online event behaviour and installed-PWA lifecycle remain F08-S01.
 - Upgrading discards all existing rigs and groups at the first successful connection (user decision); rollback cannot restore them.
+
+### F02-S05 independent review fixes (2026-11-20)
+
+PR #58 passed CI and root live acceptance at `f3ffae6`; the independent reviewer requested changes, fixed on the same branch:
+
+- **P2-1 fixed:** automatic success, address recording and drop detection now need full readiness (writer open as well as companion qualified; new `qualified` snapshot field). The reviewer's loop (companion qualified, writer stalled → 15 s timeout treated as a drop → new pass every ~15 s) cannot recur: the attempt times out after 5 s, the pass ends in the Connect dialog. The drop guard is now 30 s (≥ session deadlines).
+- **P2-2 fixed:** while any other dialog is open, a pass pauses (no new, retired or replaced attempt) and triggers are deferred until it closes; automatic attempts and failed never-qualified attempts do not bump the context revision, so an open Edit Groups draft survives.
+- **P3-1 fixed:** exhaustion and quick-repeat-drop messages also show in the status line; the Connect dialog opens once other dialogs close.
+- **P3-2 fixed:** a rig-creation failure is cleared when the snapshot name changes.
+- **P3-4 fixed:** control-session (two-socket) auto-connect tests added.
+- **P3-3 recorded (no change):** automatic settings writes (address promotion, last-used rig, rig creation) make the existing two-window stale-baseline conflict (for example an installed PWA plus a browser tab on the same origin) more likely. Behaviour is unchanged and correct: the later window shows a temporary/conflict status, its changes stay in memory and the other window's durable record is not overwritten. It will simply be seen more often.
