@@ -24,10 +24,13 @@ Three tiers, kept separate. Only the first two are protocol basis.
 - This desk: `settings.block.pass` empty (no locks), `loadshows=1`, `shows=0`. A running MixMate live tab followed a recall (rig switch, F02-S05).
 - INIT contains `SETS^var.currentSnapshot^…`, `SETS^var.currentShow^Default`, an empty `var.currentCue`, and the settings `settings.block.loadshows`, `settings.block.shows`, `settings.block.presets`.
 
+### Closed risk: `settings.block.*` INIT line form (root, 2026-11-21)
+
+Root read the raw INIT lines: `SETS^settings.block.pass^<string>` (empty on this desk) and `SETD^settings.block.<x>^0|1`. This matches the parser (`SETS`/`SETD`, flags exactly `1` or `0`; the password only matters as empty or non-empty). The fail-safe stays: an unparsed lock is unknown and refuses.
+
 ### Not tested / hypotheses (do not rely on these)
 
 - `LOADSHOW`, `DELETESNAPSHOT`, `RENAMESNAPSHOT`, save-as, recall of any other snapshot, recall of a nonexistent name, and behaviour with a lock password set were not exercised.
-- The exact INIT line form of `settings.block.*` is **not recorded** in the evidence. The parser accepts `SETS` or `SETD` and requires flags to read exactly `1` or `0`; the password only matters as empty or non-empty. Root must confirm the lines on the desk at live acceptance. If the form differs the guard fails safe: lock state is unknown and recall/save are refused (see Locks).
 - What the desk does when a save or recall arrives while another client is mid-operation is unknown.
 
 ## Allowed outbound forms
@@ -90,4 +93,14 @@ Refused with a reason, never queued, retried or replayed:
 
 ## Out of scope
 
-Show switching, save-as, rename, delete, cues, presets, recording (F07-S03), native UI access (F07-S04) and the F07-S02 UI. Live desk acceptance by root may recall and save only MixMate1 and MixMate2.
+Show switching, save-as, rename, delete, cues, presets, recording (F07-S03) and native UI access (F07-S04). The F07-S02 UI is described below. Live desk acceptance by root may recall and save only MixMate1 and MixMate2.
+
+## UI (F07-S02)
+
+The live header's **Snapshot** button (shows the received current name) opens the *Recall snapshot* dialog and **Save snapshot** opens *Save current snapshot* (`src/iem/snapshot-controls.js`; dialog owner kind `snapshots`, so the automatic-connection rules for "another dialog" apply). The UI only calls `requestSnapshotList()`, `recallSnapshot(name)` and `saveCurrentSnapshot()`; it builds no wire text and adds no outbound message. Both dialogs request a fresh list on open.
+
+- Header buttons are disabled with a `title` reason when not connected/qualified, with no received show or current name, when the matching lock is `locked` or `unknown`, or while an operation this UI started is pending. The lock password never reaches the UI (the session reduces it to a boolean).
+- Recall: "Loading snapshots…", then the desk's names (Init already filtered) in a select with the current one marked `(current)` and preselected; a truncated list adds a one-line note; warning "Recall changes desk settings for everyone."; Cancel and **Recall snapshot** (recalling the current snapshot is allowed; it discards unsaved desk changes). While pending the dialog stays open ("Recalling <name>…"), its buttons, × and Escape are disabled, so no strip gesture can start behind it (closes the F07-S01 session-level gap for the UI). `confirmed` closes it and the footer slot shows "Recalled <name>."; `unconfirmed`/`unknown` keep the session text in the dialog and the slot; a refusal shows its `reason`. Never retried.
+- Save: names the received current snapshot ("Overwrite “<name>” with the current desk settings?", text only); no name entry, no save-as. `reported` closes it and the slot shows "Saved <name>. The desk reported a show change." (a report only; any `UPDATE_SHOWS` within 3 s counts, contents are not verified); `unconfirmed`/`unknown`/refusal as above. A current snapshot missing from the list cannot be saved.
+- Outcomes are tracked outside the dialog: if the dialog is replaced or the F02-S05 rig switch runs while an operation is pending, the outcome still reaches the footer slot and the Diagnostics log.
+- Diagnostics has a *Snapshots* group (show, current, list status and count, last operation, lock) and every operation and outcome is logged. There is deliberately no dirty indicator: the desk's "snapshot modified" state is not verified.

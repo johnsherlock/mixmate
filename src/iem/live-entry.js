@@ -7,6 +7,7 @@ import { mountPanControls } from './pan-controls.js';
 import { mountEqControls } from './eq-controls.js';
 import { createLiveConnectionUI, mountLiveController } from './live-controller.js';
 import { mountGroupEditor } from './group-editor.js';
+import { mountSnapshotControls } from './snapshot-controls.js';
 import { createGroupEditorUI } from './group-editor-ui.js';
 import { SettingsRepository } from '../settings.js';
 import { prepareEntryOffline } from './entry-offline.js';
@@ -29,6 +30,8 @@ mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connect
 channelDetail = mountChannelDetail({ root, dialogOwner, onOpen: model => { controller.clearLevelContext(); return view.detailModel(model.id); } });
 panControls = mountPanControls({ root, session, controller, dialogOwner, debug });
 eqControls = mountEqControls({ root, session, controller, debug });
+// F07-S02: header Snapshot (recall) and Save snapshot dialogs over the session's typed snapshot API.
+mountSnapshotControls({ root, session, ui: connectionUI, dialogOwner });
 prepareEntryOffline(root.querySelector('.mm-offline-state'), { onPaint: () => connectionUI.refresh() });
 
 root.addEventListener('click', event => { if (event.target.closest('[data-action="edit-groups"], .mm-diagnostics-open, .mm-brand, .mm-desk')) controller.clearLevelContext(); }, true);

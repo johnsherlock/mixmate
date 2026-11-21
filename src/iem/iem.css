@@ -2733,3 +2733,12 @@ body {
 #mixmate-iem-concept .mm-diag .mm-caption { margin: 4px 0 0; font-size: 11px; }
 #mixmate-iem-concept .mm-diag-links { display: flex; gap: 14px; }
 #mixmate-iem-concept .mm-diag-links a { color: #e1d067; text-underline-offset: 3px; }
+
+/* F07-S02: Recall / Save snapshot dialogs (fit 375 px; text only). */
+#mixmate-iem-concept .mm-dialog.mm-snapshot-dialog { width: min(440px, 100%); }
+#mixmate-iem-concept .mm-snapshot-dialog-body { display: flex; flex-direction: column; gap: 8px; }
+#mixmate-iem-concept .mm-snapshot-dialog-body .mm-snapshot-field { display: flex; flex-direction: column; gap: 4px; }
+#mixmate-iem-concept .mm-snapshot-dialog-body :is(.mm-caption, .mm-warning) { margin: 0; overflow-wrap: anywhere; }
+#mixmate-iem-concept .mm-snapshot-dialog-body select { max-width: 100%; text-overflow: ellipsis; }
+#mixmate-iem-concept .mm-snapshot-dialog-body .mm-dialog-actions { margin-top: 4px; }
+#mixmate-iem-concept .mm-snapshot-dialog-body .mm-dialog-actions button:disabled { opacity: 0.5; }

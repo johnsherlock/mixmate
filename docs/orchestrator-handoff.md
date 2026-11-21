@@ -1,4 +1,4 @@
-# Orchestrator handoff — F07 batch: F07-S01 in review, 2026-11-21
+# Orchestrator handoff — F07 batch: F07-S02 in review, 2026-11-21
 
 Before new work, read:
 - [AGENTS](../AGENTS.md) (updated by F02-S05: snapshot-named rigs and automatic connection);
@@ -7,7 +7,7 @@ Before new work, read:
 - the assigned story and its feature;
 - the current contracts.
 
-**The batch resumed on the user's go-ahead (F07-S01 in review, F07-S02 next).** This handoff is identified by its containing PR and history, not by its own commit hash. The last verified story baseline on main is **`61d08fd`** (F09-S11, PR #59), after F02-S05 at `f6a1ecd` (PR #58). The text below about F02-S05 and the desk evidence is historical context for F07-S01.
+**The batch resumed on the user's go-ahead (F07-S01 merged, F07-S02 in review).** This handoff is identified by its containing PR and history, not by its own commit hash. The last verified story baseline on main is **`61d08fd`** (F09-S11, PR #59), after F02-S05 at `f6a1ecd` (PR #58). The text below about F02-S05 and the desk evidence is historical context for F07-S01.
 
 ## Authorized batch (user, 2026-11-20)
 
@@ -17,8 +17,8 @@ Before new work, read:
 | --- | --- |
 | [F02-S05](stories/F02-S05.md) snapshot-named rigs, known addresses, automatic connection | **Merged**: [PR #58](https://github.com/johnsherlock/mixmate/pull/58), merge `f6a1ecd` (2026-11-20 22:44 UTC), final approved head `7429ddc`, CI [44830969144](https://github.com/johnsherlock/mixmate/actions/runs/44830969144); main CI on `f6a1ecd` [44831343053](https://github.com/johnsherlock/mixmate/actions/runs/44831343053) passed |
 | [F09-S11](stories/F09-S11.md) live UI tidy (user-requested interstitial story, outside the batch order) | **Merged**: [PR #59](https://github.com/johnsherlock/mixmate/pull/59), merge `61d08fd` (2026-11-21 09:32 UTC), final approved head `db393b4`, CI [44889844694](https://github.com/johnsherlock/mixmate/actions/runs/44889844694) |
-| [F07-S01](stories/F07-S01.md) snapshot discovery and operation contract | **In review**: typed guards and private API merged only once reviewed; contract [iem-snapshot-contract.md](iem-snapshot-contract.md), [ADR-0009](adr/0009-snapshot-operation-contract.md); no UI |
-| [F07-S02](stories/F07-S02.md) snapshot operations (list/recall/save UI) | **Next**, after F07-S01 merges |
+| [F07-S01](stories/F07-S01.md) snapshot discovery and operation contract | **Merged**: [PR #60](https://github.com/johnsherlock/mixmate/pull/60), merge `b916b31` (2026-11-21 09:47 UTC), final approved head `f4142e8`, CI [44891055516](https://github.com/johnsherlock/mixmate/actions/runs/44891055516), [review/live record](https://github.com/johnsherlock/mixmate/pull/60#issuecomment-7060808085); contract [iem-snapshot-contract.md](iem-snapshot-contract.md), [ADR-0009](adr/0009-snapshot-operation-contract.md); no UI |
+| [F07-S02](stories/F07-S02.md) snapshot operations (list/recall/save UI) | **In review**: live Recall/Save dialogs on the F07-S01 API. After it merges, the authorized batch (F02-S05 → F07-S01 → F07-S02, plus the user-requested F09-S11) is complete; F07-S03 and F07-S04 are **not** authorized. |
 
 The F02-S05 / F09-S11 merge receipts and the accepted P3s were folded into the F07-S01 PR (user decision 2026-11-21): story, feature and backlog statuses are updated and the P3s are in [follow-ups](user-follow-up.md).
 
@@ -79,6 +79,6 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 1. Verify this handoff on remote main and the current baseline.
 2. Read AGENTS, the [snapshot contract](iem-snapshot-contract.md) and this handoff.
-3. Finish F07-S01 (independent review, root live acceptance on MixMate1/MixMate2 only, including confirming the `settings.block.*` INIT form), merge, then brief F07-S02 (UI on the F07-S01 API).
+3. Finish F07-S02 (independent review, root live acceptance on MixMate1/MixMate2 only), merge; then the batch is complete and the user decides what follows (F07-S03/S04 need their own authorization).
 
 No sidebar chat or automatic responsibility transfer has been created.
