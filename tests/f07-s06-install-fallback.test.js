@@ -84,3 +84,11 @@ test('buttons stay enabled and named through mountReadOnlyView in the fallback s
     prompt.destroy(); view.destroy();
   } finally { for (const key of keys) { if (old[key] === undefined) delete globalThis[key]; else globalThis[key] = old[key]; } }
 });
+
+test('review round 1: Android emulated on a Mac (MacIntel + touch) is not iOS and gets the Android fallback; real iPadOS still gets the iOS line', () => {
+  const emulated = setup({ navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Mobile Safari/537.36', platform: 'MacIntel', userAgentData: { platform: 'Android' }, maxTouchPoints: 5 } });
+  assert.equal(emulated.prompt.strip.hidden, true); assert.equal(emulated.jobs.length, 1); emulated.fire();
+  assert.equal(emulated.prompt.kind(), 'menu'); assert.equal(text(emulated), ANDROID_INSTRUCTION);
+  const ipad = setup({ navigator: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5 } });
+  assert.equal(ipad.prompt.kind(), 'instructions'); assert.equal(text(ipad), IOS_INSTRUCTION); assert.equal(ipad.jobs.length, 0);
+});

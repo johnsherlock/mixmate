@@ -20,6 +20,8 @@ export function isInstalled({ window, navigator }) {
 }
 export function isIOS({ navigator }) {
   const agent = String(navigator?.userAgent || '');
+  // F07-S06 review: an Android agent is never iOS (Chrome device emulation on a Mac reports MacIntel + touch).
+  if (/Android/.test(agent) || navigator?.userAgentData?.platform === 'Android') return false;
   return /iPad|iPhone|iPod/.test(agent) || (navigator?.platform === 'MacIntel' && navigator?.maxTouchPoints > 1);
 }
 
@@ -39,7 +41,7 @@ export function createInstallPrompt({ container, before = null, window = globalT
   // F07-S06: Chrome fires beforeinstallprompt only when it deems the page installable and Brave never does,
   // so after the wait show menu instructions: Android text, a generic line on other touch devices, nothing
   // on a plain desktop (phone/tablet app; desktop browsers show their own install affordance).
-  const menuText = (() => { const agent = String(navigator?.userAgent || ''); return /Android/.test(agent) ? ANDROID_INSTRUCTION : Number(navigator?.maxTouchPoints) > 0 ? GENERIC_INSTRUCTION : ''; })();
+  const menuText = (() => { const agent = String(navigator?.userAgent || ''); return (/Android/.test(agent) || navigator?.userAgentData?.platform === 'Android') ? ANDROID_INSTRUCTION : Number(navigator?.maxTouchPoints) > 0 ? GENERIC_INSTRUCTION : ''; })();
   // installed / installable / instructions (iOS) / menu (fallback) / unsupported
   const kind = () => installed ? 'installed' : deferred ? 'installable' : ios ? 'instructions' : waited && !prompted && menuText ? 'menu' : 'unsupported';
   const description = () => ({
