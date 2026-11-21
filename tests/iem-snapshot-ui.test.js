@@ -161,7 +161,7 @@ test('recall: sends the selected name; pending disables buttons and blocks close
     a.writer.receive('3:::MSG^$SNAPLOAD^MixMate2');
     assert.equal(a.owner.active(), null); assert.equal(a.dom.layer.hidden, true);
     assert.equal(a.slot(), 'Recalled MixMate2.');
-    assert.ok(a.log().some(text => /recall MixMate2: confirmed/.test(text)));
+    assert.ok(a.log().some(text => /Recalled MixMate2\./.test(text)));
     assert.equal(a.snapWrites().length, 2, 'no retry');
     a.timers.tick(MESSAGE_TTL_MS + 1); assert.equal(a.slot(), '', 'the transient slot expires');
   } finally { await a.close(); }
@@ -175,7 +175,7 @@ test('recall: unconfirmed keeps the session text; no retry and no further send',
     assert.match(a.status().textContent, /did not report it within 5 s/);
     assert.equal(a.owner.active().kind, 'snapshots'); assert.equal(a.byText('Recall snapshot').disabled, true); assert.equal(a.byText('Close').disabled, false);
     assert.match(a.slot(), /Recall MixMate1: .*did not report it within 5 s/);
-    assert.ok(a.log().some(text => /recall MixMate1: unconfirmed/.test(text)));
+    assert.ok(a.log().some(text => /Recall MixMate1: /.test(text)));
     assert.equal(a.snapWrites().length, 2);
     a.byText('Close').emit('click'); assert.equal(a.owner.active(), null);
   } finally { await a.close(); }
@@ -189,7 +189,7 @@ test('recall: a disconnect while pending shows the unknown outcome, never succes
     a.byText('Recall snapshot').emit('click');
     a.writer.drop();
     assert.match(a.status().textContent, /outcome is unknown\. No retry/); assert.equal(a.owner.active().kind, 'snapshots');
-    assert.match(a.slot(), /Recall AIC: .*unknown/); assert.ok(a.log().some(text => /recall AIC: unknown/.test(text)));
+    assert.match(a.slot(), /Recall AIC: .*unknown/); assert.ok(a.log().some(text => /Recall AIC: /.test(text)));
     assert.equal(a.byText('Recall snapshot').disabled, true); assert.equal(a.dom.close.disabled, false);
     assert.equal(a.snapWrites().length, 2);
     a.dom.close.emit('click'); assert.equal(a.owner.active(), null);
@@ -240,7 +240,7 @@ test('save dialog: requests a list, names the current snapshot with textContent,
     assert.equal(a.status().textContent, 'Saving…'); assert.ok(a.buttons().every(button => button.disabled));
     a.receiver.receive('3:::UPDATE_SHOWS');
     assert.equal(a.owner.active(), null);
-    assert.equal(a.slot(), 'Saved MixMate1. The desk reported a show change.'); assert.ok(!/verified|written/i.test(a.slot()));
+    assert.equal(a.slot(), 'Save sent for MixMate1; the desk reported a show change (contents not verified).'); assert.ok(!/^Saved/.test(a.slot()));
     assert.equal(a.dom.document.activeElement, a.saveButton);
   } finally { await a.close(); }
 });
@@ -270,7 +270,7 @@ test('the rig switch during a recall still delivers the outcome to the footer sl
     // The desk switches snapshots: the controller follows it with a new rig.
     a.receiver.receive('3:::SETS^var.currentSnapshot^MixMate2'); await flush(); await a.controller.whenRigIdle(); await flush();
     assert.equal(a.slot(), 'Recalled MixMate2.');
-    assert.ok(a.log().some(text => /recall MixMate2: confirmed/.test(text)));
+    assert.ok(a.log().some(text => /Recalled MixMate2\./.test(text)));
     assert.equal(a.snaps().operation.status, 'confirmed'); assert.equal(a.controls.pending(), false);
     assert.equal(a.owner.active(), other, 'the unrelated dialog is untouched');
     assert.equal(a.repository.snapshot().settings.profiles.some(rig => rig.name === 'MixMate2'), true, 'the rig followed the desk');
@@ -313,4 +313,48 @@ test('the module builds no wire text, never uses innerHTML and does not touch Re
   const source = await readFile(new URL('../src/iem/snapshot-controls.js', import.meta.url), 'utf8');
   assert.ok(!/innerHTML|insertAdjacentHTML|SNAPSHOTLIST|LOADSNAPSHOT|SAVESNAPSHOT|\.send\(/.test(source.replace(/\/\/.*$/gm, '')));
   assert.ok(!/data-action="record"|data-action="native"/.test(source));
+});
+
+test('review round 1: every open preselects the current snapshot, never the previous choice', async () => {
+  const a = await app();
+  try {
+    a.snapButton.emit('click'); a.listed();
+    const select = a.dom.body.querySelector('select'); select.value = 'NSLYA'; select.emit('change'); a.byText('Cancel').emit('click');
+    a.snapButton.emit('click'); a.listed();
+    assert.equal(a.dom.body.querySelector('select').value, 'MixMate1');
+    a.dom.close.emit('click');
+    a.receiver.receive('3:::SETS^var.currentSnapshot^Unlisted');
+    a.snapButton.emit('click'); a.listed();
+    assert.equal(a.dom.body.querySelector('select').value, '', 'placeholder when the current snapshot is not listed');
+    assert.equal(a.byText('Recall snapshot').disabled, true);
+  } finally { await a.close(); }
+});
+
+test('review round 1: pending focuses the dialog and traps Tab; results focus Cancel/Close', async () => {
+  const a = await app();
+  try {
+    a.snapButton.emit('click'); a.listed(); a.byText('Recall snapshot').emit('click');
+    const dialog = a.dom.layer.children[0];
+    assert.equal(a.dom.document.activeElement, dialog); assert.equal(dialog.attributes.tabindex, '-1');
+    let prevented = false; a.root.emit('keydown', { key: 'Tab', preventDefault() { prevented = true; } });
+    assert.equal(prevented, true); assert.equal(a.dom.document.activeElement, dialog);
+    a.timers.tick(5000);
+    assert.equal(a.dom.document.activeElement, a.byText('Close'));
+  } finally { await a.close(); }
+});
+
+test('review round 1: each outcome is logged once; a send failure is one coherent entry', async () => {
+  const a = await app();
+  try {
+    a.snapButton.emit('click'); a.listed(); a.byText('Recall snapshot').emit('click'); a.writer.receive('3:::MSG^$SNAPLOAD^MixMate1');
+    assert.equal(a.log().filter(text => /MixMate1/.test(text) && /Recalled|confirmed/.test(text)).length, 1);
+  } finally { await a.close(); }
+  const b = await app();
+  try {
+    b.snapButton.emit('click'); b.listed(); b.writer.send = () => { throw Error('boom'); };
+    b.byText('Recall snapshot').emit('click');
+    const entries = b.log().filter(text => /Recall MixMate1|recall MixMate1/.test(text));
+    assert.equal(entries.length, 1, JSON.stringify(entries)); assert.match(b.status().textContent, /unknown|failed/i);
+    assert.equal(b.controls.pending(), false);
+  } finally { await b.close(); }
 });

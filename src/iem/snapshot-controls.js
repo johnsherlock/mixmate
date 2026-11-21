@@ -40,7 +40,7 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
   // `tracked` follows the one operation this UI started; it outlives the dialog
   // so a replaced/closed dialog (for example by a rig switch) never loses the
   // outcome: it still reaches the footer slot and the Diagnostics log.
-  let lease = null, mode = null, focusBefore, tracked = null, finished = null, refusal = '', destroyed = false, clean = () => {}, lastSignature = '';
+  let lease = null, mode = null, focusBefore, tracked = null, finished = null, refusal = '', destroyed = false, clean = () => {}, lastSignature = '', resultFocus = false;
   const snapshot = () => session.snapshot();
   const busy = () => Boolean(tracked);
   const log = text => ui.log?.(text);
@@ -120,7 +120,7 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
     if (!token || lease !== token) return;
     lease = null; mode = null; clean(); clean = () => {};
     closeButton.disabled = false;
-    dialog.classList.remove('mm-snapshot-dialog'); dialogOwner.release(token);
+    dialog.classList.remove('mm-snapshot-dialog'); dialog.removeAttribute?.('tabindex'); dialogOwner.release(token);
     if (!dialogOwner.active()) layer.hidden = true;
     if (!reason.replaced && !dialogOwner.active()) restoreDialogFocus(focusBefore);
   }
@@ -132,8 +132,8 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
     if (snapshotAvailability(current, kind, busy())) return false;
     const token = dialogOwner.claim('snapshots', reason => closeDialog(token, reason));
     if (!token) return false;
-    lease = token; mode = kind; finished = null; refusal = ''; select.dataset.signature = ''; focusBefore = document.activeElement;
-    dialog.classList.remove('mm-group-dialog', 'mm-pan-dialog', 'mm-diag-dialog'); dialog.classList.add('mm-snapshot-dialog');
+    lease = token; mode = kind; finished = null; refusal = ''; select.dataset.signature = ''; select.replaceChildren(); select.value = ''; focusBefore = document.activeElement;
+    dialog.classList.remove('mm-group-dialog', 'mm-pan-dialog', 'mm-diag-dialog'); dialog.classList.add('mm-snapshot-dialog'); dialog.setAttribute('tabindex', '-1');
     title.textContent = kind === 'recall' ? 'Recall snapshot' : 'Save current snapshot';
     view.replaceChildren(status, field, note, warning, actions); body.replaceChildren(view);
     // Both operations need a fresh list (recall names, save requires the
@@ -143,6 +143,7 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
     layer.hidden = false;
     const click = event => { if (dialogOwner.owns(token)) { event.stopImmediatePropagation?.(); requestClose(); } };
     const key = event => {
+      if (event.key === 'Tab' && tracked && dialogOwner.owns(token)) { event.preventDefault(); event.stopImmediatePropagation?.(); dialog.focus?.(); return; }
       if (event.key !== 'Escape' || !dialogOwner.owns(token)) return;
       event.preventDefault(); event.stopImmediatePropagation?.(); requestClose();
     };
@@ -153,6 +154,13 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
     return true;
   }
 
+  // Pending: focus the dialog container (never lost behind disabled controls);
+  // after a result or refusal: Cancel/Close.
+  function applyFocus() {
+    if (!lease || !dialogOwner.owns(lease)) { resultFocus = false; return; }
+    if (tracked) dialog.focus?.();
+    else if (resultFocus) { resultFocus = false; cancel.focus(); }
+  }
   function start() {
     if (!lease || !dialogOwner.owns(lease) || tracked || finished) return;
     const current = snapshot(), kind = mode;
@@ -162,13 +170,14 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
     tracked = { kind, name };
     const result = kind === 'recall' ? session.recallSnapshot(name) : session.saveCurrentSnapshot();
     if (!result?.ok) {
-      tracked = null; refusal = result?.reason || 'The desk operation was refused.'; log(`Snapshot ${kind}${kind === 'recall' ? ` ${name}` : ''}: ${refusal}`);
-      paintDialog(); paintButtons(); return;
+      // A send failure settles reentrantly as unknown (already one coherent entry); only a plain refusal logs here.
+      if (tracked) { tracked = null; refusal = result?.reason || 'The desk operation was refused.'; log(`Snapshot ${kind}${kind === 'recall' ? ` ${name}` : ''}: ${refusal}`); resultFocus = true; }
+      paintDialog(); paintButtons(); applyFocus(); return;
     }
     log(`Snapshot ${kind} ${name}: sent, waiting for the desk`);
     // A synchronous reply during send may already have settled the outcome.
     settle(snapshot());
-    paintDialog(); paintButtons();
+    paintDialog(); paintButtons(); applyFocus();
   }
 
   // Delivers the outcome of this UI's own operation once, whether or not its
@@ -180,13 +189,14 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
     const { kind, name } = tracked; tracked = null;
     const text = op.text;
     paintButtons(current); // the header buttons are enabled again before focus returns to one
-    log(`Snapshot ${kind} ${name}: ${op.status}. ${text}`);
-    if (op.status === 'confirmed') ui.message?.(`Recalled ${name}.`);
-    else if (op.status === 'reported') ui.message?.(`Saved ${name}. The desk reported a show change.`);
-    else ui.message?.(`${kind === 'recall' ? `Recall ${name}` : `Save ${name}`}: ${text}`);
+    // The footer message slot also writes the Diagnostics log, so log once.
+    const line = op.status === 'confirmed' ? `Recalled ${name}.`
+      : op.status === 'reported' ? `Save sent for ${name}; the desk reported a show change (contents not verified).`
+      : `${kind === 'recall' ? `Recall ${name}` : `Save ${name}`}: ${text}`;
+    if (ui.message) ui.message(line); else log(line);
     if (lease && dialogOwner.owns(lease)) {
       if (op.status === 'confirmed' || op.status === 'reported') closeDialog(lease);
-      else finished = { text };
+      else { finished = { text }; resultFocus = true; }
     }
   }
 
@@ -194,7 +204,7 @@ export function mountSnapshotControls({ root, session, ui, dialogOwner }) {
     if (destroyed || kind === 'meters') return;
     settle(current);
     if (lease && dialogOwner.owns(lease) && !tracked && !finished && (current.phase !== 'live' || current.qualified === false || !current.snapshots)) closeDialog(lease);
-    paintButtons(current); paintDiagnostics(current); paintDialog(current);
+    paintButtons(current); paintDiagnostics(current); paintDialog(current); applyFocus();
   }
   const offSession = session.subscribe(onSession);
   const onActClick = () => start(), onCancelClick = () => requestClose(), onSelect = () => { refusal = ''; paintDialog(); };
