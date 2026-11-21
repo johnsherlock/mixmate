@@ -108,3 +108,11 @@ test('F07-S05 review P2: a lasting "Groups unavailable" reason never replaces th
   jobs.at(-1)(); // transient expires
   assert.match(slot(), /^Groups unavailable/);
 });
+
+test('F07-S05 review round 2: the strip buttons keep their accessible names', () => {
+  const t = setup();
+  assert.equal(t.prompt.dismissButton.attributes['aria-label'], 'Dismiss install prompt');
+  assert.equal(t.prompt.dismissButton.attributes.title, 'Dismiss');
+  assert.equal(t.prompt.go.textContent, 'Install MixMate');
+  assert.equal(t.prompt.strip.attributes.role, 'status');
+});

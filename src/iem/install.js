@@ -22,7 +22,9 @@ export function createInstallPrompt({ container, before = null, window = globalT
   const document = container.ownerDocument;
   const make = (tag, className, text = '') => { const node = document.createElement(tag); if (className) node.className = className; node.textContent = text; return node; };
   const strip = make('div', 'mm-install'), label = make('span', 'mm-install-text'), go = make('button', 'mm-install-go', 'Install MixMate'), dismissButton = make('button', 'mm-install-dismiss', '×');
-  strip.hidden = true; strip.setAttribute('role', 'status'); go.type = 'button'; dismissButton.type = 'button'; go.dataset.action = 'install'; dismissButton.dataset.action = 'dismiss-install'; // data-action keeps them enabled when the live view disables the buttons present at mount dismissButton.setAttribute('aria-label', 'Dismiss install prompt'); dismissButton.setAttribute('title', 'Dismiss');
+  strip.hidden = true; strip.setAttribute('role', 'status'); go.type = 'button'; dismissButton.type = 'button'; go.dataset.action = 'install'; dismissButton.dataset.action = 'dismiss-install';
+  // data-action keeps them enabled when the live view disables the buttons present at mount.
+  dismissButton.setAttribute('aria-label', 'Dismiss install prompt'); dismissButton.setAttribute('title', 'Dismiss');
   strip.append(label, go, dismissButton);
   container.insertBefore(strip, before);
   const read = () => { try { return storage?.getItem(INSTALL_DISMISSED_KEY) === '1'; } catch { return false; } };
