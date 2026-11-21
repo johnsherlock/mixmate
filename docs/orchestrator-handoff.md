@@ -1,131 +1,88 @@
-# Orchestrator handoff — F09 user-feedback batch complete, 2026-11-20
+# Orchestrator handoff — F07 batch paused after F02-S05, 2026-11-21
 
 Before new work, read:
-- [AGENTS](../AGENTS.md);
+- [AGENTS](../AGENTS.md) (updated by F02-S05: snapshot-named rigs and automatic connection);
 - the [lifecycle](orchestration.md);
 - the [backlog](backlog.md);
 - the assigned story and its feature;
 - the current contracts.
 
-**The F09-S05 → F09-S10 user-feedback batch is complete and merged. Stop here.** Each story fixed issues the user reported while testing on the live desk (screen recordings, screenshots, messages) and was explicitly authorized in conversation. Backlog priority does not authorize further implementation. **F07 is not started.** This closing delivery is identified by its containing PR and history, not by a commit hash, because the PR cannot name its own hash. The last verified story baseline on main is **`8d3095554c4d56ee15bb9e579eec10da3e5e3204`**.
+**Paused by the user after F02-S05. Do not start F07-S01 until the user says so.** This handoff is identified by its containing PR and history, not by its own commit hash. The last verified story baseline on main is **`f6a1ecd7ba4be5ddb74649f0041e2797366ede1e`** (F02-S05, PR #58).
+
+## Authorized batch (user, 2026-11-20)
+
+**F02-S05 → F07-S01 → F07-S02.** F07-S03 (recording) and F07-S04 (native UI access) are **not** authorized.
+
+| Story | Status |
+| --- | --- |
+| [F02-S05](stories/F02-S05.md) snapshot-named rigs, known addresses, automatic connection | **Merged**: [PR #58](https://github.com/johnsherlock/mixmate/pull/58), merge `f6a1ecd` (2026-11-20 22:44 UTC), final approved head `7429ddc`, CI [44830969144](https://github.com/johnsherlock/mixmate/actions/runs/44830969144); main CI on `f6a1ecd` [44831343053](https://github.com/johnsherlock/mixmate/actions/runs/44831343053) passed |
+| [F07-S01](stories/F07-S01.md) snapshot discovery and operation contract | Authorized, **paused**: waits for the user's go-ahead |
+| [F07-S02](stories/F07-S02.md) snapshot operations (list/recall/save) | Authorized, after F07-S01 merges |
+
+### Docs to fold into the F07-S01 PR (user decision 2026-11-21)
+
+The user chose not to open a separate closing docs PR for F02-S05. The F07-S01 PR must also:
+- set [F02-S05](stories/F02-S05.md) status (it still says "re-review pending") to Merged with the receipts above;
+- record the merge in the [F02 feature](features/F02.md) table and the [backlog](backlog.md) row 8g;
+- add the two accepted P3s below to [follow-ups](user-follow-up.md).
 
 ## Review gate substitution (user direction, still in force)
 
-Codex reviews are unavailable because Codex is out of usage. The user explicitly told root to replace `@codex review` with **independent fresh-context agent reviews**.
-
-Each story below was merged only when all of these held:
-- a reviewer approved the exact final head;
+Codex is out of usage. Use an **independent fresh-context agent review** instead of `@codex review`. Merge only when all of these hold:
+- the reviewer approved the exact final head;
 - CI passed on that head;
-- every P1 and P2 finding was resolved;
+- every P1 and P2 is resolved;
 - root completed live desk acceptance.
 
-The review rounds and live results are recorded in a comment on each PR. Accepted P3s are in [follow-ups](user-follow-up.md).
+Record the review rounds and live results in a comment on the PR. Return to `@codex review` once it is available, unless the user directs otherwise.
 
-A future orchestrator should go back to `@codex review` once it is available, unless the user directs otherwise.
+## Standing user permissions and rules
 
-## Confirmed deliveries
+- Root may change anything on the desk (Ui24R **192.168.0.60**, firmware **3.0.7865-ui24**) except saving, recalling or deleting snapshots, with one exception: for this batch the user created test snapshots **MixMate1** and **MixMate2** and allowed recalling and saving those two (never delete them; never save over or recall any other snapshot).
+- Use SPARE (AUX 9/10) for write tests. If JOHN'S MIX is touched, capture its values first and restore them exactly. A recall changes the whole desk, so capture a full INIT dump before and compare after.
+- One story agent, one `codex/` branch and one PR per story, sequentially, each in its own worktree. Reproduce on the desk anything the user reports before writing a brief.
+- Never stage the untracked `docs/iem-integration-handoff.md` (SHA256 `0ac783556d5660ec29e95652c1871628f70c84f45ebb9c4a479e409399dd5bac`).
+- F08-S01 (real phone and tablet testing) remains the release gate and must not be waived.
 
-| Story / PR | Merge commit / UTC time | Final approved head | Passing CI |
-| --- | --- | --- | --- |
-| [F09-S05 / #51](https://github.com/johnsherlock/mixmate/pull/51) | `7d8a8cbc61974a98847e44c4c1b97c5d36bfcbee` / 2026-11-19 19:29:57 | `74c2cd2` | [44598792229](https://github.com/johnsherlock/mixmate/actions/runs/44598792229) |
-| [F09-S06 / #52](https://github.com/johnsherlock/mixmate/pull/52) | `50e24d540150e492278acb9fc1d07ac627c9b61b` / 2026-11-20 09:19:56 | `413024f` | [44709492251](https://github.com/johnsherlock/mixmate/actions/runs/44709492251) |
-| [F09-S07 / #53](https://github.com/johnsherlock/mixmate/pull/53) | `dc371cb09c4973c8910393b722d7d98d571ed07f` / 2026-11-20 11:25:45 | `54c50cd` | [44727228263](https://github.com/johnsherlock/mixmate/actions/runs/44727228263) |
-| [F09-S08 / #54](https://github.com/johnsherlock/mixmate/pull/54) | `9527f91e6f00fdaaa0fc4f3f34471f312501c47e` / 2026-11-20 12:48:55 | `c978c5c` | [44738699601](https://github.com/johnsherlock/mixmate/actions/runs/44738699601) |
-| [F09-S09 / #55](https://github.com/johnsherlock/mixmate/pull/55) | `c4acb380c24be56afa9b87dd402d6f27673ad755` / 2026-11-20 14:50:09 | `bc050e0` | [44757021401](https://github.com/johnsherlock/mixmate/actions/runs/44757021401) |
-| [F09-S10 / #56](https://github.com/johnsherlock/mixmate/pull/56) | `8d3095554c4d56ee15bb9e579eec10da3e5e3204` / 2026-11-20 16:19:07 | `b1d6ae3` | [44771985983](https://github.com/johnsherlock/mixmate/actions/runs/44771985983) |
+## F02-S05 delivered behavior (user decisions 2026-11-20)
 
-- **Implementation:** one sequential fresh-context story agent per story, each in its own worktree and `codex/` branch.
-- **Root's role:** reproducing on the desk before writing each brief, opening PRs, orchestrating reviews, live acceptance and merges.
-- **Interruption:** an account usage limit stopped the F09-S09 agent once. It resumed from its preserved state after the reset.
+These supersede older wording; AGENTS, the story and [settings](settings-repository.md) / [groups](iem-groups.md) docs carry the detail.
+- **Rig identity = the desk's current snapshot name**, received as `SETS^var.currentSnapshot^<name>` (receive-only, bounded). Exact, case-sensitive match: load the rig or create an empty one. **Follow live:** a native recall while connected switches rigs (gestures/selection cancelled, socket kept). An empty or invalid name means no rig, with a one-line reason. Offline, Edit Groups uses the last-used rig.
+- **Rig UI removed.** The live Connect dialog is the IPv4 address, Connect, Disconnect while connected, and Close.
+- **Known addresses:** up to 8, most recent first, recorded only on full readiness (`qualified`: Ui24 state received and, for control sessions, the writer socket open).
+- **Automatic connection** (live app only) on open, after an unexpected drop of a qualified session, on page visible/`pageshow`/`online`: one pass through known addresses, 5 s per attempt, never overlapping; falls back to the Connect dialog. A drop within 30 s of an automatic success opens the dialog instead. Explicit Disconnect suppresses it until the next explicit Connect or app open. Passes pause and triggers defer while any other dialog (Edit Groups, pan, EQ, channel detail) is open.
+- **Settings v3:** rigs `{ id, name, groups, navigation }`, `knownAddresses`, no `localDefinitions`; 128-rig cap (evicts only an empty non-current rig; otherwise no rig with a reason). v1/v2 records discard rigs and groups, seed known addresses, keep preferences.
+- No new outbound message; the transport allowlist is unchanged.
 
-## Delivered behavior: current user decisions
+### Accepted P3s from the F02-S05 review (to record in follow-ups via F07-S01)
+- **P3-a:** a stale pending-dialog flag can open the Connect dialog over a live session after a rare drop-guard → deferred trigger → success sequence. Harmless (nothing sent). Fix: clear it on success.
+- **P3-b:** an attempt already in flight when Edit Groups opens can still close the editor if it succeeds and restores the rig's saved mix (a real context change; matches prior behaviour).
+- Already recorded by the story: P3-3, more automatic settings writes make the documented two-window stale-baseline conflict more likely.
 
-These supersede older wording wherever the two conflict. Each is recorded in its story, the contracts and AGENTS.
+## Desk evidence for F07-S01 (root, 2026-11-20, read-only)
 
-### Live writes (F09-S05, user decision 2026-11-18)
-- Level, group, pan and GEQ stream throttled, sparse, latest-wins steps during an owned deliberate gesture. Release sends the final exact value only if it differs.
-- Own echoes never cancel a gesture. Any other changed value is a native edit: it stops the stream, with no rollback or replay.
-
-### Fader feel and level scale (F09-S06 to S08)
-- Drag geometry is fixed for the whole gesture and rendering is batched per frame, so the UI no longer jumps mid-drag.
-- Level faders use a dB-linear display scale: +10 to −70 dB is linear, with a short bottom segment down to −∞. The wire value is still the desk position.
-- **Relative groups (F09-S08, user decision 2026-11-20):** one common delta in display-scale units, so equal on-screen travel for every member.
-  - Up stops when the loudest member reaches +10. Down stops when the quietest reaches −∞ (position 0).
-  - Silent members are valid fresh anchors.
-  - The group cap follows the loudest member's displayed position and never flickers to "Level unavailable".
-
-### GEQ (F09-S06 to S10)
-- **Points (F09-S07):** points are persistent Demo-style parametric drawing aids (frequency, width, gain) over an in-memory anchored base.
-  - The base re-anchors at 0 dB gain on open, after a draw or reset, or on any outside change, including between gestures.
-  - Bands saturate at ±15 dB and the points request is never rejected whole. Draw requests and the session still reject out-of-range values whole.
-- **Handles (F09-S08):**
-  - The halo or an r=24 hit circle grabs a handle. A near-miss grab within 24 px works for the mouse only.
-  - Arrow keys move the focused point.
-  - Since F09-S10 the graph is `touch-action:none` in every mode, as in the prototype. Chrome ignores touch-action on SVG children.
-- **Reset (F09-S09, user decision 2026-11-20):** an immediate, deliberate, sparse one-shot with no confirmation.
-- **Echo timeout (F09-S06):** the desk drops echoes for equal re-sends and sub-5 ms reversals, so GEQ and group basis waits expire 2.5 s after the newest write.
-
-### Presentation (F09-S07 to S09, matching the prototype)
-- These have been removed from the default UI:
-  - the strip state lines;
-  - the strip Details button;
-  - all text under the EQ graph;
-  - the pan diagnostics.
-- That diagnostic output is available only with `?debug`.
-- A read-only reason appears on one line in the EQ header or the footer.
-- Group and All Channels buttons are right-aligned before Mix EQ and Edit Groups.
-- Export and Import settings are removed. The settings v1→v2 migration is unchanged.
-
-### Pan (F09-S09, user decision 2026-11-20)
-- The dialog has LEFT/CENTRE/RIGHT labels, an L n / CENTRE / R n readout and Hard L / Centre / Hard R buttons.
-- Strip buttons read `PAN · L 30`, or plain `Pan` when the value is unknown or the two sides differ.
-- Wire 0 = left was verified against the native app on the desk.
-- Requested values are shown only while a live preview or an own send is pending, and gestures start from the value on screen.
-
-`mockups/iem.html` is unchanged and remains the visual reference, not protocol evidence.
+- INIT contains `SETS^var.currentSnapshot^…`, `SETS^var.currentShow^Default` and an empty `SETS^var.currentCue^`. Related settings seen: `settings.block.loadshows`, `settings.block.shows`, `settings.block.presets`, `settings.cascade.snapsync`, `settings.cue`.
+- The snapshot list is **not** in INIT. The native app (`mixer.html`) shows a SHOWS / SNAPSHOTS / CUES menu from the header snapshot name; the show `Default` lists `* Init *`, AIC, IMGL FIBBERS, IMGL Harbour Bar, IMGL Studio, John Test, MixMate1, MixMate2, NSLYA, RECORDING and more. How it obtains that list (socket message or HTTP) is unknown and is F07-S01's research.
+- In the native menu, a double-click on a snapshot loaded it; the desk then re-sent `var.currentSnapshot` and MixMate followed live.
 
 ## Verification and resources
 
-- **Final application:** version 0.5.0, 18 precached assets, offline worker `71185f60b38efb02`. **437/437 fake tests** pass. Local Node is 26.13.1; CI uses Node 24.
-- **Live desk acceptance:** firmware 3.0.7865-ui24, desk 192.168.0.60. Root ran headless Playwright Chromium against production builds, plus the desktop app's browser pane for real-browser checks. Each PR comment records the scripts' outcomes:
-  - fader and group geometry at 1280×800, 844×390 and 390×844;
-  - group endpoints;
-  - member-drag strip stability;
-  - GEQ points, sliders, keys, near-grab and draw;
-  - an emulated touch drag before and after F09-S10;
-  - the pan direction and presets;
-  - immediate sparse reset.
-- **Desk state:**
-  - SPARE (AUX 9/10) sends, pans and GEQ are at test values; the GEQ was last flattened by the reset test.
-  - JOHN'S MIX GEQ was edited during diagnosis and restored exactly (62 values verified).
-  - SPARE BASS L pan was restored to 0.5714285714.
-  - No snapshot was saved, recalled or deleted.
-- **Cleanup:** all story worktrees and branches are removed and the root-owned 4174 servers are stopped. The QA scripts stay in the session scratchpad and are not part of the repository.
-- **Untracked file:** preserve the unrelated untracked **`docs/iem-integration-handoff.md`** (SHA256 **`0ac783556d5660ec29e95652c1871628f70c84f45ebb9c4a479e409399dd5bac`**) and never stage it.
-- **Prototype hash:** the prototype SHA256 remains **`d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`**.
+- **Application:** 0.5.0, 18 precached assets, offline worker `9ce75844fa30b67d`, **439/439** fake tests. Local Node 26; CI Node 24.
+- **Live acceptance of F02-S05** (headless Playwright Chromium against the production build, plus the desktop app's browser pane for native recalls) is recorded on [PR #58](https://github.com/johnsherlock/mixmate/pull/58#issuecomment-7052427422).
+- **Desk state:** current snapshot **MixMate1** (the user had recalled it). Root recalled only MixMate2 and MixMate1; a full INIT comparison before and after was identical, so JOHN'S MIX and all values are unchanged. No snapshot was saved or deleted. SPARE values remain as left by the F09 batch.
+- **Cleanup:** the F02-S05 worktree and branches are removed; the root preview server is stopped. QA scripts are in the session scratchpad only, not part of the repository.
+- **Prototype:** `mockups/iem.html` unchanged, SHA256 `d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`.
 
-## Remaining work and next orchestration
+## Remaining work outside the batch
 
-- **Physical qualification:** [F08-S01](stories/F08-S01.md) still owns physical Android/iOS testing, both rigs, installation/offline, sleep/recovery, real touch feel and storage retention. Neither desktop emulation nor one desk certifies these. Items added by this batch:
-  - real-device GEQ handle touch and graph no-scroll;
-  - pan and fader touch feel;
-  - phone layouts of the cleaned panels.
-- **Accepted P3 follow-ups** (see [follow-ups](user-follow-up.md)):
-  - On touch, a dot can grab its neighbour's r=24 hit circle.
-  - The `.mm-feedback` status is not a live region.
-  - A held pan grab that spans the expiry of the 2.5 s window makes the readout jump.
-  - The pre-existing level cap shows the retained request after the window, although it is labelled separately from received.
-  - The F09-S10 CSS test scans only `.mm-live-eq` rules.
-- **Accepted P3s later fixed:** the F09-S07 `anchor.interrupted` hint wording (fixed in F09-S08) and the F09-S08 docs leftovers (fixed in F09-S09).
-- **Parked:**
-  - the unknown tablet group-save issue (no device evidence yet);
-  - the dependency audit (development-chain advisories only).
-- **User-raised future direction:** tie groups and layout to the desk's current snapshot. This depends on F07.
-- **Next backlog candidate:** [F07](features/F07.md) (snapshot contract, operations, recording, native access). It is **unstarted and outside any authorization**.
+- **Physical qualification:** [F08-S01](stories/F08-S01.md) owns Android/iOS, installation/offline, sleep/recovery and real touch. Added by F02-S05: real-device wake, visibility and `online` auto-connect behaviour, and the upgrade from v2 settings on the user's devices.
+- **Earlier accepted P3s** (see [follow-ups](user-follow-up.md)): GEQ touch neighbour-handle grab; `.mm-feedback` not a live region; pan readout jump across the 2.5 s window; level cap showing the retained request after the window; the F09-S10 CSS test scope.
+- **Parked:** the unknown tablet group-save issue (likely superseded by F02-S05's rig model, unverified) and the dependency audit (development-chain advisories only).
 
-A fresh orchestration run should:
-1. verify this closing delivery on remote main;
-2. read AGENTS and this handoff;
-3. get the next explicit batch from the user.
+## Next orchestration
+
+1. Verify this handoff on remote main and that the baseline is `f6a1ecd`.
+2. Read AGENTS and this handoff.
+3. Ask the user whether to resume with F07-S01. When authorized, the F07-S01 brief includes the folded docs items above and the desk evidence; live checks may recall/save only MixMate1 and MixMate2.
 
 Stop here. No sidebar chat or automatic responsibility transfer has been created.
