@@ -7,11 +7,11 @@ Before new work, read:
 - the assigned story and its feature;
 - the current contracts.
 
-This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the F07-S02 merge `2e9e46f`.** Verify it on remote main before relying on this text.
+This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the F07-S04 merge `5c6fdc8` (app 0.8.0).** Verify it on remote main before relying on this text.
 
 ## State
 
-The user-authorized batch **F02-S05 → F07-S01 → F07-S02**, plus the user-requested F09-S11, is **complete**.
+The user-authorized batches (**F02-S05 → F07-S01 → F07-S02**, the user-requested F09-S11, and the remaining F07 order **F07-S06 → F07-S03 → F07-S04**) are **complete**. All of F07 (S01–S06) is merged. **Nothing further is authorized.**
 
 | Story | PR | Merge commit | Final approved head |
 | --- | --- | --- | --- |
@@ -19,11 +19,12 @@ The user-authorized batch **F02-S05 → F07-S01 → F07-S02**, plus the user-req
 | [F09-S11](stories/F09-S11.md) live UI tidy (user-requested) | [#59](https://github.com/johnsherlock/mixmate/pull/59) | `61d08fd` (2026-11-21 09:32 UTC) | `db393b4` |
 | [F07-S01](stories/F07-S01.md) snapshot discovery and operation contract ([contract](iem-snapshot-contract.md), [ADR-0009](adr/0009-snapshot-operation-contract.md)) | [#60](https://github.com/johnsherlock/mixmate/pull/60) | `b916b31` (2026-11-21 09:47 UTC) | `f4142e8` |
 | [F07-S02](stories/F07-S02.md) snapshot operations (Recall/Save dialogs) | [#61](https://github.com/johnsherlock/mixmate/pull/61) | `2e9e46f` (2026-11-21 10:01 UTC) | `a61e1d1` |
+| [F07-S04](stories/F07-S04.md) native UI access (new tab) | [#66](https://github.com/johnsherlock/mixmate/pull/66) | `5c6fdc8` (2026-11-21) | `bae56a2` |
 
-- **Authorized (user, 2026-11-21): the rest of F07, in this order: F07-S06 → F07-S03 (recording) → F07-S04 (native UI access).** Sequential, one story agent at a time.
-- **Merged:** [F07-S05](stories/F07-S05.md) automatic online updates, install prompt and visible versioning (0.6.0), [PR #63](https://github.com/johnsherlock/mixmate/pull/63), merge `5cd755c` (2026-11-21 11:51 UTC), final head `3715737`, record https://github.com/johnsherlock/mixmate/pull/63#issuecomment-7062173207. It had no dependency on F07-S03/S04; the exception is recorded in [follow-ups](user-follow-up.md). **Merged:** [F07-S06](stories/F07-S06.md) install prompt fallback (0.6.1), [PR #64](https://github.com/johnsherlock/mixmate/pull/64), merge `4c6c574`, final head `3a516a3`. **In review:** [F07-S03](stories/F07-S03.md) multitrack recording status and control (0.7.0; branch `codex/f07-s03-recording`; [contract](iem-recording-contract.md), [ADR-0011](adr/0011-multitrack-recording-contract.md); live start/stop acceptance needs a USB drive in the desk). Next in the authorized order: F07-S04. Version policy: [orchestration](orchestration.md#versioning-policy-f07-s05).
-- **Merged:** [F07-S03](stories/F07-S03.md) multitrack recording status and control (0.7.0), [PR #65](https://github.com/johnsherlock/mixmate/pull/65), merge `901a342`, final head `02bf217`; live start/stop acceptance **parked** pending a USB drive in the desk (accepted P3s: stop requires `rec.busy` < 0.5; a stale `rec.time` may flash at start). **In review:** [F07-S04](stories/F07-S04.md) native UI access (0.8.0), the last authorized F07 story; branch `codex/f07-s04-native-ui`.
-- **Drafted, not authorized:** [F01-S05](stories/F01-S05.md) (side-loaded Android APK; open decisions for the user: application ID, APK contents, minimum Android version, signing key and first Release; planned ADR-0010).
+- **Authorized (user, 2026-11-21; completed): the rest of F07, in this order: F07-S06 → F07-S03 (recording) → F07-S04 (native UI access).** Sequential, one story agent at a time.
+- **Merged:** [F07-S05](stories/F07-S05.md) automatic online updates, install prompt and visible versioning (0.6.0), [PR #63](https://github.com/johnsherlock/mixmate/pull/63), merge `5cd755c` (2026-11-21 11:51 UTC), final head `3715737`, record https://github.com/johnsherlock/mixmate/pull/63#issuecomment-7062173207. It had no dependency on F07-S03/S04; the exception is recorded in [follow-ups](user-follow-up.md). **Merged:** [F07-S06](stories/F07-S06.md) install prompt fallback (0.6.1), [PR #64](https://github.com/johnsherlock/mixmate/pull/64), merge `4c6c574`, final head `3a516a3`. Version policy: [orchestration](orchestration.md#versioning-policy-f07-s05).
+- **Merged:** [F07-S03](stories/F07-S03.md) multitrack recording status and control (0.7.0), [PR #65](https://github.com/johnsherlock/mixmate/pull/65), merge `901a342`, final head `02bf217`; live start/stop acceptance **parked** pending a USB drive in the desk (accepted P3s: stop requires `rec.busy` < 0.5; a stale `rec.time` may flash at start). **Merged:** [F07-S04](stories/F07-S04.md) native UI access (0.8.0), [PR #66](https://github.com/johnsherlock/mixmate/pull/66), merge `5c6fdc8`, final head `bae56a2`, review/live record https://github.com/johnsherlock/mixmate/pull/66#issuecomment-7064454470. The authorized F07 order is complete; the remaining F07 item is F07-S03 live start/stop acceptance, **parked** until a USB drive is in the desk.
+- **Drafted, not authorized:** [F01-S05](stories/F01-S05.md) (side-loaded Android APK, now also including an APK-only full-screen overlay of the desk's native UI behind the Native button, user decision 2026-11-21; open decisions for the user: application ID, APK contents, minimum Android version, overlay implementation (iframe vs plugin) and connection behaviour, signing key and first Release; planned ADR-0010).
 - **No implementation is authorized until the user says so.** Backlog priority alone does not authorize execution.
 
 ## Delegation (user rule, 2026-11-21)
@@ -59,7 +60,7 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 ## Verification and resources
 
-- **Application:** 0.5.0, 18 precached assets, **486/486** fake tests. Local Node 26; CI Node 24.
+- **Application:** 0.8.0 (baseline `5c6fdc8`); 561 fake tests pass on `5c6fdc8`; the offline worker precaches 18 assets (root verified on every build on 2026-11-21). Local Node 26; CI Node 24.
 - **Desk state:** current snapshot **MixMate1**. During F07-S02 acceptance root recalled MixMate1 and MixMate2 and saved MixMate1 from the live state (2026-11-21), so MixMate1 now holds those contents. Full INIT dumps were identical before and after, and no other snapshot was touched. Live records: [PR #58](https://github.com/johnsherlock/mixmate/pull/58#issuecomment-7052427422), [PR #60](https://github.com/johnsherlock/mixmate/pull/60#issuecomment-7060808085), [PR #61](https://github.com/johnsherlock/mixmate/pull/61#issuecomment-7060957809).
 - **Prototype:** `mockups/iem.html` unchanged, SHA256 `d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`.
 - `.claude/launch.json` is a local, untracked root convenience file; do not commit it.
@@ -68,6 +69,7 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 - **Physical qualification:** [F08-S01](stories/F08-S01.md) owns Android/iOS, installation/offline, sleep/recovery and real touch, including real-device wake, visibility and `online` auto-connect behaviour and the v2 settings upgrade. It stays the release gate.
 - **Accepted P3s** for F02-S05, F09-S11, F07-S01 and F07-S02 and earlier ones live in [follow-ups](user-follow-up.md).
-- **Parked:** the unknown tablet group-save issue (likely superseded by the F02-S05 rig model, unverified) and the dependency audit (development-chain advisories only).
+- **Open finding:** the Pixel install issue (Chrome refuses to install the PWA, Brave installs it) remains open; F07-S06 added a menu-instructions fallback only.
+- **Parked:** F07-S03 live start/stop acceptance (needs a USB drive in the desk); the unknown tablet group-save issue (likely superseded by the F02-S05 rig model, unverified) and the dependency audit (development-chain advisories only).
 
 No sidebar chat or automatic responsibility transfer has been created.
