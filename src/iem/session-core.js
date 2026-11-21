@@ -9,6 +9,7 @@ import { auxLevelPath, encodeAuxLevelCommand, resolveAuxLevelTopology } from './
 import { AUX_EQ_DISPLAY_CENTRES, auxEqPath, auxEqPositionToDb, encodeAuxEqCommand, eqArray, eqDataFields, parseAuxEqStateFrame, parseAuxProcessingFrame, resolveAuxEqTopology } from './aux-eq-protocol.js';
 import { resolveGroupTopology, groupReferenceDelta, groupReferencePosition } from './relative-groups.js';
 import { mapRequestedAuxEqCurve } from './aux-eq-curve.js';
+import { checkShowName, checkSnapshotName, encodeSnapshotListCommand, encodeSnapshotRecallCommand, encodeSnapshotSaveCommand, isSnapshotInitEntry, parseSnapshotCompanionFrame, parseSnapshotWriterFrame } from './snapshot-protocol.js';
 
 // Private ownership: no socket, generic sender or queue escapes. The literal
 // read-only factory cannot acquire the typed level capability through options.
@@ -222,7 +223,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   function journal(frame) {
     if (!controlEnabled) return;
     inspectConfirmation();
-    let controlsChanged = false;
+    let controlsChanged = auxControl ? noteSnapshotCompanion(frame) : false;
     const updates = parseIemStateFrame(frame);
     // Separate bounded GEQ parser: 31 bands plus read-only bypass per output.
     if (auxControl) for (const update of parseAuxEqStateFrame(frame)) updates.push({ path: update.path, value: update.value, auxIndex: update.auxIndex, field: update.field === 'bypass' ? 'eqBypass' : 'eqBand' });
@@ -231,6 +232,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       // F02-S05: a desk snapshot recall changes the rig context; the socket stays.
       if (actual && field === 'currentSnapshot' && observed.has(path)) { cancelControl('Desk snapshot changed; obsolete adjustment cancelled.', 'profile'); selected = null; }
       observed.set(path, value); receipts.set(path, ++sequence);
+      if (field === 'currentSnapshot' && auxControl && snapshotRecallSeen(value)) controlsChanged = true;
       if (dispatchWatch?.paths.has(path)) dispatchWatch.hit = true;
       if (field === 'eqBand' || field === 'eqBypass') { eqObserved.set(path, value); controlsChanged = true; }
       if (actual && field === 'eqBypass' && eqOutputs().includes(auxIndex)) cancelControl('Received GEQ bypass changed; obsolete EQ adjustment cancelled.', 'processing');
@@ -504,16 +506,153 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       return commit(token, undefined, 'geq');
     },
   };
+  // F07-S01 snapshot owner (createAuxControlSession only; docs/iem-snapshot-contract.md,
+  // ADR-0009). Typed list / recall / save-current on the writer socket, never
+  // caller strings. List replies and MSG^$SNAPLOAD arrive on the writer socket
+  // only and feed this state, never mixer observations; the companion supplies
+  // var.currentShow/var.currentSnapshot, lock settings and UPDATE_SHOWS. The
+  // lock password value is reduced to "is set" at parse time and never stored.
+  const SNAPSHOT_WAIT_MS = Object.freeze({ list: 5000, recall: 5000, save: 3000 });
+  const freshSnapshots = () => ({ show: null, passSet: null, loadshows: null, shows: null, list: null, request: null, op: null });
+  let sn = freshSnapshots(), snLast = null;
+  const snapshotRefusal = (code, reason) => Object.freeze({ ok: false, code, reason });
+  function settleSnapshotOp(op, status) {
+    if (sn.op !== op || op.status !== 'pending') return false;
+    timers.clearTimeout(op.timer); op.timer = undefined; op.status = status; return true;
+  }
+  function noteSnapshotCompanion(frame) {
+    const found = parseSnapshotCompanionFrame(frame);
+    let changed = false;
+    if (found.show !== undefined && found.show !== sn.show) { sn.show = found.show; sn.list = null; timers.clearTimeout(sn.request?.timer); sn.request = null; changed = true; }
+    for (const key of ['passSet', 'loadshows', 'shows']) if (found[key] !== undefined && found[key] !== sn[key]) { sn[key] = found[key]; changed = true; }
+    if (found.updateShows) {
+      // A show/snapshot change invalidates the list; a reply already in flight
+      // may predate the change, so it is stored stale.
+      if (sn.list && !sn.list.stale) { sn.list = Object.freeze({ ...sn.list, stale: true }); changed = true; }
+      if (sn.request) sn.request.dirty = true;
+      if (sn.op?.kind === 'save' && settleSnapshotOp(sn.op, 'reported')) changed = true;
+    }
+    return changed;
+  }
+  function snapshotRecallSeen(name) {
+    return sn.op?.kind === 'recall' && sn.op.name === name && settleSnapshotOp(sn.op, 'confirmed');
+  }
+  function receiveWriterSnapshot(data) {
+    let changed = false;
+    for (const event of parseSnapshotWriterFrame(data)) {
+      if (event.type === 'list') {
+        if (!sn.request || event.show !== sn.show) continue;
+        timers.clearTimeout(sn.request.timer);
+        sn.list = Object.freeze({ show: event.show, names: event.names, truncated: event.truncated, stale: Boolean(sn.request.dirty) });
+        sn.request = null; changed = true;
+      } else if (sn.op?.kind === 'recall' && sn.op.name === event.name && settleSnapshotOp(sn.op, 'confirmed')) changed = true;
+    }
+    return changed;
+  }
+  function resetSnapshots() {
+    timers.clearTimeout(sn.request?.timer); timers.clearTimeout(sn.op?.timer);
+    // Only an outcome that was still outstanding survives a stop, as unknown.
+    snLast = sn.op?.status === 'pending' ? Object.freeze({ kind: sn.op.kind, name: sn.op.name, status: 'unknown' }) : null;
+    sn = freshSnapshots();
+  }
+  const lockState = () => {
+    const gate = flag => sn.passSet === null ? 'unknown' : !sn.passSet ? 'allowed' : sn[flag] === null ? 'unknown' : sn[flag] ? 'allowed' : 'locked';
+    return { recall: gate('loadshows'), save: gate('shows') };
+  };
+  // Shared preconditions, revalidated immediately before every send. Refuse
+  // with a reason; never cancel the user's drag or queue for later.
+  function snapshotPreflight(mutating) {
+    if (!canAct() || phase !== 'live' || !writerReady) return snapshotRefusal('not-ready', 'Not connected to the desk.');
+    if (!checkShowName(sn.show).ok) return snapshotRefusal('no-show', 'The desk’s current show has not been received.');
+    const owned = model?.generation === generation;
+    if (dispatchWatch || owned && (model.gesture || model.operation?.status === 'dispatching')) return snapshotRefusal('gesture', 'A control adjustment is in progress.');
+    if (!mutating) return null;
+    if (intentActive(model)) return snapshotRefusal('pending', 'Waiting for the desk to report the last control change; try again shortly.');
+    if (sn.op?.status === 'pending') return snapshotRefusal('busy', 'A snapshot operation is already waiting for the desk.');
+    if (!sn.list || sn.list.show !== sn.show) return snapshotRefusal('no-list', 'The snapshot list has not been received.');
+    if (sn.list.stale) return snapshotRefusal('stale-list', 'The desk changed its shows; refresh the snapshot list first.');
+    return null;
+  }
+  function sendSnapshotMessage(message) {
+    try { socket.send(message); return true; }
+    catch { stop('error', 'Connection send failed — received state cleared'); return false; }
+  }
+  function startSnapshotOp(kind, name, message) {
+    const op = { kind, name, status: 'pending', timer: undefined };
+    sn.op = op; snLast = null;
+    if (!sendSnapshotMessage(message)) return snapshotRefusal('send-failed', 'Connection send failed; the outcome is unknown. No retry.');
+    // A synchronous reply or stop during send already settled or replaced op.
+    if (sn.op === op && op.status === 'pending') {
+      const owner = generation;
+      op.timer = timers.setTimeout(() => { if (generation === owner && settleSnapshotOp(op, 'unconfirmed')) emit('controls'); }, SNAPSHOT_WAIT_MS[kind]);
+    }
+    emit('controls');
+    return Object.freeze({ ok: true, kind, name });
+  }
+  const lockRefusal = lock => snapshotRefusal(lock === 'locked' ? 'locked' : 'lock-unknown', lock === 'locked' ? 'Locked on the desk.' : 'The desk’s lock settings have not been received.');
+  const snapshotAPI = {
+    requestSnapshotList() {
+      const refused = snapshotPreflight(false);
+      if (refused) return refused;
+      if (sn.request) return snapshotRefusal('busy', 'A snapshot list request is already waiting for the desk.');
+      const message = encodeSnapshotListCommand(sn.show), owner = generation, request = { timer: undefined, dirty: false };
+      sn.request = request;
+      if (!sendSnapshotMessage(message)) return snapshotRefusal('send-failed', 'Connection send failed.');
+      if (sn.request === request) request.timer = timers.setTimeout(() => { if (generation === owner && sn.request === request) { sn.request = null; emit('controls'); } }, SNAPSHOT_WAIT_MS.list);
+      emit('controls');
+      return Object.freeze({ ok: true, kind: 'list' });
+    },
+    recallSnapshot(name) {
+      const refused = snapshotPreflight(true);
+      if (refused) return refused;
+      const shape = checkSnapshotName(name);
+      if (!shape.ok) return snapshotRefusal('invalid-name', shape.reason);
+      if (isSnapshotInitEntry(name)) return snapshotRefusal('init-entry', 'The desk Init entry cannot be recalled from MixMate.');
+      if (!sn.list.names.includes(name)) return snapshotRefusal('not-in-list', 'That snapshot is not in the desk’s list.');
+      const lock = lockState().recall;
+      if (lock !== 'allowed') return lockRefusal(lock);
+      return startSnapshotOp('recall', name, encodeSnapshotRecallCommand(sn.show, name));
+    },
+    // Updates the desk's received current snapshot only; never a new name.
+    saveCurrentSnapshot() {
+      const refused = snapshotPreflight(true);
+      if (refused) return refused;
+      const name = observed.get('var.currentSnapshot');
+      if (typeof name !== 'string' || !checkSnapshotName(name).ok) return snapshotRefusal('no-current', 'The desk’s current snapshot name has not been received.');
+      if (isSnapshotInitEntry(name)) return snapshotRefusal('init-entry', 'The desk Init entry cannot be saved from MixMate.');
+      if (!sn.list.names.includes(name)) return snapshotRefusal('not-in-list', 'The current snapshot is not in the desk’s list.');
+      const lock = lockState().save;
+      if (lock !== 'allowed') return lockRefusal(lock);
+      return startSnapshotOp('save', name, encodeSnapshotSaveCommand(sn.show, name));
+    },
+  };
+  const OUTCOME_TEXT = {
+    recall: { pending: 'Recall sent; waiting for the desk to report it.', confirmed: 'The desk reported the snapshot loaded.', unconfirmed: 'Recall sent; the desk did not report it within 5 s. Check the desk before relying on it.', unknown: 'The connection ended while a recall was outstanding; the outcome is unknown. No retry.' },
+    save: { pending: 'Save sent; waiting for the desk to report a show change.', reported: 'The desk reported a show change after the save. This does not prove the snapshot contents were written.', unconfirmed: 'Save sent; the desk did not report a show change within 3 s.', unknown: 'The connection ended while a save was outstanding; the outcome is unknown. No retry.' },
+  };
+  const publicOperation = op => op ? Object.freeze({ kind: op.kind, name: op.name, status: op.status, text: OUTCOME_TEXT[op.kind][op.status] }) : null;
+  function snapshotsSnapshot() {
+    const pending = Boolean(sn.request), list = sn.list, current = observed.get('var.currentSnapshot');
+    return Object.freeze({
+      show: checkShowName(sn.show).ok ? sn.show : null,
+      current: typeof current === 'string' ? current : null,
+      list: Object.freeze({ status: pending ? 'pending' : list ? list.stale ? 'stale' : 'fresh' : 'none', show: list?.show ?? null, truncated: Boolean(list?.truncated),
+        names: Object.freeze(list ? list.names.filter(name => !isSnapshotInitEntry(name)) : []) }),
+      operation: publicOperation(sn.op ?? snLast),
+      lock: Object.freeze(lockState()),
+    });
+  }
   const snapshot = () => {
     if (socket) inspectCurrent(); // A read after sleep cannot resurrect old state before timers run.
     // Full readiness: received Ui24 AUX state and, for control sessions, an open writer.
     const qualified = phase === 'live' && (!controlEnabled || writerReady);
-    return { phase, qualified, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}) };
+    return { phase, qualified, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}), ...(auxControl ? { snapshots: snapshotsSnapshot() } : {}) };
   };
   const emit = (kind = 'state') => { for (const listener of listeners) listener(snapshot(), kind); };
   const clearTimers = () => { timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = null; timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
   function stop(next = 'disconnected', message = 'Disconnected — received state cleared') {
     ++generation;
+    resetSnapshots();
     cancelControl('Received state cleared; connect explicitly.', 'disconnect'); selected = null; attentionFlag = false; observed.clear(); receipts.clear(); eqObserved.clear(); processingRaw.clear(); sequence = 0;
     clearTimers();
     const old = socket, oldReceiver = receiver;
@@ -528,7 +667,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     emit();
   }
   function connect(address) {
-    stop('idle', 'Starting an explicit connection');
+    stop('idle', 'Starting an explicit connection'); snLast = null;
     let url;
     try { url = mixerURL(address); }
     catch (error) { phase = 'invalid'; detail = error.message; emit(); return false; }
@@ -629,6 +768,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       // Control writers never populate actual state: their INIT may arrive late
       // and sender echoes are absent on observed firmware. One receiver owns it.
       if (!controlEnabled) receiveState(data);
+      else if (auxControl && receiveWriterSnapshot(data)) emit('controls');
     };
     current.onerror = () => { if (active()) stop('error', 'Mixer connection failed — reconnect explicitly'); };
     current.onclose = () => { if (active()) stop('closed', 'Mixer connection closed — received state cleared'); };
@@ -665,6 +805,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     ...(controlEnabled ? controlAPI : {}),
     ...(auxControl ? panAPI : {}),
     ...(auxControl ? eqAPI : {}),
+    ...(auxControl ? snapshotAPI : {}),
     connect,
     disconnect: () => stop(),
     snapshot,

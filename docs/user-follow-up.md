@@ -495,3 +495,27 @@ Reviewer APPROVE with P2s; root live acceptance found R1. Fixed on the same bran
 - Lasting conditions ("View is temporary…", "Groups unavailable: …") show in the slot while they hold; transient messages clear after 8 s or at the next gesture.
 - *Trade-offs:* "Groups unavailable: connect to the desk…" now also shows in the footer while offline with no last-used rig. A selection change that stops a gesture (user's own tap) is deliberately not an alert. Not verified on the desk by the story agent.
 
+
+## F07-S01 Snapshot contract — 2026-11-21
+
+Implementation on `codex/f07-s01-snapshot-contract` (from main `61d08fd`), second story of the batch authorized 2026-11-20. Routine decisions, also in [ADR-0009](adr/0009-snapshot-operation-contract.md):
+
+- **Allowlist:** three exact forms on the control session writer only (`SNAPSHOTLIST^<show>`, `LOADSNAPSHOT^<show>^<snapshot>`, `SAVESNAPSHOT^<show>^<snapshot>`); typed names-only API; show always the received `var.currentShow`; recall names from the fresh received list; save updates only the received current snapshot; `* Init *` never; bounded names (64 chars / 256 bytes); everything else (`SHOWLIST`, `CUELIST`, `LOADSHOW`, delete/rename, save-as, presets, `MIXER_RESET`) excluded.
+- **Prerequisites:** refuse, never cancel a drag or queue: no gesture or pending own send, one operation outstanding, fresh list (`UPDATE_SHOWS` stales it), desk locks (`pass` set needs `loadshows`/`shows`). **Unknown lock state refuses** (safe default; this desk sends the settings in INIT). The pass value is never stored or exposed.
+- **Outcomes:** recall confirmed by writer `MSG^$SNAPLOAD` or companion `var.currentSnapshot` within 5 s, else unconfirmed; save `reported` by companion `UPDATE_SHOWS` within 3 s (proves only a show-change report, wording says so), else unconfirmed; unknown on disconnect/hide/failure; no retry, replay or rollback.
+- **Review while Codex is unavailable:** independent fresh-context agent; root may recall/save only MixMate1 and MixMate2 for live checks (user standing rule).
+- **Open / not verified:** the INIT line form of `settings.block.*` is unrecorded (parser accepts SETD and SETS; unparsed means refusal) — root to confirm on the desk; lock behaviour with a password set, `LOADSHOW`, delete/rename and save-as were never tested; automated tests use fake transports only.
+
+## Accepted P3s carried from F02-S05 and F09-S11 (recorded 2026-11-21 in the F07-S01 PR)
+
+F02-S05 (PR #58, merged `f6a1ecd`):
+
+- **P3-a:** a stale pending-dialog flag can open the Connect dialog over a live session after a rare drop-guard → deferred trigger → success sequence. Harmless, nothing is sent. Fix: clear the flag on success.
+- **P3-b:** an attempt already in flight when Edit Groups opens can still close the editor if it succeeds and restores the rig's saved mix (a real context change; matches prior behaviour).
+- P3-3 (already recorded in F02-S05): automatic settings writes make the two-window stale-baseline conflict more likely.
+
+F09-S11 (PR #59, merged `61d08fd`):
+
+- A user's own cancel during a gesture (cancel-invalidated, for example Escape) shows "Adjustment cancelled; use a new gesture." in the footer slot for 8 s.
+- After a desk-side change stops a drag, the footer shows the raw control status ("Ready to edit current received state… application unverified…") rather than a plain message.
+- `__BUILD_TIME__` is wall-clock, so the generated offline worker version changes on every rebuild even for identical sources; on pull-request CI `GITHUB_SHA` is the merge commit, so the commit string shown there is not the PR head.

@@ -71,6 +71,24 @@ S02 must either leave field-specific precision unresolved/conservative or justif
 
 S03 cannot silently adopt native bootstrap, optimistic received values, generic library transport or unwired GEQ. Any reviewed contract change must explicitly reconcile ADR-0004/5/6 and the current 2.5s rule. S04 needs separately authorized bounded firmware corroboration for the applicable matrix rows (actual precision, own/peer event coverage, native edits, partial/interrupted outcomes and explicit GEQ readiness). Exact served-source gap, endpoint/session cause, server mirroring and pan direction remain parked where needed. F08-S01 still owns both rigs and physical Android/iOS/offline/sleep qualification; targeted tests do not waive it.
 
+## Snapshot commands (F07-S01, root desk evidence 2026-11-21)
+
+Native `E_COMMANDS` names seen in the served `mixer.html` (firmware 3.0.7865-ui24), with MixMate's status. Full evidence, per-socket delivery and bounds: [snapshot contract](iem-snapshot-contract.md); decision: [ADR-0009](adr/0009-snapshot-operation-contract.md).
+
+| Native command | Wire name | MixMate |
+| --- | --- | --- |
+| `SNAP_LIST` | `SNAPSHOTLIST^<show>` → reply `SNAPSHOTLIST^<show>^<name>…` (requester only) | **Allowed** (control session writer only) |
+| `SNAP_LOAD` | `LOADSNAPSHOT^<show>^<snapshot>` → `MSG^$SNAPLOAD^<name>` (requester), `UPDATE_SHOWS` and `SETS^var.currentSnapshot` (broadcast, only when it changes) | **Allowed** (writer only, name from the received list) |
+| `SNAP_SAVE` | `SAVESNAPSHOT^<show>^<snapshot>` → `UPDATE_SHOWS` (broadcast), no other reply | **Allowed** (writer only, received current snapshot only) |
+| `SHOW_LIST` | `SHOWLIST` | Excluded |
+| `CUE_LIST` | `CUELIST` | Excluded |
+| `SHOW_LOAD` | `LOADSHOW` | Excluded (native sends it before a recall only when the chosen show differs) |
+| `SNAP_DEL` | `DELETESNAPSHOT` | Excluded, never sent, not tested |
+| `SNAP_RENAME` | `RENAMESNAPSHOT` | Excluded, never sent, not tested |
+| (incoming) | `UPDATE_SHOWS`, `MSG^$<KEY>^args` | Received only |
+
+The list is not part of INIT. The `* Init *` entry is the desk's factory reset and is never recalled or saved by MixMate. Not named in `E_COMMANDS` evidence and also excluded: `CREATESHOW`, presets, `MIXER_RESET`.
+
 ## Delivery verification
 
 Local Node **26.13.1** (CI targets Node24): `npm ci` passed (existing fsevents allowScripts notice), `npm test` **256/256 passed**, `npm run build` passed app **0.5.0**, **18 assets**, worker **`f5c4f38ebcaec5d2`** unchanged. All automated write transports were fake. No production/browser/device/live-write test was needed or performed for this documentation-only story.
