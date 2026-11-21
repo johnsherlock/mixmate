@@ -1,5 +1,13 @@
 # User follow-ups and parked decisions
 
+## 2026-11-21 native UI overlay added to F01-S05 (user decision)
+
+The user asked whether the desk's native UI could open "in a layer on top of our app so that we can quickly dive in and out of the native app" instead of a new tab, and decided: "Yes, add to F01-S05". [F01-S05](stories/F01-S05.md) remains drafted and **not authorized**; no implementation is started.
+
+Evidence (root): in the deployed HTTPS PWA an iframe of `http://192.168.0.60/` is blocked by MixMate's CSP (`default-src 'self'`); even with that relaxed, an HTTP frame inside HTTPS is blocked as mixed content; browsers install web apps only from a secure origin, so the PWA must stay HTTPS; the desk serves `http://<ip>/` (Ui Selector; `/mixer.html` is the mixer) with no `X-Frame-Options` or CSP. [F07-S04](stories/F07-S04.md) (PR #66, merged `5c6fdc8`, 0.8.0) therefore ships the new-tab route for the PWA; MixMate disconnects while hidden and reconnects on return, typically in under 0.5 s.
+
+Decisions recorded in F01-S05: overlay in the APK only (header Native button, full-screen layer, visible "× MixMate" and Android back, validated private IPv4 only, no navigation elsewhere, no JS bridge, no credentials); the PWA keeps the new-tab behaviour and the Pages CSP is unchanged; implementation (iframe with native-only `frame-src`/narrow cleartext vs a second WebView plugin, which would be a listed and justified runtime plugin) and connection behaviour while open (default: keep the connection, suspend gestures and automatic updates, overlay treated as a dialog) are left to ADR-0010 for user confirmation; no transport allowlist change; physical acceptance recorded under F08-S01-style device evidence.
+
 ## Completed UI-alignment batch after S04
 
 The user reports live bidirectional fader/pan updates working and supplies native/live phone/tablet screenshots. They reaffirm `mockups/iem.html` as the UI/UX reference and request removal of persistent extra channel headers/footers and pan-modal engineering detail; a working Edit Groups entry; a single landscape All Mixes row; tandem linked fader motion; combined stereo AUX names from either side; and even landscape channel capacities avoiding split stereo pairs. This authorized existing F04-S03, F04-S04 and F02-S04 sequentially; all three are now confirmed merged in PR #44/#45/#46. The prototype has five logical stereo mix cards; input channel banks retain both actual members. Preserve known reciprocal topology and individual actual/unequal state, release-only existing writers, explicit rig identity and actionable failure/unknown feedback. No EQ/new writer or maintenance expansion is authorized. Root verified clean main `6c303de`, no open PR and the unchanged unrelated untracked handoff at batch start. Historical S04 completion/stop statements below remain receipts, not a block on this new request.
@@ -603,7 +611,7 @@ F07-S05 review round 1 (root live acceptance, [story](stories/F07-S05.md#review-
 
 ## 2026-11-21 — F07-S03 merged; F07-S04 native UI access (root decisions, in review)
 
-[F07-S03](stories/F07-S03.md) merged as [PR #65](https://github.com/johnsherlock/mixmate/pull/65), `901a342`, final head `02bf217` (0.7.0). [F07-S04](stories/F07-S04.md), user-authorized 2026-11-21 (last story of the F07 order), is in review (0.8.0).
+[F07-S03](stories/F07-S03.md) merged as [PR #65](https://github.com/johnsherlock/mixmate/pull/65), `901a342`, final head `02bf217` (0.7.0). [F07-S04](stories/F07-S04.md), user-authorized 2026-11-21 (last story of the F07 order), merged as [PR #66](https://github.com/johnsherlock/mixmate/pull/66), `5c6fdc8`, final head `bae56a2` (0.8.0). All of F07 (S01-S06) is merged; F07-S03 live start/stop acceptance remains parked until a USB drive is in the desk.
 
 | Item | Decision / status | Next action and owner |
 | --- | --- | --- |
