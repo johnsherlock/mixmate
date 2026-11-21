@@ -572,3 +572,15 @@ F07-S02 (PR #61, merged `2e9e46f`, final approved head `a61e1d1`):
 | Leftover docs | F07-S02 acceptance line and backlog row 8j tidied | None. |
 
 F07-S05 review round 1 (root live acceptance, [story](stories/F07-S05.md#review-round-1-pr-63-at-1f1f604-independent-reviewer-approve-with-p3s-root-live-acceptance-abc-on-a-fresh-origin)): install buttons were disabled by the live view's mount-time disabling (now exempt and re-enabled on every repaint); the update notice was overwritten by a transient "Groups unavailable" from the group editor (now yields to a showing transient); an explicit Disconnect now stays in force across one automatic update reload (sessionStorage carry, one-shot); meter emits no longer re-evaluate a deferred update; an explicit Connect in `connecting` blocks an update (an automatic pass still does not); the version check counts `mockups/` and runtime dependency changes. Trade-off: the carry is a deliberate exception to "app open resets suppression" and applies only to the reload that applies an update.
+
+## 2026-11-21 — F07-S06 install prompt fallback (root decisions, in review)
+
+[F07-S06](stories/F07-S06.md), user-authorized 2026-11-21 (rest of F07 in the order F07-S06 → F07-S03 → F07-S04).
+
+| Item | Decision / status | Next action and owner |
+| --- | --- | --- |
+| Pixel finding | Pixel, Android 17, Chrome 157.0.8103.78: neither Chrome nor Brave showed the Install strip. Brave installed MixMate from its menu; Chrome's menu said "This app cannot be installed". Root's Chrome DevTools `Page.getInstallabilityErrors` (desktop and Android UA) reports no errors for the deployed build, so this is most likely that phone's Chrome state or the same-origin Chromium issue 572287931/568841400 (hypotheses, not verified). Recorded in [device checks](device-checks.md). | User may retry after clearing Chrome site data; not a MixMate defect. |
+| Fallback | After 3 s without `beforeinstallprompt` (and not installed/dismissed/iOS) the strip shows menu instructions; a later event upgrades it to the Install button. | Physical-device check on the Pixel belongs to F08-S01. |
+| Desktop | Generic line only on touch devices; nothing on a plain desktop (phone/tablet app; desktop browsers show their own install affordance). | None. |
+| Version | 0.6.1 (patch) with CHANGELOG entry. | None. |
+| Post-merge docs | F07-S05 recorded as merged (PR #63, `5cd755c`) in story, feature, backlog and handoff; handoff records the F07 authorization. | None. |

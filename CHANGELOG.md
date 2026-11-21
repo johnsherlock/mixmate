@@ -2,7 +2,11 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
-## 0.6.0 — 2026-11-21 — F07-S05 (this PR)
+## 0.6.1 — 2026-11-21 — F07-S06 (this PR)
+
+- Install prompt fallback: when the browser has not offered installation 3 s after load (Brave never does; Chrome only when it deems the page installable), the install strip shows menu instructions (Android: browser menu → Install app or Add to Home screen). A later browser offer switches it to the Install button.
+
+## 0.6.0 — 2026-11-21 — F07-S05
 
 Summarises everything since 0.5.0, plus automatic updates and the install prompt.
 
