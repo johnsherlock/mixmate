@@ -2,7 +2,11 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
-## 0.8.0 — 2026-11-21 — F07-S04 (this PR)
+## 0.9.0 — 2026-11-21 — F06-S05 (this PR)
+
+- EQ filters: the AUX EQ screen gains Low cut and High cut toggles (high-pass / low-pass, as in the Demo). When a cut is on, a draggable LC / HC handle with its frequency and a dashed line appears on the graph; drag it with mouse, finger or arrow keys (changes are sent live, throttled). Turning a cut on uses the last value you used (else 35 Hz / 16 kHz); off sends the desk's OFF position. A pair of stereo AUX outputs gets both sides changed equally; unequal sides stay read-only. The ↺ reset now also turns both cuts off. Cut frequencies shown are the desk's own (20 Hz to 20 kHz); the roll-off drawn on the curve is an approximation.
+
+## 0.8.0 — 2026-11-21 — F07-S04 ([#66](https://github.com/johnsherlock/mixmate/pull/66))
 
 - Native app button: the header Native button opens the desk's own web app (`http://<desk address>/`) in a new browser tab when you tap it. It uses the connected address, else the most recently connected one, and is disabled until MixMate has connected to a desk once. The fake "Simulated native screen" is gone from the live app (the Demo keeps its own). Diagnostics shows the Native UI target. Leaving MixMate for the other tab disconnects as before; returning reconnects automatically.
 

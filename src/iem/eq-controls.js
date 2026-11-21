@@ -1,6 +1,7 @@
 import { installFaderGestures } from './gestures.js';
 import { stereoRelationship } from './protocol.js';
-import { AUX_EQ_DISPLAY_CENTRES, auxEqPositionToDb } from './aux-eq-protocol.js';
+import { AUX_EQ_DISPLAY_CENTRES, AUX_EQ_FILTERS, auxEqPositionToDb } from './aux-eq-protocol.js';
+import { AUX_EQ_FILTER_DEFAULT, auxEqFilterHz, auxEqFilterOn, auxEqFilterRolloffDb } from './aux-eq-filter.js';
 import { AUX_EQ_POINT_COUNT, auxEqCentreX, auxEqPointGain, mapRequestedAuxEqCurve, pointCentreGainLimit, requestedDrawSamples, requestedPointSamples } from './aux-eq-curve.js';
 
 // Live AUX GEQ view. Presentation copies never grant authority: only the private
@@ -23,7 +24,7 @@ const deskFormat = value => (value === 0 ? 0 : Number(value.toPrecision(10)));
 const HANDLE_RADIUS = 20, HANDLE_MARGIN = 22, HANDLE_GRAB_PX = 24, KEY_X_STEP = 1 / 62, KEY_GAIN_STEP = 0.5, KEY_SHIFT = 4;
 const ARROWS = Object.freeze({ ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['gainDb', 1], ArrowDown: ['gainDb', -1] });
 const flatPoints = () => [0.233, 0.566, 0.85].map(x => ({ x, gainDb: 0, q: 0.5 }));
-export const EQ_APPROXIMATION_NOTE = 'Approximation: band centres are the native display labels (20 Hz–20 kHz), not verified DSP centres. Lines join band values; they are not a measured response. No shelves, cuts, filters or parametric bands.';
+export const EQ_APPROXIMATION_NOTE = 'Approximation: band centres are the native display labels (20 Hz–20 kHz), not verified DSP centres. Lines join band values; they are not a measured response. Low/High cut handles show the received high-pass/low-pass positions (native 20 × 1000^v Hz, OFF at hpf 0 / lpf 1); the roll-off drawn past them is the Demo −12 dB/oct approximation, not the verified native slope. No shelves or parametric bands.';
 // Editable basis: the session coordinate — received band values, or the last
 // requested values while the desk has not echoed them (shown dashed).
 // F09-S07 (user decision 2026-11-20): points are persistent parametric drawing
@@ -42,9 +43,14 @@ export function projectEqReadback(snapshot, auxIndex) {
     const bypass = eq.get(`${output}.eq.bypass`);
     return { auxIndex: Number(output.slice(2)), bands, received: bands.filter(value => value !== undefined).length, bypass: typeof bypass === 'boolean' ? bypass : undefined };
   });
+  // F06-S05: hpf/lpf positions per side (undefined until received).
+  for (const side of sides) for (const filter of AUX_EQ_FILTERS) { const value = eq.get(`a.${side.auxIndex}.eq.${filter}`); side[filter] = unit(value) ? value : undefined; }
+  const filterComplete = sides.every(side => side.hpf !== undefined && side.lpf !== undefined);
+  const filterEqual = sides.length === 1 || sides[0].hpf === sides[1].hpf && sides[0].lpf === sides[1].lpf;
+  const filters = { complete: filterComplete, equal: filterEqual, ok: filterComplete && filterEqual, hpf: sides[0]?.hpf, lpf: sides[0]?.lpf };
   const complete = sides.every(side => side.received === BANDS && side.bypass !== undefined);
   const equal = sides.length === 1 || sides[0].bypass === sides[1].bypass && sides[0].bands.every((value, index) => value !== undefined && value === sides[1].bands[index]);
-  return { link: link.status, sides, complete, equal, bypassed: sides.some(side => side.bypass === true) };
+  return { link: link.status, sides, complete, equal, filters, bypassed: sides.some(side => side.bypass === true) };
 }
 export function eqSideText(side) {
   return `Output ${side.auxIndex + 1} · GEQ ${side.bypass === true ? 'BYPASSED on desk (status only; MixMate never changes bypass)' : side.bypass === false ? 'active' : 'bypass not received'} · ${side.received}/${BANDS} bands received`;
@@ -54,6 +60,12 @@ function unavailableReason(readback) {
   if (!readback.complete) return 'Waiting for every band and bypass state on each side; GEQ stays read-only.';
   if (!readback.equal) return 'Unequal linked GEQ profiles stay read-only; MixMate never equalizes sides.';
   return 'GEQ adjustment unavailable.';
+}
+// F06-S05: the compact reason the Low/High cut controls are read-only.
+export function eqFilterCompactState(readback) {
+  if (!readback.filters.complete) return 'Cuts read-only · waiting for filters';
+  if (!readback.filters.equal) return 'Cuts read-only · L/R cuts unequal';
+  return '';
 }
 // F09-S09: the compact one-line head state (full text in its title/aria and the
 // app's header/footer status), never a multi-line block below the graph.
@@ -89,7 +101,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
   svg.append(grid, shapePath, actualGroup, requestedPath, handleGroup); plot.append(svg);
   const sidebar = make('aside', 'mm-eq-sidebar'); sidebar.setAttribute('aria-label', 'EQ controls');
   const modes = make('div', 'mm-eq-mode');
-  const pointsButton = button('•••', 'Points mode: three requested shape points'), drawButton = button('✎', 'Draw mode: redraw band values'), resetButton = button('↺', 'Reset this mix GEQ bands to 0 dB; bypass, filters and other processing are untouched');
+  const pointsButton = button('•••', 'Points mode: three requested shape points'), drawButton = button('✎', 'Draw mode: redraw band values'), resetButton = button('↺', 'Reset this mix GEQ bands to 0 dB and turn both cuts off; bypass and other processing are untouched');
   pointsButton.dataset.eqMode = 'points'; drawButton.dataset.eqMode = 'draw'; resetButton.dataset.eqReset = '';
   modes.append(pointsButton, drawButton, resetButton);
   const tabs = make('div', 'mm-band-tabs'); tabs.setAttribute('aria-label', 'Selected requested point');
@@ -101,8 +113,10 @@ export function mountEqControls({ root, session, controller, window = globalThis
     input.setAttribute('aria-label', `Selected requested point ${aria}; cap drag or arrow keys; changes are sent live while you drag`);
     wrap.append(make('span', '', label), output, input); bank.append(wrap); params.set(id, { input, output });
   }
-  const unverified = make('p', 'mm-eq-cut-bank mm-eq-unverified', 'Shelves / cuts: unverified · not available');
-  sidebar.append(modes, tabs, bank, unverified); shell.append(plot, sidebar);
+  // F06-S05: Low cut (hpf) / High cut (lpf) toggles, as the Demo's cut bank.
+  const cutBank = make('div', 'mm-eq-cut-bank'), CUT_NAMES = { hpf: ['Low cut', 'high-pass'], lpf: ['High cut', 'low-pass'] };
+  const cutButtons = AUX_EQ_FILTERS.map(filter => { const node = button(CUT_NAMES[filter][0]); node.dataset.eqFilter = filter; node.setAttribute('aria-pressed', 'false'); node.disabled = true; cutBank.append(node); return { filter, node }; });
+  sidebar.append(modes, tabs, bank, cutBank); shell.append(plot, sidebar);
   const legendText = 'Received band values: L filled green dots, R hollow magenta dots (one green line when both sides are equal). Dashed: requested curve at the 31 band centres. Dotted: point base plus every point\'s bump.';
   section.append(head, shell);
   // Development-only diagnostics (?debug): never created otherwise.
@@ -130,6 +144,18 @@ export function mountEqControls({ root, session, controller, window = globalThis
     label.setAttribute('text-anchor', 'end'); label.setAttribute('fill', colour); label.dataset.eqSideLabel = String(index);
     const dots = AUX_EQ_DISPLAY_CENTRES.map(() => { const dot = svgNode('circle'); dot.setAttribute('r', index ? '3.2' : '2.6'); dot.setAttribute('fill', index ? 'none' : colour); dot.setAttribute('stroke', colour); dot.setAttribute('stroke-width', '1.4'); group.append(dot); return dot; });
     group.dataset.eqSide = String(index); actualGroup.append(group); return { group, path, label, dots };
+  });
+  // F06-S05 LC/HC handles (Demo paintEQ): dashed vertical line, r=14 dot, label and
+  // frequency; the r=24 transparent hit circle is the touch/mouse target.
+  const CUT_COLOURS = { hpf: ['#7caabb', '#436d7b', 'LC'], lpf: ['#c7a16d', '#83653c', 'HC'] };
+  const cutHandles = AUX_EQ_FILTERS.map(filter => {
+    const group = svgNode('g', 'mm-eq-handle mm-eq-cut-handle'), line = svgNode('line'), hit = svgNode('circle'), dot = svgNode('circle'), label = svgNode('text'), freq = svgNode('text');
+    line.setAttribute('stroke', CUT_COLOURS[filter][0]); line.setAttribute('stroke-dasharray', '3 4'); line.setAttribute('pointer-events', 'none');
+    hit.setAttribute('r', String(HANDLE_GRAB_PX)); hit.setAttribute('class', 'mm-eq-handle-hit'); hit.setAttribute('fill', 'transparent');
+    dot.setAttribute('r', '14'); dot.setAttribute('fill', CUT_COLOURS[filter][1]); label.setAttribute('text-anchor', 'middle'); label.setAttribute('fill', '#edf1ee'); label.textContent = CUT_COLOURS[filter][2];
+    freq.setAttribute('text-anchor', filter === 'hpf' ? 'start' : 'end'); freq.dataset.eqFilterHz = filter;
+    group.dataset.eqFilterHandle = filter; group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.setAttribute('visibility', 'hidden'); group.append(line, hit, dot, label, freq); handleGroup.append(group);
+    return { filter, group, line, hit, dot, label, freq, cx: NaN, cy: NaN };
   });
   const handles = Array.from({ length: AUX_EQ_POINT_COUNT }, (_, index) => {
     // F09-S08 review: a transparent r=24 hit circle belongs to the handle itself,
@@ -162,6 +188,12 @@ export function mountEqControls({ root, session, controller, window = globalThis
   // `settling` suppresses the render-time anchor check while begin/finish run
   // (the owner emits synchronously inside them); finish renders once afterwards.
   let gesture = null, drag = null, previewValues = null, snapshot = null, editable = false, focusBefore = null, hint = '', settling = false;
+  // F06-S05: filterEditable = GEQ editable AND the received hpf/lpf (both sides of
+  // a pair equal) are usable; filterPreview = positions requested by the active
+  // cut gesture (distinct from received); lastCut remembers the last ON position
+  // per output for this mount (session-local, never persisted).
+  let filterEditable = false, filtersOk = false, filterPreview = null;
+  const lastCut = new Map();
   const RESTART_OUTSIDE = 'Curve changed on the desk; points restarted from the current curve.';
   const RESTART_INTERRUPTED = 'The last point change was interrupted; points restarted from the current curve.';
   const ZERO_GAIN_HINT = 'No change sent: every point gain is 0 dB, so frequency and width have no bump to move yet.';
@@ -181,6 +213,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
     for (let index = 1; index < xs.length; index++) if (x <= xs[index]) return basis[index - 1] + (basis[index] - basis[index - 1]) * (x - xs[index - 1]) / (xs[index] - xs[index - 1]);
     return basis.at(-1);
   }
+  // Displayed cut positions: the active gesture's requested value, else received.
+  const shownFilter = (readback, filter) => filterPreview?.[filter] ?? readback?.filters[filter];
+  const cutIsOn = (filter, position) => typeof position === 'number' && auxEqFilterOn(filter, position);
   function geometry() {
     const rect = svg.getBoundingClientRect?.() || { width: 0, height: 0 }, w = Math.max(150, rect.width || 0), h = Math.max(80, rect.height || 0);
     // F09-S08: top/right margins keep a handle's whole r=20 halo inside the
@@ -219,7 +254,9 @@ export function mountEqControls({ root, session, controller, window = globalThis
       const linked = readback?.sides.length === 2;
       node.label.textContent = side ? `${linked ? readback.equal ? 'L=R · ' : index ? 'R · ' : 'L · ' : ''}Output ${side.auxIndex + 1}${linked && readback.equal ? `/${readback.sides[1].auxIndex + 1}` : ''}` : '';
       node.label.setAttribute('x', g.right - 2); node.label.setAttribute('y', g.top + 10 + index * 13);
-      const values = side ? side.bands.map(value => value === undefined ? undefined : auxEqPositionToDb(value)) : [];
+      // Received cuts bend the displayed received band values (approximation only).
+      const hpf = filterPreview?.hpf ?? side?.hpf, lpf = filterPreview?.lpf ?? side?.lpf;
+      const values = side ? side.bands.map((value, band) => value === undefined ? undefined : auxEqPositionToDb(value) + auxEqFilterRolloffDb(hpf, lpf, AUX_EQ_DISPLAY_CENTRES[band])) : [];
       node.path.setAttribute('d', visible ? linePath(g, values) : '');
       node.dots.forEach((dot, band) => {
         const known = visible && typeof values[band] === 'number';
@@ -240,6 +277,18 @@ export function mountEqControls({ root, session, controller, window = globalThis
       handle.label.setAttribute('x', x.toFixed(2)); handle.label.setAttribute('y', (y + 4).toFixed(2));
       handle.group.setAttribute('aria-label', `Requested point ${index + 1}, ${hzText(20 * Math.pow(1000, point.x))}, Δ ${dbText(point.gainDb)}; Enter or Space selects it for the sliders; arrow keys move it (Shift for larger steps)`);
     });
+    for (const handle of cutHandles) {
+      const position = shownFilter(readback, handle.filter), on = cutIsOn(handle.filter, position);
+      handle.group.setAttribute('visibility', on ? 'visible' : 'hidden');
+      if (!on) { handle.cx = handle.cy = NaN; continue; }
+      const x = xPixel(g, position), y = g.top + 15, hzLabel = hzText(auxEqFilterHz(position));
+      handle.line.setAttribute('x1', x.toFixed(2)); handle.line.setAttribute('x2', x.toFixed(2)); handle.line.setAttribute('y1', (y + 12).toFixed(2)); handle.line.setAttribute('y2', g.bottom);
+      for (const circle of [handle.hit, handle.dot]) { circle.setAttribute('cx', x.toFixed(2)); circle.setAttribute('cy', y.toFixed(2)); }
+      handle.label.setAttribute('x', x.toFixed(2)); handle.label.setAttribute('y', (y + 4).toFixed(2));
+      handle.freq.setAttribute('x', (x + (handle.filter === 'hpf' ? 18 : -18)).toFixed(2)); handle.freq.setAttribute('y', (y + 4).toFixed(2)); handle.freq.textContent = hzLabel;
+      handle.cx = x; handle.cy = y;
+      handle.group.setAttribute('aria-label', `${CUT_NAMES[handle.filter][0]} handle, ${hzLabel} (${CUT_NAMES[handle.filter][1]} filter); arrow keys move it (Shift for larger steps), Enter or Space turns it off`);
+    }
     svg.setAttribute('aria-label', `AUX GEQ graph. ${readback ? readback.sides.map(eqSideText).join('. ') : 'No received bands.'} ${requested ? 'Requested curve shown dashed.' : 'No requested curve.'}${paintNote ? ` ${paintNote}` : ''}`);
     svg.dataset.draw = String(mode === 'draw' && editable);
   }
@@ -270,7 +319,14 @@ export function mountEqControls({ root, session, controller, window = globalThis
     editable = Boolean(session.canEditEqTarget(auxIndex) && !control?.dispatching);
     // The owner ended the gesture (native change, revalidation): the points stay;
     // the next gesture re-anchors if the curve no longer matches them.
-    if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; gestures?.cancel(); drag = null; }
+    if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; filterPreview = null; gestures?.cancel(); drag = null; }
+    // F06-S05: remember the last ON position per output; derive cut availability.
+    for (const filter of AUX_EQ_FILTERS) if (!filterPreview && cutIsOn(filter, readback.filters[filter]) && readback.filters.ok) lastCut.set(`${auxIndex}.${filter}`, readback.filters[filter]);
+    // A pair's sides echo a few ms apart: while this owner's cut gesture or own filter send is live
+    // the transient inequality is our own outstanding echo, so the cuts stay editable and unflagged.
+    const ownLive = owned(control) && Boolean(control.eqFilters) && (control.gestureActive || control.pending || control.dispatching);
+    filtersOk = readback.filters.ok || ownLive && readback.filters.complete;
+    filterEditable = Boolean(editable && filtersOk);
     // Between gestures, keep handles/shape over the curve the next gesture will
     // edit: when the editable coordinate (requested values while own echoes are
     // pending, else complete equal received bands once the owner allows editing)
@@ -284,6 +340,12 @@ export function mountEqControls({ root, session, controller, window = globalThis
       else if (coordinate) anchor.interrupted = false;
     }
     resetButton.disabled = !editable; pointsButton.disabled = drawButton.disabled = false;
+    for (const { filter, node } of cutButtons) {
+      const position = shownFilter(readback, filter), on = cutIsOn(filter, position), hzLabel = on ? hzText(auxEqFilterHz(position)) : 'off';
+      node.disabled = !filterEditable; node.className = on ? 'mm-active' : ''; node.setAttribute('aria-pressed', String(on));
+      node.setAttribute('aria-label', `${CUT_NAMES[filter][0]} (${CUT_NAMES[filter][1]} filter), ${hzLabel}${filterEditable ? '' : `; ${eqFilterCompactState(readback) || 'unavailable'}`}`);
+      node.setAttribute('title', filterEditable ? '' : eqFilterCompactState(readback));
+    }
     // A local hint is shown alongside the owner's status, never in place of it.
     const ownerText = owned(control) ? control.reason || control.status : editable ? 'Ready: drag a point or slider, or draw. Changes are sent live while you drag (throttled).' : unavailableReason(readback);
     const showHint = Boolean(hint) && (editable || owned(control));
@@ -291,7 +353,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     // Compact read-only state: a readback reason, else the owner's one-line reason
     // (the full text also stays in the app's header/footer status and the title).
     const readbackOk = ['mono', 'linked'].includes(readback.link) && readback.complete && readback.equal;
-    const stateText = editable ? '' : readbackOk && owned(control) ? control.reason || control.status : eqCompactState(readback);
+    const stateText = editable ? (filtersOk ? '' : eqFilterCompactState(readback)) : readbackOk && owned(control) ? control.reason || control.status : eqCompactState(readback);
     stateBadge.textContent = stateText; stateBadge.hidden = !stateText; stateBadge.setAttribute('title', editable ? '' : ownerText);
     stateBadge.dataset.state = editable ? 'editable' : 'read-only';
     if (diag) renderDiagnostics(readback, control, showHint ? `${hint} ${ownerText}` : ownerText);
@@ -340,6 +402,16 @@ export function mountEqControls({ root, session, controller, window = globalThis
     paint(projectEqReadback(snapshot, auxIndex));
     return values;
   }
+  // F06-S05: one cut intent through the private owner; the owner clamps it and
+  // answers with the position it will request (null = refused, nothing changes).
+  function previewFilter(intent) {
+    if (!gesture) return null;
+    gesture.touched = true;
+    const mapped = session.previewEqFilterGesture(gesture.token, intent);
+    if (mapped) { filterPreview = { ...filterPreview, [mapped.filter]: mapped.value }; gesture.changed = true; if (drag) drag.changed = true; }
+    paint(projectEqReadback(snapshot, auxIndex));
+    return mapped;
+  }
   function finish(commit) {
     const active = gesture; gesture = null; drag = null;
     if (!active) return;
@@ -348,18 +420,19 @@ export function mountEqControls({ root, session, controller, window = globalThis
       if (commit) {
         const sent = session.commitEqGesture(active.token), outcome = session.snapshot().control?.outcome;
         // Sparse dispatch: a release whose bands all match sends nothing; say so.
-        if (mode === 'points' && outcome === 'no-op') hint = points.every(point => point.gainDb === 0) ? ZERO_GAIN_HINT : 'No change sent: every band already matches the requested curve.';
+        if (active.filter) { /* A cut gesture never touches the point anchor or band hints. */ }
+        else if (mode === 'points' && outcome === 'no-op') hint = points.every(point => point.gainDb === 0) ? ZERO_GAIN_HINT : 'No change sent: every band already matches the requested curve.';
         // A failed or partial release is our interruption, not a desk change.
         else if (mode === 'points' && anchor && !sent) anchor.interrupted = true;
       } else {
         // Only a gesture that moved points can leave the desk short of them.
-        if (mode === 'points' && anchor && active.touched) anchor.interrupted = true;
+        if (mode === 'points' && anchor && active.touched && !active.filter) anchor.interrupted = true;
         session.cancelEqGesture();
       }
     } finally { settling = false; }
     // A draw gesture (committed or not) changes the curve under the points.
-    if (mode === 'draw') dropAnchor();
-    previewValues = null; render();
+    if (mode === 'draw' && !active.filter) dropAnchor();
+    previewValues = null; filterPreview = null; render();
   }
   const gestures = installFaderGestures(section, {
     onBegin: input => begin(input),
@@ -395,6 +468,16 @@ export function mountEqControls({ root, session, controller, window = globalThis
   }
   function onPointerDown(event) {
     if (event.button !== 0 || !open || !editable || gesture) return;
+    const cutNode = event.target.closest?.('[data-eq-filter-handle]');
+    if (cutNode) {
+      // A cut handle grabs in both modes through its own hit circle only.
+      if (!filterEditable) return;
+      if (!begin()) return;
+      gesture.filter = cutNode.dataset.eqFilterHandle;
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, changed: false, filter: gesture.filter };
+      svg.setPointerCapture?.(event.pointerId); event.preventDefault?.();
+      return;
+    }
     const handle = event.target.closest?.('[data-eq-handle]');
     // Only a mouse press on the background may grab a nearby handle; touch/pen
     // grabs come from the handle's own hit circle (the svg is touch-action:none,
@@ -423,6 +506,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (!drag || drag.id !== event.pointerId || !gesture) return;
     if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 4) return;
     drag.moved = true;
+    if (drag.filter) { previewFilter({ filter: drag.filter, enabled: true, value: pointer(event).x }); return; }
     if (mode === 'draw') { drawAt(event); return; }
     if (!anchor) return;
     const p = pointer(event), previous = points[selectedPoint];
@@ -459,6 +543,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (!target || target.disabled || !open) return;
     if (target === back) { close(); return; }
     if (target.dataset.eqMode) { setMode(target.dataset.eqMode); return; }
+    if (target.dataset.eqFilter) { toggleFilter(target.dataset.eqFilter); return; }
     if (target.dataset.eqPoint !== undefined && mode === 'points') { if (gesture) { gestures.cancel(); finish(false); } selectedPoint = Number(target.dataset.eqPoint); render(); return; }
     // F09-S09 (user decision 2026-11-20): one click is one immediate, deliberate
     // scoped reset through the private owner (sparse; bypass/filters untouched;
@@ -471,6 +556,21 @@ export function mountEqControls({ root, session, controller, window = globalThis
       if (!owned(session.snapshot().control)) session.selectEqTarget(auxIndex);
       dropAnchor(); session.resetEqBands(); render(); // Points restart from the reset curve.
     }
+  }
+  // F06-S05: Low/High cut toggle = one immediate, deliberate one-shot through the
+  // private owner (never streamed): on writes the last used (else the Demo
+  // default) position, off writes exactly 0 (hpf) / 1 (lpf). Nothing is queued.
+  function toggleFilter(filter) {
+    if (!open || !AUX_EQ_FILTERS.includes(filter)) return;
+    if (gesture) { gestures.cancel(); finish(false); }
+    if (!filterEditable) return;
+    if (!owned(session.snapshot().control)) session.selectEqTarget(auxIndex);
+    const control = session.snapshot().control, readback = projectEqReadback(snapshot, auxIndex);
+    const retained = owned(control) && control.eqFilters?.coordinate ? control.eqFilters.coordinate[AUX_EQ_FILTERS.indexOf(filter)] : undefined;
+    const position = typeof retained === 'number' ? retained : readback.filters[filter], key = `${auxIndex}.${filter}`;
+    if (cutIsOn(filter, position)) { lastCut.set(key, position); session.setEqFilter({ filter, enabled: false, value: position }); }
+    else session.setEqFilter({ filter, enabled: true, value: lastCut.get(key) ?? AUX_EQ_FILTER_DEFAULT[filter] });
+    render();
   }
   section.addEventListener('click', onClick);
   // Holding Enter on the focused reset button must not auto-repeat resets.
@@ -498,18 +598,43 @@ export function mountEqControls({ root, session, controller, window = globalThis
     else points[index] = { ...previous, x }; // x still follows; the gain stays.
     syncParams(); paint(projectEqReadback(snapshot, auxIndex));
   }
+  // Deliberate keyboard gesture on a focused cut handle (same rules as points).
+  function keyMoveFilter(handle, event) {
+    const filter = handle.dataset.eqFilterHandle, [, sign] = ARROWS[event.key];
+    if (gesture && gesture.keyboardFilter !== filter) return;
+    if (!gesture) {
+      if (!filterEditable || !begin()) return;
+      gesture.filter = filter; gesture.keyboardFilter = filter; gesture.filterPosition = shownFilter(projectEqReadback(snapshot, auxIndex), filter);
+    }
+    if (typeof gesture.filterPosition !== 'number') return;
+    const mapped = previewFilter({ filter, enabled: true, value: clamp(gesture.filterPosition + sign * KEY_X_STEP * (event.shiftKey ? KEY_SHIFT : 1), 0, 1) });
+    if (mapped) gesture.filterPosition = mapped.value;
+  }
   function onKeyUp(event) {
+    if (gesture?.keyboardFilter && ARROWS[event.key]) {
+      const cut = event.target?.closest?.('[data-eq-filter-handle]');
+      if (cut && cut.dataset.eqFilterHandle === gesture.keyboardFilter) { event.preventDefault?.(); finish(gesture.changed); }
+      return;
+    }
     if (!gesture || gesture.keyboard === null || !ARROWS[event.key]) return;
     const handle = event.target?.closest?.('[data-eq-handle]');
     if (!handle || Number(handle.dataset.eqHandle) !== gesture.keyboard) return;
     event.preventDefault?.(); finish(gesture.changed);
   }
   function onFocusOut(event) {
+    const cut = event.target?.closest?.('[data-eq-filter-handle]');
+    if (cut && gesture && gesture.keyboardFilter === cut.dataset.eqFilterHandle) { finish(false); return; }
     const handle = event.target?.closest?.('[data-eq-handle]');
     if (handle && gesture && gesture.keyboard === Number(handle.dataset.eqHandle)) finish(false);
   }
   function onKey(event) {
     if (!open) return;
+    const cutHandle = event.target?.closest?.('[data-eq-filter-handle]');
+    if (cutHandle) {
+      if (ARROWS[event.key]) { event.preventDefault?.(); keyMoveFilter(cutHandle, event); return; }
+      if (event.key === 'Escape' && gesture?.keyboardFilter) { event.preventDefault?.(); finish(false); return; }
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault?.(); if (!event.repeat) toggleFilter(cutHandle.dataset.eqFilterHandle); return; }
+    }
     const handle = event.target?.closest?.('[data-eq-handle]');
     if (handle && mode === 'points' && ARROWS[event.key]) { event.preventDefault?.(); keyMove(handle, event); return; }
     if (handle && event.key === 'Escape' && gesture && gesture.keyboard !== null) { event.preventDefault?.(); finish(false); return; }

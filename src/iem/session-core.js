@@ -6,7 +6,8 @@ import { createControlScope, createPeerControlState, transitionControl, OBSERVAT
 import { auxPanPath, encodeAuxPanCommand, resolveAuxPanTopology } from './aux-pan-protocol.js';
 import { validateSettings, validateDefinitionOwner, definitionOwner } from '../settings.js';
 import { auxLevelPath, encodeAuxLevelCommand, resolveAuxLevelTopology } from './aux-level-protocol.js';
-import { AUX_EQ_DISPLAY_CENTRES, auxEqPath, auxEqPositionToDb, encodeAuxEqCommand, eqArray, eqDataFields, parseAuxEqStateFrame, parseAuxProcessingFrame, resolveAuxEqTopology } from './aux-eq-protocol.js';
+import { AUX_EQ_DISPLAY_CENTRES, AUX_EQ_FILTERS, auxEqFilterPath, auxEqPath, auxEqPositionToDb, encodeAuxEqCommand, encodeAuxEqFilterCommand, eqArray, eqDataFields, parseAuxEqStateFrame, parseAuxProcessingFrame, resolveAuxEqTopology } from './aux-eq-protocol.js';
+import { mapRequestedAuxEqFilter } from './aux-eq-filter.js';
 import { resolveGroupTopology, groupReferenceDelta, groupReferencePosition } from './relative-groups.js';
 import { mapRequestedAuxEqCurve } from './aux-eq-curve.js';
 import { checkShowName, checkSnapshotName, encodeSnapshotListCommand, encodeSnapshotRecallCommand, encodeSnapshotSaveCommand, isSnapshotInitEntry, parseSnapshotCompanionFrame, parseSnapshotWriterFrame } from './snapshot-protocol.js';
@@ -88,6 +89,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (!group) throw Error('Current bound local group is unavailable.');
     return group;
   };
+  const hasFilterMembers = scope => scope.members.some(x => x.target.filter !== undefined);
   function scope(target = selected) {
     if (!target) throw Error('Select an observed master or source send.');
     const kind = kindOf(target);
@@ -114,8 +116,14 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (kind === 'geq') {
       // Topology only: link/mode/bypass metadata via the strict resolver; band
       // paths follow deterministically (31 per output) without per-band values.
-      const eq = { auxIndex: target.auxIndex }, outputs = resolveAuxEqTopology(observed, eq).outputs;
-      return { identity: JSON.stringify([kind, eq]), members: outputs.flatMap(({ auxIndex }) => AUX_EQ_DISPLAY_CENTRES.map((_, bandIndex) => ({ path: `a.${auxIndex}.eq.peak.${bandIndex}`, target: { auxIndex, bandIndex } }))) };
+      // F06-S05: the filter members follow the owned model scope (it decides
+      // inclusion from received equality); a candidate without an owned scope
+      // includes them whenever every filter path has been received.
+      const eq = { auxIndex: target.auxIndex }, outputs = resolveAuxEqTopology(observed, eq).outputs, identity = JSON.stringify([kind, eq]);
+      const bands = outputs.flatMap(({ auxIndex }) => AUX_EQ_DISPLAY_CENTRES.map((_, bandIndex) => ({ path: `a.${auxIndex}.eq.peak.${bandIndex}`, target: { auxIndex, bandIndex } })));
+      const owned = model?.generation === generation && model.scope.kind === 'geq' && model.scope.identity === identity;
+      const filters = AUX_EQ_FILTERS.flatMap(filter => outputs.map(({ auxIndex }) => ({ path: `a.${auxIndex}.eq.${filter}`, target: { auxIndex, filter } })));
+      return { identity, members: owned ? hasFilterMembers(model.scope) ? [...bands, ...filters] : bands : filters.every(x => observed.has(x.path)) ? [...bands, ...filters] : bands };
     }
     return { identity: JSON.stringify([kind, target]), members: resolveAuxLevelTopology(observed, target).members };
   }
@@ -140,6 +148,8 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   // Current owned GEQ outputs, from the private model scope only.
   const eqOutputs = () => selected?.kind === 'geq' && model?.generation === generation && model.scope.kind === 'geq' ? [...new Set(model.scope.members.map(x => x.target.auxIndex))] : [];
   const eqValues = rows => rows.slice(0, AUX_EQ_DISPLAY_CENTRES.length).map(x => x.value);
+  // F06-S05 filter rows (hpf, lpf of the first output; pairs are equal by scope).
+  const eqFilterValues = rows => { const hpf = rows.find(x => x.target.filter === 'hpf'), lpf = rows.find(x => x.target.filter === 'lpf'); return hpf && lpf ? [hpf.value, lpf.value] : null; };
   // Groups always, and GEQ whenever it would re-arm from received state (no
   // retained same-scope chain), wait for every overlapping prior local write's
   // paths to be received after their preauthorization cutpoints.
@@ -211,7 +221,9 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     // received actual) and the requested loudest-member reference position.
     const groupLive = selected?.kind === 'group' && owned && model.scope.kind === 'group' && chain?.anchor && (model.gesture || ['pending', 'dispatching'].includes(op?.status));
     return { ...(auxControl ? { panCapable: true, eqCapable: true, operation: apiKind(selected), previewPan: selected?.kind === 'geq' ? undefined : preview?.expected[0]?.value, expectedPan: selected?.kind === 'pan' ? chain?.requested[0]?.value ?? null : null } : {}),
-      ...(selected?.kind === 'geq' ? { eqRequested: eqSelected && preview ? eqValues(preview.expected) : eqSelected && chain?.touched ? eqValues(chain.requested) : null, eqCoordinate: eqSelected && chain ? eqValues(chain.requested) : null } : {}),
+      ...(selected?.kind === 'geq' ? { eqRequested: eqSelected && preview ? eqValues(preview.expected) : eqSelected && chain?.touched ? eqValues(chain.requested) : null, eqCoordinate: eqSelected && chain ? eqValues(chain.requested) : null,
+        // F06-S05: requested/retained filter positions [hpf, lpf]; null when the owned scope has no filters (unreceived/unequal: read-only).
+        eqFilters: eqSelected && hasFilterMembers(model.scope) ? { requested: eqFilterValues(preview ? preview.expected : chain?.requested ?? []) , coordinate: chain ? eqFilterValues(chain.requested) : null } : null } : {}),
       ...(groupName ? { groupName } : {}), selected: selected ? { ...selected } : null, eligible, reason,
       armed: Boolean(owned && model.armed), gestureActive: Boolean(owned && model.gesture), pending: Boolean(owned && ['pending', 'dispatching'].includes(op?.status)), dispatching: Boolean(owned && op?.status === 'dispatching'),
       requestedDiagnostic: op?.expected.map(({ path, value }) => ({ path, value })) ?? [], status: statusText(eligible), attention: attentionFlag ? statusText(eligible) : '', outcome: owned ? model.status : 'idle', previewDelta: preview?.gestureDelta ?? 0, lastDelta: chain?.delta ?? op?.delta ?? null,
@@ -228,7 +240,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (auxControl) { const snapshotsChanged = noteSnapshotCompanion(frame), recordingChanged = noteRecordingCompanion(frame); controlsChanged = snapshotsChanged || recordingChanged; }
     const updates = parseIemStateFrame(frame);
     // Separate bounded GEQ parser: 31 bands plus read-only bypass per output.
-    if (auxControl) for (const update of parseAuxEqStateFrame(frame)) updates.push({ path: update.path, value: update.value, auxIndex: update.auxIndex, field: update.field === 'bypass' ? 'eqBypass' : 'eqBand' });
+    if (auxControl) for (const update of parseAuxEqStateFrame(frame)) updates.push({ path: update.path, value: update.value, auxIndex: update.auxIndex, field: update.field === 'bypass' ? 'eqBypass' : update.field === 'filter' ? 'eqFilter' : 'eqBand' });
     for (const { path, value, field, auxIndex } of updates) {
       const actual = !observed.has(path) || observed.get(path) !== value;
       // F02-S05: a desk snapshot recall changes the rig context; the socket stays.
@@ -236,14 +248,19 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       observed.set(path, value); receipts.set(path, ++sequence);
       if (field === 'currentSnapshot' && auxControl && snapshotRecallSeen(value)) controlsChanged = true;
       if (dispatchWatch?.paths.has(path)) dispatchWatch.hit = true;
-      if (field === 'eqBand' || field === 'eqBypass') { eqObserved.set(path, value); controlsChanged = true; }
+      if (field === 'eqBand' || field === 'eqBypass' || field === 'eqFilter') { eqObserved.set(path, value); controlsChanged = true; }
+      // F06-S05: a changed filter outside the owned scope (unreceived/unequal
+      // pair) cannot be classified by the reducer; it cancels obsolete intent so
+      // the next gesture rebuilds its scope. Inside the scope the reducer decides
+      // (own echo vs native change).
+      if (actual && field === 'eqFilter' && eqOutputs().includes(auxIndex) && !model.scope.members.some(member => member.path === path)) cancelControl('Received EQ filter changed; obsolete EQ adjustment cancelled.', 'processing');
       if (actual && field === 'eqBypass' && eqOutputs().includes(auxIndex)) cancelControl('Received GEQ bypass changed; obsolete EQ adjustment cancelled.', 'processing');
       if (actual && ['model', 'matrix', 'stereoIndex'].includes(field)) cancelControl('Received topology changed; obsolete adjustment cancelled.', 'topology');
       if (actual && ['mute', 'post', 'postproc'].includes(field) && model?.generation === generation && model.scope.members.some(({ target }) =>
         path.startsWith(`a.${target.auxIndex}.`) || target.sourceId && (path === `${target.sourceId}.mute` || path.startsWith(`${target.sourceId}.aux.${target.auxIndex}.`)))) {
         cancelControl('Received processing context changed; obsolete adjustment cancelled.', 'processing');
       }
-      if (model?.generation === generation && (field === 'level' || field === 'pan' || field === 'eqBand')) { step({ type: 'receive', generation, path, value, receipt: sequence }); controlsChanged = true; }
+      if (model?.generation === generation && (field === 'level' || field === 'pan' || field === 'eqBand' || field === 'eqFilter')) { step({ type: 'receive', generation, path, value, receipt: sequence }); controlsChanged = true; }
     }
     // Unmodelled selected-output processing (filters, dynamics, presets, unknown
     // fields) is opaque: any new or changed raw value cancels obsolete GEQ intent.
@@ -269,7 +286,9 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     const item = op.expected[ordinal], command = { ...item.target, value: item.value }, kind = op.scope.kind;
     if (kind !== kindOf(selected)) throw Error('Typed closure kind changed.');
     if (kind === 'geq') {
-      if (!auxControl || auxEqPath(item.target) !== item.path) throw Error('Unqualified GEQ form.');
+      if (!auxControl) throw Error('Unqualified GEQ form.');
+      if (item.target.filter !== undefined) { if (auxEqFilterPath(item.target) !== item.path) throw Error('Unqualified EQ filter form.'); return encodeAuxEqFilterCommand(command); }
+      if (auxEqPath(item.target) !== item.path) throw Error('Unqualified GEQ form.');
       return encodeAuxEqCommand(command);
     }
     if (kind === 'pan') { if (!auxControl) throw Error('Unqualified pan form.'); return encodeAuxPanCommand(command); }
@@ -281,7 +300,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     // Any synchronous reentrant receipt for the closure (including an exact or
     // unchanged value, bypass or processing) stops the remaining ordinals.
     const outputs = [...new Set(op.scope.members.map(x => x.target.auxIndex))];
-    dispatchWatch = { paths: new Set([...op.expected.map(x => x.path), ...(op.scope.kind === 'geq' ? outputs.map(index => `a.${index}.eq.bypass`) : [])]), hit: false };
+    dispatchWatch = { paths: new Set([...op.expected.map(x => x.path), ...(op.scope.kind === 'geq' ? outputs.flatMap(index => [`a.${index}.eq.bypass`, ...AUX_EQ_FILTERS.map(filter => `a.${index}.eq.${filter}`)]) : [])]), hit: false };
     try { return dispatchOrdinals(op); } finally { dispatchWatch = null; }
   }
   function dispatchOrdinals(op) {
@@ -407,7 +426,24 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       const seed = eqValues(model.gesture.origin);
       request.samples.forEach((sample, index) => { if (sample.gainDb === auxEqPositionToDb(seed[index])) values[index] = seed[index]; });
     }
+    // F06-S05: a band intent keeps the gesture-start filter positions.
+    if (hasFilterMembers(model.scope)) values.push(...eqFilterValues(model.gesture.origin));
     return preview(token, values, 'geq');
+  }
+  // F06-S05 filter intent: exactly { filter: 'hpf'|'lpf', enabled, value }. The
+  // private owner clamps it (never off while enabled, hpf < lpf by a gap), keeps
+  // every band at the gesture-start coordinate and sends only changed filter
+  // paths through the same per-ordinal guard. Never caller paths or raw arrays.
+  function previewEqFilter(token, intent, live = true) {
+    if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || selected?.kind !== 'geq' || model.scope.kind !== 'geq') return null;
+    if (!hasFilterMembers(model.scope)) { controlStatus = 'EQ filters are read-only: not received or the two sides differ.'; emit('controls'); return null; }
+    let mapped;
+    const [hpf, lpf] = eqFilterValues(model.gesture.origin);
+    try { mapped = mapRequestedAuxEqFilter(intent, { hpf, lpf }); }
+    catch (error) { controlStatus = `EQ filter request rejected: ${error.message}`; emit('controls'); return null; }
+    const filters = mapped.filter === 'hpf' ? [mapped.value, lpf] : [hpf, mapped.value];
+    if (preview(token, [...eqValues(model.gesture.origin), ...filters], 'geq', live) === null) return null;
+    return mapped;
   }
   function commit(token, value, kind) {
     if (!canAct() || !model?.gesture || model.gesture.token !== token || !model.armed || apiKind(selected) !== kind) return false;
@@ -485,8 +521,9 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     commitPanGesture: token => commit(token, undefined, 'pan'),
     cancelPanGesture() { if (selected?.kind === 'pan' && model?.gesture) { cancelControl('Pan adjustment cancelled; use a new gesture.'); emit('controls'); } },
   };
-  // AUX GEQ: only the selected output's 31 band peaks (62 for a verified equal
-  // stereo pair). No bypass/filter/shelf/AFS/preset/main/input EQ capability.
+  // AUX GEQ: the selected output's 31 band peaks plus (F06-S05) its hpf/lpf
+  // filter positions (both sides of a verified equal pair; 62 / 4 paths). No
+  // bypass/slope/shelf/AFS/preset/main-mix (m.*)/input EQ capability.
   const eqAPI = {
     canEditEqTarget: auxIndex => canEditTarget({ kind: 'geq', auxIndex }),
     selectEqTarget(auxIndex) {
@@ -501,10 +538,21 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     cancelEqGesture() { if (selected?.kind === 'geq' && model?.gesture) { cancelControl('EQ adjustment cancelled; use a new gesture.'); emit('controls'); } },
     // Scoped explicit reset: selected GEQ band peaks to .5 only, never native
     // resetGraphEQ (which also changes bypass, presets and filters).
+    // F06-S05 (user decision 2026-11-21, following native resetGraphEQ and the
+    // Demo): the same immediate one-shot also turns both cuts off (hpf 0, lpf 1)
+    // when the filters are in the owned scope. Still no bypass/preset writes.
     resetEqBands() {
       const token = begin('geq');
       // Confirmed one-shot: never streamed.
-      if (!token || preview(token, Array(AUX_EQ_DISPLAY_CENTRES.length).fill(0.5), 'geq', false) === null) return false;
+      if (!token || preview(token, [...Array(AUX_EQ_DISPLAY_CENTRES.length).fill(0.5), ...(hasFilterMembers(model.scope) ? [0, 1] : [])], 'geq', false) === null) return false;
+      return commit(token, undefined, 'geq');
+    },
+    previewEqFilterGesture: (token, intent) => previewEqFilter(token, intent),
+    // Deliberate one-shot toggle/set of one filter (Low cut / High cut button).
+    setEqFilter(intent) {
+      const token = begin('geq');
+      if (!token) return false;
+      if (previewEqFilter(token, intent, false) === null) { cancelControl(controlStatus, 'cancel', true); emit('controls'); return false; }
       return commit(token, undefined, 'geq');
     },
   };

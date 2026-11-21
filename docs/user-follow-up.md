@@ -1,5 +1,22 @@
 # User follow-ups and parked decisions
 
+## 2026-11-21 F06-S05 AUX EQ high-pass / low-pass filters (user request, root decisions, in review)
+
+User request: "We're missing the high/low pass filter in the EQ. See the demo app and native ui." Story: [F06-S05](stories/F06-S05.md) (0.9.0). Evidence and wire forms: [EQ contract](iem-aux-eq-contract.md#f06-s05-aux-eq-filters--2026-11-21), [ADR-0006 amendment](adr/0006-aux-geq-curve-contract.md#f06-s05-amendment--aux-eq-high-pass--low-pass-filters-user-request-2026-11-21).
+
+| Item | Decision / status | Next action and owner |
+| --- | --- | --- |
+| Allowlist | AUX GEQ row extended by exactly `3:::SETD^a.<0..9>.eq.hpf^<v>` and `.eq.lpf^<v>` (finite 0..1), `createAuxControlSession` only, typed intent, same private guard. Excluded: bypass, slopes, `m.*`, input EQ, presets, AFS, native `resetGraphEQ`. ADR-0002 already covers the feature class (no repeated scope approval). | None. |
+| Mono / pair | Mono one path; verified reciprocal pair both sides equally; unequal or unreceived sides keep the cuts read-only with a compact reason, bands unaffected. | None. |
+| Semantics | Off = hpf 0 / lpf 1 exactly; on writes last used (this mount) else 35 Hz / 16 kHz; enabled positions clamp inside (0.01, 0.99); hpf stays ≥ 0.1 position (about one octave) below lpf; no room refuses and sends nothing. | Root may tune the gap/bounds after live use. |
+| Reset | ↺ also writes hpf 0 / lpf 1 in the same one-shot (Demo and native semantics; docs that said "filters untouched" updated). | None. |
+| Native changes | Another client's filter change stops a gesture (no rollback); same own-echo rule. | None. |
+| Display | Received cuts bend the drawn received line with the Demo's −12 dB/oct; labelled an approximation in the `?debug` note only. | None. |
+| Beyond the brief | Cut gestures never touch the point anchor or band hints; `Low cut` last-used memory is per output within one mounted EQ view (not persisted); the unverified-note paragraph was removed. | Reviewer to confirm. |
+| Unverified | Filter slope (no AUX GEQ slope path), mono-output behaviour on the desk, DSP response of the cuts. | Root's live acceptance on SPARE AUX 9/10 and a mono output; F08-S01 for devices. |
+| Version | 0.9.0 (minor) with CHANGELOG entry. | None. |
+| PR #67 leftovers | Backlog header sentence and F01-S05 dependency line updated: F07-S03/S04 and F07-S06 are merged. | None. |
+
 ## 2026-11-21 native UI overlay added to F01-S05 (user decision)
 
 The user asked whether the desk's native UI could open "in a layer on top of our app so that we can quickly dive in and out of the native app" instead of a new tab, and decided: "Yes, add to F01-S05". [F01-S05](stories/F01-S05.md) remains drafted and **not authorized**; no implementation is started.
