@@ -40,7 +40,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   const openButtons = [$('.mm-brand'), $('.mm-desk')].filter(Boolean);
   for (const button of openButtons) button.disabled = false;
   let focusBefore, beforeOpen = () => {}, connectionVisible = false, dialogLease = null;
-  const openListeners = new Set();
+  const openListeners = new Set(), deskListeners = new Set(); let deskAddressValue = null;
   const show = () => {
     if (dialogOwner && !dialogOwner.owns(dialogLease)) {
       const next = dialogOwner.claim('connection', reason => closeFor(next, reason, true));
@@ -83,6 +83,9 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
     status: value => diagnostics.status(value), rig: text => diagnostics.rig(text), autoPass: pass => diagnostics.autoPass(pass), log: text => diagnostics.log(text), refresh: () => diagnostics.refresh(),
     onOpen(listener) { openListeners.add(listener); return () => openListeners.delete(listener); },
     visible: () => connectionVisible,
+    // F07-S04: the desk address the header Native button would open (null when none is known).
+    deskAddress(address) { if (address === deskAddressValue) return; deskAddressValue = address; for (const listener of deskListeners) listener(address); },
+    onDeskAddress(listener) { deskListeners.add(listener); listener(deskAddressValue); return () => deskListeners.delete(listener); },
     navigation: diagnostics.links,
     knownAddresses(addresses) {
       known.replaceChildren(...addresses.map(value => { const option = make('option'); option.value = value; return option; }));
@@ -268,6 +271,8 @@ export function mountLiveController({ session, repository, view, ui, document = 
       if (status.state === 'failed' && !statusNotice) { if (ui.feedback) ui.feedback.textContent = `${status.text}${status.text.startsWith('Couldn') ? '.' : '. Connect again.'}`; }
     }
     ui.status?.(status);
+    // F07-S04: the connected desk's address, else the most recent known one.
+    ui.deskAddress?.(validPrivateAddress(status.state === 'connected' ? status.address : '') || validPrivateAddress(settings?.knownAddresses?.[0] || '') || null);
     // Lasting conditions reach the footer slot while they hold.
     ui.condition?.(navigationMessage.startsWith('View is temporary') ? navigationMessage : settingsReady && !owner() && /^Groups unavailable/.test(rigMessage) ? rigMessage : '');
     ui.rig?.(owner() ? `Rig “${profile()?.name}”` : rigMessage || 'No rig');
@@ -473,7 +478,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (snapshot.status) ui.settings.textContent = settingsStatusText(snapshot.status);
     if (!settingsReady || destroyed) return;
     settings = snapshot.settings;
-    ui.knownAddresses?.(settings.knownAddresses);
+    ui.knownAddresses?.(settings.knownAddresses); reportStatus(session.snapshot());
     if (!addressTouched && !isActive(session.snapshot().phase) && settings.knownAddresses[0]) setAddress(settings.knownAddresses[0]);
     view.preferences(settings.preferences);
     if (JSON.stringify([owner(), definition()?.groups]) !== groupsSignature) session.invalidateLevelContext?.();
@@ -512,7 +517,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (destroyed) return;
     const { settings: loaded, status } = repository.snapshot?.() || result;
     settings = loaded; settingsReady = true;
-    ui.knownAddresses?.(settings.knownAddresses);
+    ui.knownAddresses?.(settings.knownAddresses); reportStatus(session.snapshot());
     if (!addressTouched && !isActive(session.snapshot().phase)) setAddress(settings.knownAddresses[0] || DEFAULT_MIXER_ADDRESS);
     view.preferences(settings.preferences);
     ui.settings.textContent = settingsStatusText(status);

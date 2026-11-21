@@ -116,6 +116,11 @@ Landscape source banks use an even visible capacity derived from available bank 
 - **Update messages:** after an automatic update reload the footer slot shows "Updated to v<version> (<commit>)." (8 s transient, also in the Diagnostics log). While an update is deferred, Diagnostics > Build > Update shows "Update ready — applies when you disconnect" and the slot says it once. The Diagnostics button's tooltip carries the running version and commit.
 - **Dev server:** the offline line reads "Offline copy isn't available on the dev server (use npm run build + npm run preview)" instead of the raw registration error.
 
+## Native button (F07-S04, 2026-11-21)
+
+- **Header Native button** (live entry only) opens the desk's own web app at `http://<address>/` in a new tab (`window.open(url, '_blank', 'noopener')`) on tap only, never on load. The address is the connected desk, else the most recent known address, and must pass the private-IPv4 validation; with none known the button is disabled with the title "Connect to the desk once so MixMate knows its address". A null return from `window.open` shows the manual address in the footer (a successful noopener open can also return null).
+- The live entry has no simulated native screen (`.mm-native-layer` is removed; the Demo keeps its own). No iframe: MixMate's CSP blocks it and the HTTPS app would block HTTP content. When the new tab takes focus the page is hidden and the existing hide path disconnects and clears received state; returning triggers the existing automatic connection. The header clock is local time only. Diagnostics shows the Native UI target. See [F07-S04](stories/F07-S04.md).
+
 ## Record button and Stop dialog (F07-S03, 2026-11-21)
 
 - **Header Record button** (`.mm-record`, live entry only): disabled with a `title` reason unless connected, the desk has reported its recording state, a USB drive is present (start only), the desk lock allows it and the recorder is not busy. Stopped: "Record" (" MTK" shown on wide layouts as before); one tap starts recording with no confirmation. While the desk reports recording: the `.mm-recording` look and the elapsed time `hh:mm:ss` taken from the desk's received `var.mtk.rec.time` (never a local timer; "REC" when the time is unknown). While an operation is pending: "Starting…" / "Stopping…" and disabled.

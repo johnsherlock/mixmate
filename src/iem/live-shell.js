@@ -11,6 +11,8 @@ export function tidyLive(root) {
   sink.hidden = true;
   sink.append($(".mm-mode-label"), $(".mm-feedback"), $(".mm-offline-state"), $(".mm-dirty"), $(".mm-rec-state"), $(".mm-page-state"));
   $(".mm-preview").remove();
+  // F07-S04: the live entry never shows the Demo's simulated native screen; the header Native button opens the desk's own web app in a new tab.
+  $(".mm-native-layer")?.remove();
   const message = make("span", "mm-message");
   message.setAttribute("role", "status"); message.setAttribute("aria-live", "polite");
   const diagnostics = make("button", "mm-diagnostics-open", "Diagnostics");

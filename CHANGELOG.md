@@ -2,7 +2,11 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
-## 0.7.0 — 2026-11-21 — F07-S03 (this PR)
+## 0.8.0 — 2026-11-21 — F07-S04 (this PR)
+
+- Native app button: the header Native button opens the desk's own web app (`http://<desk address>/`) in a new browser tab when you tap it. It uses the connected address, else the most recently connected one, and is disabled until MixMate has connected to a desk once. The fake "Simulated native screen" is gone from the live app (the Demo keeps its own). Diagnostics shows the Native UI target. Leaving MixMate for the other tab disconnects as before; returning reconnects automatically.
+
+## 0.7.0 — 2026-11-21 — F07-S03 ([#65](https://github.com/johnsherlock/mixmate/pull/65))
 
 - Multitrack recording: the header Record button starts recording in one tap and shows the desk's own elapsed time while recording; tapping it then offers Stop multitrack recording?. The button is disabled with a reason when no USB drive is in the desk, the desk is locked or busy, or the state is unknown. Outcomes appear in the footer and the Diagnostics log, which gains a Recording section. Automatic updates wait while a recording is active.
 

@@ -12,6 +12,7 @@ import { mountRecordingControls } from './recording-controls.js';
 import { createGroupEditorUI } from './group-editor-ui.js';
 import { SettingsRepository } from '../settings.js';
 import { prepareEntryOffline } from './entry-offline.js';
+import { mountNativeUi } from './native-ui.js';
 import { createInstallPrompt } from './install.js';
 import { createUpdateManager, updateBusy, updatedMessage, consumeUpdateSuppress } from './updates.js';
 import { buildInfo } from '../build-info.js';
@@ -46,6 +47,9 @@ eqControls = mountEqControls({ root, session, controller, debug });
 snapshotControls = mountSnapshotControls({ root, session, ui: connectionUI, dialogOwner });
 // F07-S03: header Record button and Stop recording dialog over the session's typed recording API.
 recordingControls = mountRecordingControls({ root, session, ui: connectionUI, dialogOwner });
+// F07-S04: header Native button opens the desk's own web app in a new tab (user-triggered navigation only).
+const nativeUi = mountNativeUi({ root, ui: connectionUI });
+connectionUI.onDeskAddress(address => nativeUi.setAddress(address));
 connectionUI.diagnostics.install({ text: installPrompt.description(), canShow: false }, () => installPrompt.reshow());
 // F07-S05 (user decision 2026-11-21): automatic online updates. A waiting worker is
 // applied (skipWaiting + one reload) only while updateBusy() is false; otherwise it
