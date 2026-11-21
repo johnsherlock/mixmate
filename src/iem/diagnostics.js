@@ -36,8 +36,8 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
   const actions = make('div', 'mm-dialog-actions'); actions.append(connect, disconnect);
   label.append(address); form.append(label, known, actions); connection.append(form);
   const status = row(connection, 'Status'), connected = row(connection, 'Address'), session = row(connection, 'Session');
-  const auto = row(connection, 'Automatic'), attempts = make('ul', 'mm-diag-list'); connection.append(attempts);
-  status.textContent = 'Not connected'; connected.textContent = 'none'; session.textContent = 'No received mixer state'; auto.textContent = 'No automatic pass yet';
+  const nativeRow = row(connection, 'Native UI'), auto = row(connection, 'Automatic'), attempts = make('ul', 'mm-diag-list'); connection.append(attempts);
+  status.textContent = 'Not connected'; connected.textContent = 'none'; session.textContent = 'No received mixer state'; auto.textContent = 'No automatic pass yet'; nativeRow.textContent = 'no known address';
 
   const desk = section('Desk and state');
   const mode = row(desk, 'Mode'), snapshot = row(desk, 'Snapshot'), rig = row(desk, 'Groups rig'), control = row(desk, 'Controls'), recording = row(desk, 'Recording'), page = row(desk, 'Page'), feedback = row(desk, 'Latest feedback');
@@ -134,6 +134,8 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
       if (desk) { desk.textContent = value.text; desk.dataset.state = value.state; desk.setAttribute?.('title', value.title || value.text); }
       refresh();
     },
+    // F07-S04: where the header Native button opens the desk's own web app (text only).
+    nativeTarget(url) { nativeRow.textContent = url || 'no known address'; },
     updates(text) { updateRow.textContent = String(text || 'No update waiting'); refresh(); },
     install(value, onShow) { installRow.textContent = String(value?.text || 'Unknown'); reshow.hidden = !value?.canShow; if (onShow) onReshow = onShow; refresh(); },
     rig(text) { if (state.rig !== text) { state = { ...state, rig: text }; refresh(); } },

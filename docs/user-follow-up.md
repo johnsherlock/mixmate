@@ -600,3 +600,21 @@ F07-S05 review round 1 (root live acceptance, [story](stories/F07-S05.md#review-
 | Updates | `updateBusy` treats a pending recording operation and an active recording while connected as busy. | None. |
 | Version | 0.7.0 (minor) with CHANGELOG entry. | None. |
 | F07-S06 | Recorded as merged (PR #64, `4c6c574`, final head `3a516a3`) in story, feature, backlog and handoff. | None. |
+
+## 2026-11-21 — F07-S03 merged; F07-S04 native UI access (root decisions, in review)
+
+[F07-S03](stories/F07-S03.md) merged as [PR #65](https://github.com/johnsherlock/mixmate/pull/65), `901a342`, final head `02bf217` (0.7.0). [F07-S04](stories/F07-S04.md), user-authorized 2026-11-21 (last story of the F07 order), is in review (0.8.0).
+
+| Item | Decision / status | Next action and owner |
+| --- | --- | --- |
+| F07-S03 live acceptance | Live start/stop acceptance is **parked**: needs a USB drive in the desk. Not waived. | Root verifies with a drive and records it in the story. |
+| F07-S03 accepted P3 | Stop requires `rec.busy` < 0.5 (verify during drive acceptance). | Root, with the drive. |
+| F07-S03 accepted P3 | A stale `rec.time` may flash briefly at start. | Observe during drive acceptance. |
+| Native UI route | No iframe: blocked by MixMate's CSP (`default-src 'self'`) and, in production (HTTPS), by mixed content; the desk itself sends no `X-Frame-Options`/CSP. The supported route is a user-triggered new-tab navigation to `http://<address>/`. | None. |
+| Native button | Live only; address = connected desk, else most recent known, private-IPv4 validated; disabled with a reason when none; never opens on load; null from `window.open` (also returned for a successful noopener open) shows a non-alarming hedge, "Opened the desk's web app in a new tab. If it didn't appear, open http://<ip>/ yourself." (review round 1). | None. |
+| Simulated native layer | Removed from the live entry; Demo unchanged. | None. |
+| Leaving MixMate | Existing hide/`pagehide` disconnect and visible/`pageshow` automatic connection; no new behaviour, tested. | None. |
+| Clock/fullscreen | Local time only, no desk time write (tested); fullscreen unchanged. | None. |
+| Unverified | New-tab behaviour from the installed PWA on Android/iOS, returning to MixMate, Chrome local-network-access prompts. | F08-S01 physical gate. |
+| Transport | No new outbound message; allowlist unchanged. | None. |
+| Version | 0.8.0 (minor) with CHANGELOG entry. | None. |
