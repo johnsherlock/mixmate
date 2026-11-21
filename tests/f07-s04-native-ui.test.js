@@ -63,13 +63,14 @@ test('a tap opens exactly http://<ip>/ in a new tab with noopener and no outboun
   assert.equal(f.opens.length, 1, 'destroyed: no further opens');
 });
 
-test('a blocked or null popup shows the address to open manually', () => {
+test('a null (spec-successful noopener or blocked) or throwing open gives a non-alarming hedge with the address', () => {
   const f = fixture(), native = mountNativeUi({ root: f.root, ui: f.ui, window: f.window });
   native.setAddress('192.168.0.60');
   f.window.result = null;
   f.button.emit('click');
   assert.equal(f.messages.length, 1);
-  assert.match(f.messages[0], /http:\/\/192\.168\.0\.60\//);
+  assert.equal(f.messages[0], "Opened the desk's web app in a new tab. If it didn't appear, open http://192.168.0.60/ yourself.");
+  assert.doesNotMatch(f.messages[0], /blocked/i);
   f.window.open = () => { throw new Error('blocked'); };
   f.button.emit('click');
   assert.equal(f.messages.length, 2);
@@ -122,7 +123,9 @@ test('controller feeds the connected, else most recent known, address; hiding di
   await controller.ready;
   assert.equal(native.target(), 'http://192.168.0.61/', 'most recent known address while disconnected');
   assert.equal(f.button.disabled, false);
-  assert.match(f.root.querySelector('.mm-diag-value') ? 'ok' : 'ok', /ok/);
+  ui.diagnostics.show();
+  const nativeRow = () => f.root.querySelectorAll('.mm-diag-row').find(row => row.children[0].textContent === 'Native UI').children[1].textContent;
+  assert.equal(nativeRow(), 'http://192.168.0.61/');
 
   ui.address.value = '10.0.0.5'; ui.form.emit('submit');
   const [writer, receiver] = FakeSocket.all.slice(-2);
@@ -131,12 +134,36 @@ test('controller feeds the connected, else most recent known, address; hiding di
   assert.equal(native.target(), 'http://10.0.0.5/', 'connected address wins');
   const sent = [...writer.sent, ...receiver.sent];
 
+  assert.equal(nativeRow(), 'http://10.0.0.5/');
+
   // Leaving MixMate: the new tab takes focus, the page becomes hidden.
   document.hidden = true; document.emit('visibilitychange');
   assert.equal(writer.readyState, 3); assert.equal(receiver.readyState, 3);
   assert.notEqual(session.snapshot().phase, 'live');
   assert.deepEqual([...writer.sent, ...receiver.sent], sent, 'hiding sends nothing');
   assert.equal(session.snapshot().auxes?.length ?? 0, 0, 'received state cleared');
+  native.destroy(); controller.destroy(); await repository.close();
+});
+
+test('the address becoming unknown after a settings change disables the button and the Diagnostics target', async () => {
+  const f = fixture(); tidyLive(f.root);
+  f.root.querySelector('.mm-diagnostics-open').disabled = true;
+  const ui = createLiveConnectionUI(f.root, { levels: true, pan: true, dialogOwner: createDialogOwner(), timers });
+  const native = mountNativeUi({ root: f.root, ui, window: f.window });
+  ui.onDeskAddress(address => native.setAddress(address));
+  const session = createAuxControlSession({ WebSocketClass: FakeSocket, timers, now: () => 0, wallNow: () => 0 });
+  const repository = new SettingsRepository({ indexedDB: undefined });
+  await repository.replace({ ...emptySettings(), knownAddresses: ['192.168.0.61'] });
+  const view = { render() {}, preferences() {}, snapshotName() {}, clear() {}, destroy() {} };
+  const controller = mountLiveController({ session, repository, view, ui, document: Object.assign(new Events(), { hidden: false, activeElement: null }), window: new Events(), timers, now: () => 0, autoConnect: false, createID: () => 'rig-1' });
+  await controller.ready;
+  assert.equal(f.button.disabled, false);
+  await repository.replace({ ...emptySettings(), knownAddresses: [] });
+  assert.equal(native.target(), null);
+  assert.equal(f.button.disabled, true);
+  assert.equal(f.button.attributes.title, NATIVE_NO_ADDRESS_REASON);
+  ui.diagnostics.show();
+  assert.equal(f.root.querySelectorAll('.mm-diag-row').find(row => row.children[0].textContent === 'Native UI').children[1].textContent, 'no known address');
   native.destroy(); controller.destroy(); await repository.close();
 });
 

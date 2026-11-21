@@ -118,7 +118,7 @@ Landscape source banks use an even visible capacity derived from available bank 
 
 ## Native button (F07-S04, 2026-11-21)
 
-- **Header Native button** (live entry only) opens the desk's own web app at `http://<address>/` in a new tab (`window.open(url, '_blank', 'noopener')`) on tap only, never on load. The address is the connected desk, else the most recent known address, and must pass the private-IPv4 validation; with none known the button is disabled with the title "Connect to the desk once so MixMate knows its address". A null return from `window.open` shows the manual address in the footer (a successful noopener open can also return null).
+- **Header Native button** (live entry only) opens the desk's own web app at `http://<address>/` in a new tab (`window.open(url, '_blank', 'noopener')`) on tap only, never on load. The address is the connected desk, else the most recent known address, and must pass the private-IPv4 validation; with none known the button is disabled with the title "Connect to the desk once so MixMate knows its address". A null return from `window.open` (which a successful noopener open also gives) shows "Opened the desk's web app in a new tab. If it didn't appear, open http://<ip>/ yourself." in the footer.
 - The live entry has no simulated native screen (`.mm-native-layer` is removed; the Demo keeps its own). No iframe: MixMate's CSP blocks it and the HTTPS app would block HTTP content. When the new tab takes focus the page is hidden and the existing hide path disconnects and clears received state; returning triggers the existing automatic connection. The header clock is local time only. Diagnostics shows the Native UI target. See [F07-S04](stories/F07-S04.md).
 
 ## Record button and Stop dialog (F07-S03, 2026-11-21)

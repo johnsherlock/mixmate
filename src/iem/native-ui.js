@@ -30,8 +30,8 @@ export function mountNativeUi({ root, ui, window = globalThis.window }) {
     if (!url) return;
     let opened = null;
     try { opened = window.open(url, '_blank', 'noopener'); } catch { opened = null; }
-    // A browser may return null for a successful noopener open as well as for a blocked one, so null always gets the manual address.
-    if (opened === null || opened === undefined) say(`If the desk's web app did not open, your browser blocked it. Open ${url} yourself.`);
+    // The HTML spec makes a successful noopener open return null too, so null cannot mean blocked: hedge and always give the address.
+    if (opened === null || opened === undefined) say(`Opened the desk's web app in a new tab. If it didn't appear, open ${url} yourself.`);
     else ui.log?.(`Opened the desk's web app at ${url}`);
   }
   button?.addEventListener('click', click);
