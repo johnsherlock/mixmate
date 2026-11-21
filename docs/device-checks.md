@@ -89,3 +89,7 @@ Follow-up / retest required:
 If a device blocks the local socket, return its exact versions and diagnostics. Leave that verdict blocked/unverified pending a decision; installation or successful desktop access cannot override it. Raw mixer names/values need not be shared for distribution testing.
 
 On 2026-11-09 the user could not run the optional current-tablet read-only check. It remains pending/not run; no request is repeated while they are unavailable, and no prior result is transferred to the c16e… build.
+
+## Pixel install finding (2026-11-21, F07-S06)
+
+Device: Pixel, Android 17, Chrome 157.0.8103.78 and Brave, production deployment at 0.6.0. Neither browser showed MixMate's Install strip (Brave never fires `beforeinstallprompt`; Chrome fires it only when it considers the page installable). Brave installed the app from its menu. Chrome's menu said "This app cannot be installed". Root confirmed with Chrome DevTools `Page.getInstallabilityErrors` (desktop and Android user agent) that the deployed build reports no installability errors. Likely causes (hypotheses): that phone's Chrome on-device state or the same-origin Chromium issue 572287931/568841400. F07-S06 (0.6.1) adds a menu-instruction fallback; the Pixel retest, including whether Chrome ever offers installation, remains part of the [F08-S01](stories/F08-S01.md) gate. Not a pass or fail of that gate.

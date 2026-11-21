@@ -84,7 +84,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.match(rootHTML, /connect-src ws:/);
     const metadata = JSON.parse(await readFile('package.json', 'utf8'));
     const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
-    assert.equal(metadata.version, '0.6.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
+    assert.equal(metadata.version, '0.6.1'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
     assert.ok(live.includes(metadata.version) && connection.includes(metadata.version));
     assert.equal(manifest.name, 'MixMate — IEM mixer'); assert.equal(manifest.id, 'mixmate/'); assert.equal(manifest.start_url, './'); assert.equal(manifest.scope, './');
     const shell = await readFile('src/iem/shell.html', 'utf8');
