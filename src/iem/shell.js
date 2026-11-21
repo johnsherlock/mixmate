@@ -1,5 +1,6 @@
 import template from "./shell.html?raw";
 import "./iem.css";
+import { tidyLive } from "./live-shell.js";
 export function mountShell(container, mode) {
   container.innerHTML = template; // Trusted static shell only; never provider strings.
   const root = container.firstElementChild;
@@ -8,5 +9,6 @@ export function mountShell(container, mode) {
     mode === "demo"
       ? "DEMO · SIMULATED · NO MIXER CONNECTION"
       : "LIVE IEM · LEVELS OFF";
+  if (mode !== "demo") tidyLive(root);
   return root;
 }

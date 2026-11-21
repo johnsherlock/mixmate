@@ -89,7 +89,7 @@ test('connection/groups/pan owners replace exclusively, close/Escape affect only
     app.pan.open(target); const oldLease = app.owner.active(), preset = app.root.querySelector('.mm-pan-presets').children[1], stale = [...preset.handlers.get('click')][0];
     app.groups.show('Rig'); assert.equal(app.owner.active().kind, 'groups'); assert.equal(app.engine.snapshot().control.armed, false); assert.equal(app.owner.close(oldLease), false);
     app.pan.open(target); assert.equal(app.root.querySelector('.mm-pan-enable'), null); stale(); assert.equal(app.writes().length, 0);
-    app.root.querySelector('.mm-connect-toggle').emit('click'); assert.equal(app.owner.active().kind, 'connection'); assert.equal(app.engine.snapshot().control.armed, false);
+    app.root.querySelector('.mm-desk').emit('click'); assert.equal(app.owner.active().kind, 'connection'); assert.equal(app.engine.snapshot().control.armed, false);
     app.closeButton.emit('click'); assert.equal(app.owner.active(), null); assert.equal(app.layer.hidden, true);
     app.pan.open(target); app.root.emit('keydown', { key: 'Escape' }); assert.equal(app.owner.active(), null); assert.equal(app.layer.hidden, true);
   } finally { app.close(); }
@@ -98,7 +98,7 @@ test('same shared head click/Escape cannot close a new dialog opened reentrantly
   for (const event of ['click', 'Escape']) {
     const app = fixture();
     try {
-      const opener = app.root.querySelector('.mm-connect-toggle'); opener.focus(); opener.emit('click');
+      const opener = app.root.querySelector('.mm-desk'); opener.focus(); opener.emit('click');
       opener.onFocus = () => app.groups.show('New owner');
       if (event === 'click') app.closeButton.emit('click'); else app.root.emit('keydown', { key: 'Escape' });
       assert.equal(app.owner.active().kind, 'groups'); assert.equal(app.layer.hidden, false);

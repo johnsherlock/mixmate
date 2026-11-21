@@ -12,12 +12,14 @@ export const AUTO_CONNECT_ATTEMPT_MS = 5000;
 const FAILED = new Set(['error', 'closed', 'timeout', 'blocked', 'unsupported', 'invalid', 'disconnected']);
 
 export function createAutoConnect({ connect, disconnect, timers = globalThis, attemptMs = AUTO_CONNECT_ATTEMPT_MS,
-  canAdvance = () => true, onSuccess = () => {}, onExhausted = () => {}, onProgress = () => {} }) {
+  canAdvance = () => true, onSuccess = () => {}, onExhausted = () => {}, onProgress = () => {}, onFailure = () => {} }) {
   let pass = null, attempts = 0;
   function finishAttempt(attempt) {
     timers.clearTimeout(attempt.timer); attempt.timer = undefined;
     timers.clearTimeout(attempt.advance); attempt.advance = undefined;
   }
+  // Diagnostic only (F09-S11): which address failed and why. Never affects the pass.
+  function report(attempt, reason) { try { onFailure({ address: attempt.address, index: attempt.index, reason }); } catch { /* Display observer only. */ } }
   function next(current) {
     if (pass !== current) return;
     if (!canAdvance()) { current.paused = current.paused || 'advance'; return; }
@@ -31,6 +33,7 @@ export function createAutoConnect({ connect, disconnect, timers = globalThis, at
     attempt.timer = timers.setTimeout(() => {
       if (pass !== current || current.attempt !== attempt) return;
       attempt.failed = true; attempt.timer = undefined;
+      report(attempt, 'timeout');
       // Never retire an attempt behind an open dialog; resume() does it later.
       if (!canAdvance()) { current.paused = 'timeout'; return; }
       disconnect(); // Retire the slow attempt before trying the next address.
@@ -38,13 +41,13 @@ export function createAutoConnect({ connect, disconnect, timers = globalThis, at
     }, attemptMs);
     let started = false;
     try { started = connect(attempt.address) === true; } catch { started = false; }
-    if (!started) fail(current, attempt);
+    if (!started) fail(current, attempt, 'refused');
   }
   // Failure is handled after the current call stack so a synchronous session
   // emission inside connect() can never advance (or nest) the pass twice.
-  function fail(current, attempt) {
+  function fail(current, attempt, reason = 'error') {
     if (attempt.failed || pass !== current || current.attempt !== attempt) return;
-    attempt.failed = true;
+    attempt.failed = true; report(attempt, reason);
     attempt.advance = timers.setTimeout(() => { attempt.advance = undefined; if (pass === current && current.attempt === attempt) next(current); }, 0);
   }
   return Object.freeze({
@@ -61,7 +64,7 @@ export function createAutoConnect({ connect, disconnect, timers = globalThis, at
       const current = pass, attempt = current?.attempt;
       if (!attempt) return;
       if (ready && (!attempt.failed || current.paused === 'timeout')) { finishAttempt(attempt); pass = null; onSuccess({ reason: current.reason, address: attempt.address, index: attempt.index }); return; }
-      if (!attempt.failed && FAILED.has(phase)) fail(current, attempt);
+      if (!attempt.failed && FAILED.has(phase)) fail(current, attempt, phase);
     },
     // Continue a paused pass once advancing is allowed again.
     resume() {

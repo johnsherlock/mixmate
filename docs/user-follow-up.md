@@ -473,3 +473,17 @@ PR #58 passed CI and root live acceptance at `f3ffae6`; the independent reviewer
 - **P3-2 fixed:** a rig-creation failure is cleared when the snapshot name changes.
 - **P3-4 fixed:** control-session (two-socket) auto-connect tests added.
 - **P3-3 recorded (no change):** automatic settings writes (address promotion, last-used rig, rig creation) make the existing two-window stale-baseline conflict (for example an installed PWA plus a browser tab on the same origin) more likely. Behaviour is unchanged and correct: the later window shows a temporary/conflict status, its changes stay in memory and the other window's durable record is not overwritten. It will simply be seen more often.
+
+## F09-S11 Live UI tidy — 2026-11-21
+
+Implementation on `codex/f09-s11-live-ui-tidy` (from main `ed741a0`). User request of 2026-11-21. Routine decisions, recorded for review:
+
+- **Live banner removed;** its information moves to the new Diagnostics modal (footer button). Demo, `demo.html` and `connection-test.html` are unchanged and keep their banner.
+- **Footer** = connection status button (`Connected · <ip>`, `Connecting · <ip>…`, `Couldn't reach <ip>`, `Connection lost`, `Not connected`), one actionable message slot, Diagnostics button. Routine status is Diagnostics-only. *Judgement call:* what counts as actionable is an explicit list (group not editable, fullscreen unavailable, group save/delete/unavailable, interrupted / cancelled / native-changed control outcomes, matched by text in `live-view.js`); other control statuses stay in Diagnostics.
+- **Compact landscape** now shows a slim 22 px live footer (it was hidden there) so the status and Diagnostics stay reachable; the removed banner more than pays for the height.
+- **Diagnostics** shows build commit/time, version, offline line, connection controls (same explicit Connect/Disconnect paths), the last automatic pass with per-attempt reasons, desk/state text, a 30-entry in-memory log, settings status/notes and the Demo / Settings links. It closes when the page is hidden (like the Connect dialog) so a resumed session can reconnect automatically.
+- **Build info:** `__BUILD_COMMIT__` / `__BUILD_TIME__` via Vite `define`; `unknown` fallbacks for node tests. *Trade-off:* the build time is wall-clock, so the offline worker version changes on every build even for identical sources (it already changes per commit).
+- **Auto-connect** gained an additive `onFailure` diagnostic hook only; timing and rules are unchanged.
+- **Bug found while verifying in a browser:** `mountReadOnlyView` disables every button present at mount; the Diagnostics button is explicitly re-enabled (covered by a test).
+- **Not verified by the story agent:** real desk behaviour, the deployed GitHub Pages build's commit string, and real-device layout (only a 375 px emulation of a production preview was inspected; the app also closes dialogs when the pane is hidden, which hid the modal from one screenshot).
+

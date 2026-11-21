@@ -105,6 +105,7 @@ export function createGroupEditorUI(root, connectionUI) {
     },
     saved(message) {
       $(".mm-feedback").textContent = message;
+      connectionUI.message?.(message);
     },
     bind(value) {
       handlers = value;
@@ -226,6 +227,7 @@ export function createGroupEditorUI(root, connectionUI) {
     unavailable(text) {
       const status = $(".mm-feedback");
       if (status) { status.textContent = text; status.setAttribute?.("aria-label", text); }
+      if (text) connectionUI.message?.(text);
     },
     destroy() {
       for (const [target, type, callback] of listeners)

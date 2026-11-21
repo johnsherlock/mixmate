@@ -12,6 +12,7 @@ export function prepareEntryOffline(element, {
   navigator = globalThis.navigator,
   storage,
   verify = verifyOfflineCopy,
+  onPaint = () => {},
 } = {}) {
   if (storage === undefined) {
     try { storage = globalThis.localStorage; } catch { /* Optional metadata only. */ }
@@ -25,6 +26,7 @@ export function prepareEntryOffline(element, {
       ? "Update downloaded. Close all MixMate windows/tabs when finished to activate it."
       : updated ? "MixMate updated. The current page and every offline asset are verified."
       : "The app version and verified offline asset version are separate.";
+    try { onPaint(); } catch { /* Display observer only. */ }
   };
   async function prepare() {
     const token = ++attempt;

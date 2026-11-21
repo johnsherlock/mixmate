@@ -17,7 +17,7 @@ const dialogOwner = createDialogOwner();
 // F09-S07/S09: per-strip Details and the EQ diagnostics below the graph are development-only (index.html?debug).
 const debug = debugFlag(window.location.search);
 if (debug) root.dataset.debug = 'true';
-const view = mountReadOnlyView(root, { debug, onOpenPan: target => panControls.open(target), onOpenEq: auxIndex => eqControls.open(auxIndex), onOpenDetail: model => channelDetail.open(model), onDetailUpdate: models => channelDetail?.update(models), onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllChannels: () => controller.allChannels(),
+const view = mountReadOnlyView(root, { debug, onMessage: text => connectionUI.message(text), onClearMessage: text => { if (connectionUI.diagnostics.currentMessage() === text) connectionUI.clearMessage(); }, onOpenPan: target => panControls.open(target), onOpenEq: auxIndex => eqControls.open(auxIndex), onOpenDetail: model => channelDetail.open(model), onDetailUpdate: models => channelDetail?.update(models), onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllChannels: () => controller.allChannels(),
   canEditLevel: target => session.canEditLevelTarget(target), onSelectGroupLevel: id => controller.selectGroupLevel(id), onSelectLevel: target => controller.selectLevel(target), onToggleLevel: () => controller.toggleLevel(),
   onBeginLevel: () => session.beginLevelGesture(), onPreviewLevel: (token, value) => session.previewLevelGesture(token, value), onCommitLevel: (token, value) => session.commitLevelGesture(token, value), onCancelLevel: () => session.cancelLevelGesture() });
 const connectionUI = createLiveConnectionUI(root, { levels: true, pan: true, dialogOwner });
@@ -29,6 +29,6 @@ mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connect
 channelDetail = mountChannelDetail({ root, dialogOwner, onOpen: model => { controller.clearLevelContext(); return view.detailModel(model.id); } });
 panControls = mountPanControls({ root, session, controller, dialogOwner, debug });
 eqControls = mountEqControls({ root, session, controller, debug });
-prepareEntryOffline(root.querySelector('.mm-offline-state'));
+prepareEntryOffline(root.querySelector('.mm-offline-state'), { onPaint: () => connectionUI.refresh() });
 
-root.addEventListener('click', event => { if (event.target.closest('[data-action="edit-groups"], .mm-connect-toggle, .mm-brand, .mm-desk')) controller.clearLevelContext(); }, true);
+root.addEventListener('click', event => { if (event.target.closest('[data-action="edit-groups"], .mm-diagnostics-open, .mm-brand, .mm-desk')) controller.clearLevelContext(); }, true);
