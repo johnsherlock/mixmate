@@ -1,4 +1,4 @@
-# Orchestrator handoff — F07 batch paused after F02-S05, 2026-11-21
+# Orchestrator handoff — F07 batch: F07-S01 in review, 2026-11-21
 
 Before new work, read:
 - [AGENTS](../AGENTS.md) (updated by F02-S05: snapshot-named rigs and automatic connection);
@@ -7,7 +7,7 @@ Before new work, read:
 - the assigned story and its feature;
 - the current contracts.
 
-**Paused by the user after F02-S05. Do not start F07-S01 until the user says so.** This handoff is identified by its containing PR and history, not by its own commit hash. The last verified story baseline on main is **`f6a1ecd7ba4be5ddb74649f0041e2797366ede1e`** (F02-S05, PR #58).
+**The batch resumed on the user's go-ahead (F07-S01 in review, F07-S02 next).** This handoff is identified by its containing PR and history, not by its own commit hash. The last verified story baseline on main is **`61d08fd`** (F09-S11, PR #59), after F02-S05 at `f6a1ecd` (PR #58). The text below about F02-S05 and the desk evidence is historical context for F07-S01.
 
 ## Authorized batch (user, 2026-11-20)
 
@@ -16,15 +16,11 @@ Before new work, read:
 | Story | Status |
 | --- | --- |
 | [F02-S05](stories/F02-S05.md) snapshot-named rigs, known addresses, automatic connection | **Merged**: [PR #58](https://github.com/johnsherlock/mixmate/pull/58), merge `f6a1ecd` (2026-11-20 22:44 UTC), final approved head `7429ddc`, CI [44830969144](https://github.com/johnsherlock/mixmate/actions/runs/44830969144); main CI on `f6a1ecd` [44831343053](https://github.com/johnsherlock/mixmate/actions/runs/44831343053) passed |
-| [F07-S01](stories/F07-S01.md) snapshot discovery and operation contract | Authorized, **paused**: waits for the user's go-ahead |
-| [F07-S02](stories/F07-S02.md) snapshot operations (list/recall/save) | Authorized, after F07-S01 merges |
+| [F09-S11](stories/F09-S11.md) live UI tidy (user-requested interstitial story, outside the batch order) | **Merged**: [PR #59](https://github.com/johnsherlock/mixmate/pull/59), merge `61d08fd` (2026-11-21 09:32 UTC), final approved head `db393b4`, CI [44889844694](https://github.com/johnsherlock/mixmate/actions/runs/44889844694) |
+| [F07-S01](stories/F07-S01.md) snapshot discovery and operation contract | **In review**: typed guards and private API merged only once reviewed; contract [iem-snapshot-contract.md](iem-snapshot-contract.md), [ADR-0009](adr/0009-snapshot-operation-contract.md); no UI |
+| [F07-S02](stories/F07-S02.md) snapshot operations (list/recall/save UI) | **Next**, after F07-S01 merges |
 
-### Docs to fold into the F07-S01 PR (user decision 2026-11-21)
-
-The user chose not to open a separate closing docs PR for F02-S05. The F07-S01 PR must also:
-- set [F02-S05](stories/F02-S05.md) status (it still says "re-review pending") to Merged with the receipts above;
-- record the merge in the [F02 feature](features/F02.md) table and the [backlog](backlog.md) row 8g;
-- add the two accepted P3s below to [follow-ups](user-follow-up.md).
+The F02-S05 / F09-S11 merge receipts and the accepted P3s were folded into the F07-S01 PR (user decision 2026-11-21): story, feature and backlog statuses are updated and the P3s are in [follow-ups](user-follow-up.md).
 
 ## Review gate substitution (user direction, still in force)
 
@@ -81,8 +77,8 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 ## Next orchestration
 
-1. Verify this handoff on remote main and that the baseline is `f6a1ecd`.
-2. Read AGENTS and this handoff.
-3. Ask the user whether to resume with F07-S01. When authorized, the F07-S01 brief includes the folded docs items above and the desk evidence; live checks may recall/save only MixMate1 and MixMate2.
+1. Verify this handoff on remote main and the current baseline.
+2. Read AGENTS, the [snapshot contract](iem-snapshot-contract.md) and this handoff.
+3. Finish F07-S01 (independent review, root live acceptance on MixMate1/MixMate2 only, including confirming the `settings.block.*` INIT form), merge, then brief F07-S02 (UI on the F07-S01 API).
 
-Stop here. No sidebar chat or automatic responsibility transfer has been created.
+No sidebar chat or automatic responsibility transfer has been created.

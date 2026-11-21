@@ -7,14 +7,14 @@ Current plan: 2026-11-18. Nine features contain **43 stories**. The accepted `mo
 | Feature | Outcome | Stories | Current status |
 | --- | --- | --- | --- |
 | [F01](features/F01.md) | Offline distribution and compatibility | 7 | Merged implementation checkpoint; physical F08 qualification open |
-| [F02](features/F02.md) | Device-local settings | 5 | S01–S04 merged; S05 in review; physical F08 qualification open |
+| [F02](features/F02.md) | Device-local settings | 5 | S01–S05 merged (S05: PR #58); physical F08 qualification open |
 | [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
 | [F04](features/F04.md) | Groups and navigation | 5 | S01–S05 merged |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S04 merged (S04 GEQ: targeted live evidence on one pair; F08 physical qualification open) |
-| [F07](features/F07.md) | Snapshots, recording and native UI | 4 | Planned |
+| [F07](features/F07.md) | Snapshots, recording and native UI | 4 | S01 in review (snapshot contract and typed guards); S02–S04 planned |
 | [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 7 | S01–S10 merged; physical F08 gate open |
+| [F09](features/F09.md) | Reliable control transport and state | 7 | S01–S11 merged; physical F08 gate open |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -37,8 +37,9 @@ Feature numbers do not determine execution priority. Previously merged implement
 | 8d | [F09-S08](stories/F09-S08.md) | User feedback after F09-S07: group faders travel to −∞ in display-scale units (user decision 2026-11-20), group strip tracks members, GEQ point keyboard/near-handle grab, settings export/import removed, right-aligned group navigation — merged in PR #54 at `9527f91` (`9527f91e6f00fdaaa0fc4f3f34471f312501c47e`) |
 | 8e | [F09-S09](stories/F09-S09.md) | User feedback after F09-S08: EQ diagnostics only with `?debug`, immediate GEQ reset (user decision 2026-11-20), prototype pan dialog and `PAN · L 30` strip labels (user decision 2026-11-20) — merged in PR #55 at `c4acb38` (`c4acb380c24be56afa9b87dd402d6f27673ad755`) |
 | 8f | [F09-S10](stories/F09-S10.md) | User report after F09-S09: GEQ point touch drag was pointercancelled by Chrome; the live graph svg is `touch-action: none` in points mode too, as the prototype — **Merged** in [PR #56](https://github.com/johnsherlock/mixmate/pull/56) at `8d30955` |
-| 8f-2 | [F09-S11](stories/F09-S11.md) | User request 2026-11-21: live UI tidy — banner removed, footer connection status with IP, message slot and Diagnostics modal (build commit/time, connect/disconnect, auto-connect attempt reasons), minimal Connect dialog — **In review** |
-| 8g | [F02-S05](stories/F02-S05.md) | First story of the batch authorized 2026-11-20 (**F02-S05 → F07-S01 → F07-S02**): rigs named by the desk's received current snapshot, rig UI removed, known addresses, bounded automatic connection, settings v3 discarding old rigs/groups (user decisions 2026-11-20) |
+| 8f-2 | [F09-S11](stories/F09-S11.md) | User request 2026-11-21: live UI tidy — banner removed, footer connection status with IP, message slot and Diagnostics modal (build commit/time, connect/disconnect, auto-connect attempt reasons), minimal Connect dialog — **Merged** in [PR #59](https://github.com/johnsherlock/mixmate/pull/59), merge `61d08fd` (2026-11-21 09:32 UTC), final approved head `db393b4`, CI [44889844694](https://github.com/johnsherlock/mixmate/actions/runs/44889844694) |
+| 8g | [F02-S05](stories/F02-S05.md) | First story of the batch authorized 2026-11-20 (**F02-S05 → F07-S01 → F07-S02**): rigs named by the desk's received current snapshot, rig UI removed, known addresses, bounded automatic connection, settings v3 discarding old rigs/groups (user decisions 2026-11-20) — **Merged** in [PR #58](https://github.com/johnsherlock/mixmate/pull/58), merge `f6a1ecd` (2026-11-20 22:44 UTC), final approved head `7429ddc`, CI [44830969144](https://github.com/johnsherlock/mixmate/actions/runs/44830969144) |
+| 8h | [F07-S01](stories/F07-S01.md) | Second story of the batch authorized 2026-11-20: snapshot discovery and operation contract — exact `SNAPSHOTLIST`/`LOADSNAPSHOT`/`SAVESNAPSHOT` forms, typed names-only guards and private API on the control session, bounded outcomes (ADR-0009, [contract](iem-snapshot-contract.md)); no UI (F07-S02 next) — **In review** |
 | 9 | [F07](features/F07.md) S01 → S02 → S03 → S04 | F06-S04 → exact snapshot contract, operations, recording, native access |
 | 10 | [F08-S01](stories/F08-S01.md) | All release implementation → supported physical devices, both rigs, offline/sleep/control gate |
 | 11 | [F08-S02](stories/F08-S02.md) | F08-S01 → release/recovery documentation |
