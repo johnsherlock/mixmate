@@ -38,6 +38,11 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
   const desk = section('Desk and state');
   const mode = row(desk, 'Mode'), snapshot = row(desk, 'Snapshot'), rig = row(desk, 'Groups rig'), control = row(desk, 'Controls'), recording = row(desk, 'Recording'), page = row(desk, 'Page'), feedback = row(desk, 'Latest feedback');
 
+  // F07-S02: received snapshot state and the last snapshot operation (text only).
+  const snapshots = section('Snapshots');
+  const snapshotRows = { show: row(snapshots, 'Show'), current: row(snapshots, 'Current'), list: row(snapshots, 'List'), operation: row(snapshots, 'Last operation'), lock: row(snapshots, 'Lock') };
+  const emptySnapshots = { show: 'unavailable', current: 'unavailable', list: 'unavailable', operation: 'none', lock: 'unavailable' };
+
   const recent = section('Recent messages'), log = make('ol', 'mm-diag-list mm-diag-log'); recent.append(log);
 
   const settingsSection = section('Settings'), settings = make('p', '', 'Checking local settings storage…');
@@ -54,7 +59,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
   demo.href = './demo.html'; test.href = './connection-test.html'; test.title = 'Settings and connection test';
   nav.append(demo, test); linksSection.append(nav);
 
-  const entries = []; let state = { auto: null, rig: '', status: null, connected: '', note: '' };
+  const entries = []; let state = { auto: null, rig: '', status: null, connected: '', note: '', snapshots: emptySnapshots };
   const messageNode = () => $('.mm-message');
   let transient = '', lasting = '', transientTimer;
   const paintSlot = () => { const node = messageNode(), value = transient || lasting; if (node) { node.textContent = value; node.setAttribute('title', value); } };
@@ -72,6 +77,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
     const pass = state.auto;
     auto.textContent = pass ? `${pass.reason} pass · ${pass.outcome}` : 'No automatic pass yet';
     attempts.replaceChildren(...(pass?.attempts || []).map(item => make('li', '', `${item.address} — ${item.result}`)));
+    for (const [key, node] of Object.entries(snapshotRows)) node.textContent = state.snapshots[key];
     paintLog();
   };
 
@@ -117,6 +123,8 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
       refresh();
     },
     rig(text) { if (state.rig !== text) { state = { ...state, rig: text }; refresh(); } },
+    // Snapshot rows: plain strings built by the snapshot controls from received state.
+    snapshots(value) { state = { ...state, snapshots: value ? Object.fromEntries(Object.keys(emptySnapshots).map(key => [key, String(value[key] ?? emptySnapshots[key])])) : emptySnapshots }; refresh(); },
     autoPass(pass) { state = { ...state, auto: pass ? { ...pass, attempts: pass.attempts.map(item => ({ ...item })) } : null }; refresh(); },
     // Footer message slot: only actionable feedback. A transient message clears
     // after MESSAGE_TTL_MS or at the next deliberate gesture; a lasting condition

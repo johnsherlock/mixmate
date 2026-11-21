@@ -519,3 +519,17 @@ F09-S11 (PR #59, merged `61d08fd`):
 - A user's own cancel during a gesture (cancel-invalidated, for example Escape) shows "Adjustment cancelled; use a new gesture." in the footer slot for 8 s.
 - After a desk-side change stops a drag, the footer shows the raw control status ("Ready to edit current received state… application unverified…") rather than a plain message.
 - `__BUILD_TIME__` is wall-clock, so the generated offline worker version changes on every rebuild even for identical sources; on pull-request CI `GITHUB_SHA` is the merge commit, so the commit string shown there is not the PR head.
+
+## F07-S01 accepted P3s and F07-S02 decisions (recorded 2026-11-21 in the F07-S02 PR)
+
+F07-S01 (PR #60, merged `b916b31`) accepted P3s:
+
+- (a) A save counts as `reported` on any `UPDATE_SHOWS` within 3 s, including a lagging broadcast from a preceding recall or another client's save, so the UI wording is a report only.
+- (b) A re-recall of the current snapshot could be confirmed by an unrelated `currentSnapshot` receipt within 5 s; `MSG^$SNAPLOAD` is the strong signal.
+- (c) A late reply to a timed-out list request can be accepted by the next request (same show only, refresh only).
+- (d) A desk name containing `^` would be split by the list parser (not exploitable).
+- (e) Controls are not blocked during a pending recall at the session level; F07-S02 addresses this in the UI with a modal pending dialog.
+- (f) The static send-site audit counts sites, not senders.
+- Closed risk: the `settings.block.*` INIT line form (root read the raw lines: `SETS^settings.block.pass^<string>`, empty on this desk, and `SETD^settings.block.<x>^0|1`; matches the parser).
+
+F07-S02 routine decisions (root, [story](stories/F07-S02.md)): header Snapshot opens a Recall dialog (list, current marked and preselected, warning, Cancel/Recall; modal while pending; confirmed closes with an 8 s footer message); Save opens an overwrite-current dialog (no save-as; the `reported` wording is a report only); header buttons are disabled with a title reason when not qualified, no show/current name, lock locked/unknown or pending; Diagnostics gains a Snapshots group and logs every operation; no dirty indicator (the desk's "snapshot modified" state is unverified). Review round 1 (root): the "Recalled <name>." success message in the footer slot is kept as a deliberate decision (a recall result is user-meaningful feedback even when not an error); the save wording was softened to "Save sent for <name>; the desk reported a show change (contents not verified)."; every open preselects the desk's current snapshot; pending focuses the dialog and traps Tab. Beyond the brief: × and Escape are inert while an operation is pending; the outcome is tracked outside the dialog so replacement or a rig switch never loses it; a list the desk does not send within 5 s shows "did not send its snapshot list".
