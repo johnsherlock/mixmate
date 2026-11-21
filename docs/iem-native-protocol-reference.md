@@ -89,6 +89,21 @@ Native `E_COMMANDS` names seen in the served `mixer.html` (firmware 3.0.7865-ui2
 
 The list is not part of INIT. The `* Init *` entry is the desk's factory reset and is never recalled or saved by MixMate. Not named in `E_COMMANDS` evidence and also excluded: `CREATESHOW`, presets, `MIXER_RESET`.
 
+## Multitrack recording commands (F07-S03, root desk evidence 2026-11-21)
+
+Native `E_COMMANDS` names seen in the served `mixer.html` (firmware 3.0.7865-ui24), with MixMate's status. Evidence, outcomes and bounds: [recording contract](iem-recording-contract.md); decision: [ADR-0011](adr/0011-multitrack-recording-contract.md).
+
+| Native command | Wire name | MixMate |
+| --- | --- | --- |
+| `TOGGLE_MTK_REC` | `MTK_REC_TOGGLE` → state via `SETD^var.mtk.rec.currentState` (broadcast, values while recording unverified); with no USB drive the requester receives `MSG^$REC_ERRNOSTICK` and `DLGSHOW^usb_rec^$REC_ERRNOACCESS^$MSGBTN_OK` (47 ms) | **Allowed** (control session writer only; a toggle, so start only at received state 0 and stop only at non-zero) |
+| `TOGGLE_REC` | `RECTOGGLE` (2-track USB recorder) | Excluded |
+| `MTK_REC`, `MTK_REC_STOP`, `MTK_REC_PAUSE`, `MTK_REC_JUMP_TO`, `MTK_REC_SET_SESSION` | same names | Excluded, never sent, not tested |
+| `MTK_PLAY`, `MTK_STOP`, `MTK_PAUSE`, `MTK_JUMP_TO`, `MTK_SELECT` | same names | Excluded (playback) |
+| `MTK_DELETE`, `MTK_RENAME`, `MTK_GET_SESSIONS`, `MTK_GET_FILES` | same names | Excluded (session management) |
+| (incoming) | `SETD^var.mtk.present`, `freespace`, `dropouts`, `rec.currentState`, `rec.time`, `rec.busy`; `SETS^var.mtk.rec.session` | Received only (companion); `rec.time` counts up while stopped |
+
+Native refuses the toggle when the player lock is active (`settings.block.pass` non-empty and `settings.block.player` falsy) and when `var.mtk.rec.busy >= 0.5`; it does not check `var.mtk.present`.
+
 ## Delivery verification
 
 Local Node **26.13.1** (CI targets Node24): `npm ci` passed (existing fsevents allowScripts notice), `npm test` **256/256 passed**, `npm run build` passed app **0.5.0**, **18 assets**, worker **`f5c4f38ebcaec5d2`** unchanged. All automated write transports were fake. No production/browser/device/live-write test was needed or performed for this documentation-only story.

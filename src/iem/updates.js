@@ -14,6 +14,7 @@ export const READY_TEXT = 'Update ready — applies when you disconnect';
 // - a desk session past socket open (connected / partial / live, qualified or not);
 // - an owned gesture or a pending/dispatching control send;
 // - a snapshot operation (the desk is mid-request, or this UI is tracking one);
+// - a recording operation (this UI's or the session's), or the desk reporting that it is recording while MixMate is connected (F07-S03);
 // - any dialog except the idle Connect dialog.
 // An attempt that is still only `connecting` (for example an automatic pass whose
 // address does not answer on this network) has no state to lose: reloading simply
@@ -24,7 +25,7 @@ export function consumeUpdateSuppress(storage) {
   try { value = storage?.getItem(UPDATE_SUPPRESS_KEY) === '1'; storage?.removeItem(UPDATE_SUPPRESS_KEY); } catch { /* Best effort. */ }
   return value;
 }
-export function updateBusy({ session, dialogOwner, snapshotControls, explicitConnecting, snapshot: given }) {
+export function updateBusy({ session, dialogOwner, snapshotControls, recordingControls, explicitConnecting, snapshot: given }) {
   // `given` is the snapshot a session emit already built; otherwise one copy is taken.
   const snapshot = given || session.snapshot();
   if (snapshot.phase === 'connecting' && explicitConnecting?.()) return true; // never drop the user's own Connect attempt
@@ -33,6 +34,7 @@ export function updateBusy({ session, dialogOwner, snapshotControls, explicitCon
   if (control && (control.gestureActive || control.pending || control.dispatching)) return true;
   if (snapshot.snapshots?.operation?.status === 'pending') return true;
   if (snapshotControls?.pending?.()) return true;
+  if (snapshot.recording?.operation?.status === 'pending' || snapshot.recording?.recording === true || recordingControls?.pending?.()) return true;
   const lease = dialogOwner?.active?.();
   return Boolean(lease && lease.kind !== 'connection');
 }

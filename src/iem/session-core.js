@@ -10,6 +10,7 @@ import { AUX_EQ_DISPLAY_CENTRES, auxEqPath, auxEqPositionToDb, encodeAuxEqComman
 import { resolveGroupTopology, groupReferenceDelta, groupReferencePosition } from './relative-groups.js';
 import { mapRequestedAuxEqCurve } from './aux-eq-curve.js';
 import { checkShowName, checkSnapshotName, encodeSnapshotListCommand, encodeSnapshotRecallCommand, encodeSnapshotSaveCommand, isSnapshotInitEntry, parseSnapshotCompanionFrame, parseSnapshotWriterFrame } from './snapshot-protocol.js';
+import { encodeRecordingToggleCommand, parseRecordingCompanionFrame, parseRecordingWriterFrame, recordingRefusalText } from './recording-protocol.js';
 
 // Private ownership: no socket, generic sender or queue escapes. The literal
 // read-only factory cannot acquire the typed level capability through options.
@@ -223,7 +224,8 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   function journal(frame) {
     if (!controlEnabled) return;
     inspectConfirmation();
-    let controlsChanged = auxControl ? noteSnapshotCompanion(frame) : false;
+    let controlsChanged = false;
+    if (auxControl) { const snapshotsChanged = noteSnapshotCompanion(frame), recordingChanged = noteRecordingCompanion(frame); controlsChanged = snapshotsChanged || recordingChanged; }
     const updates = parseIemStateFrame(frame);
     // Separate bounded GEQ parser: 31 bands plus read-only bypass per output.
     if (auxControl) for (const update of parseAuxEqStateFrame(frame)) updates.push({ path: update.path, value: update.value, auxIndex: update.auxIndex, field: update.field === 'bypass' ? 'eqBypass' : 'eqBand' });
@@ -573,14 +575,16 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (sn.list.stale) return snapshotRefusal('stale-list', 'The desk changed its shows; refresh the snapshot list first.');
     return null;
   }
-  function sendSnapshotMessage(message) {
+  // The one non-parameter send site: only the typed snapshot encoders (F07-S01)
+  // and the recording toggle encoder (F07-S03) reach it, never caller text.
+  function sendTypedMessage(message) {
     try { socket.send(message); return true; }
     catch { stop('error', 'Connection send failed — received state cleared'); return false; }
   }
   function startSnapshotOp(kind, name, message) {
     const op = { kind, name, status: 'pending', timer: undefined };
     sn.op = op; snLast = null;
-    if (!sendSnapshotMessage(message)) return snapshotRefusal('send-failed', 'Connection send failed; the outcome is unknown. No retry.');
+    if (!sendTypedMessage(message)) return snapshotRefusal('send-failed', 'Connection send failed; the outcome is unknown. No retry.');
     // A synchronous reply or stop during send already settled or replaced op.
     if (sn.op === op && op.status === 'pending') {
       const owner = generation;
@@ -597,7 +601,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       if (sn.request) return snapshotRefusal('busy', 'A snapshot list request is already waiting for the desk.');
       const message = encodeSnapshotListCommand(sn.show), owner = generation, request = { timer: undefined, dirty: false };
       sn.request = request;
-      if (!sendSnapshotMessage(message)) return snapshotRefusal('send-failed', 'Connection send failed.');
+      if (!sendTypedMessage(message)) return snapshotRefusal('send-failed', 'Connection send failed.');
       if (sn.request === request) request.timer = timers.setTimeout(() => { if (generation === owner && sn.request === request) { sn.request = null; emit('controls'); } }, SNAPSHOT_WAIT_MS.list);
       emit('controls');
       return Object.freeze({ ok: true, kind: 'list' });
@@ -642,17 +646,100 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       lock: Object.freeze(lockState()),
     });
   }
+  // F07-S03 multitrack recording owner (createAuxControlSession only;
+  // docs/iem-recording-contract.md, ADR-0011). The one permitted form is the
+  // toggle encoder in recording-protocol.js. It is a toggle, never sent blind: start only when
+  // the received `var.mtk.rec.currentState` is exactly 0, stop only when it is
+  // received and non-zero. Companion `var.mtk.*` values and the writer's
+  // requester-only `REC_ERR*` refusal feed only this state, never mixer
+  // observations. No retry, queue or replay; elapsed time is the desk's own
+  // received `var.mtk.rec.time`, shown only while recording.
+  const RECORDING_WAIT_MS = 5000;
+  const freshRecording = () => ({ present: null, freespace: null, dropouts: null, state: null, time: null, busy: null, session: null, player: null, op: null });
+  let rc = freshRecording(), rcLast = null;
+  const recordingRefusal = (code, reason) => Object.freeze({ ok: false, code, reason });
+  function settleRecordingOp(op, status, code) {
+    if (rc.op !== op || op.status !== 'pending') return false;
+    timers.clearTimeout(op.timer); op.timer = undefined; op.status = status; if (code) op.code = code; return true;
+  }
+  function noteRecordingCompanion(frame) {
+    const found = parseRecordingCompanionFrame(frame);
+    let changed = false;
+    for (const key of ['present', 'freespace', 'dropouts', 'state', 'busy', 'session', 'player']) if (found[key] !== undefined && found[key] !== rc[key]) { rc[key] = found[key]; changed = true; }
+    // The desk counts rec.time up while stopped: a time-only change matters only while recording.
+    if (found.time !== undefined && found.time !== rc.time) { rc.time = found.time; if (rc.state !== null && rc.state !== 0) changed = true; }
+    const op = rc.op;
+    if (found.state !== undefined && op?.status === 'pending' && (op.kind === 'start' ? rc.state !== 0 : rc.state === 0) && settleRecordingOp(op, 'confirmed')) changed = true;
+    return changed;
+  }
+  function receiveWriterRecording(data) {
+    for (const event of parseRecordingWriterFrame(data)) if (rc.op?.status === 'pending' && settleRecordingOp(rc.op, 'refused', event.code)) return true;
+    return false;
+  }
+  function resetRecording() {
+    timers.clearTimeout(rc.op?.timer);
+    rcLast = rc.op?.status === 'pending' ? Object.freeze({ kind: rc.op.kind, status: 'unknown', text: RECORDING_OUTCOME_TEXT[rc.op.kind].unknown }) : null;
+    rc = freshRecording();
+  }
+  // Desk lock (same model as ADR-0009): `settings.block.pass` empty means no lock; otherwise the player flag must be exactly 1. Unknown refuses.
+  const recordingLock = () => sn.passSet === null ? 'unknown' : !sn.passSet ? 'allowed' : rc.player === null ? 'unknown' : rc.player ? 'allowed' : 'locked';
+  function recordingPreflight(kind) {
+    if (!canAct() || phase !== 'live' || !writerReady) return recordingRefusal('not-ready', 'Not connected to the desk.');
+    if (rc.op?.status === 'pending') return recordingRefusal('busy', 'A recording operation is already waiting for the desk.');
+    if (rc.state === null) return recordingRefusal('unknown-state', 'The desk has not reported its recording state.');
+    if (kind === 'start') {
+      if (rc.state !== 0) return recordingRefusal('already-recording', 'The desk is already recording.');
+      if (rc.present === null) return recordingRefusal('drive-unknown', 'The desk has not reported its USB drive.');
+      if (rc.present < 0.5) return recordingRefusal('no-drive', 'No USB drive in the desk');
+    } else if (rc.state === 0) return recordingRefusal('not-recording', 'The desk is not recording.');
+    const lock = recordingLock();
+    if (lock !== 'allowed') return lockRefusal(lock);
+    if (rc.busy === null) return recordingRefusal('recorder-busy-unknown', 'The desk has not reported whether the recorder is busy.');
+    if (rc.busy >= 0.5) return recordingRefusal('recorder-busy', 'Recorder busy');
+    return null;
+  }
+  function startRecordingOp(kind) {
+    const op = { kind, status: 'pending', code: undefined, timer: undefined };
+    rc.op = op; rcLast = null;
+    if (!sendTypedMessage(encodeRecordingToggleCommand())) return recordingRefusal('send-failed', 'Connection send failed; the outcome is unknown. No retry.');
+    // A synchronous reply or stop during send already settled or replaced op.
+    if (rc.op === op && op.status === 'pending') {
+      const owner = generation;
+      op.timer = timers.setTimeout(() => { if (generation === owner && settleRecordingOp(op, 'unconfirmed')) emit('controls'); }, RECORDING_WAIT_MS);
+    }
+    emit('controls');
+    return Object.freeze({ ok: true, kind });
+  }
+  const recordingAPI = {
+    startRecording() { return recordingPreflight('start') ?? startRecordingOp('start'); },
+    stopRecording() { return recordingPreflight('stop') ?? startRecordingOp('stop'); },
+  };
+  const RECORDING_OUTCOME_TEXT = {
+    start: { pending: 'Start sent; waiting for the desk to report recording.', confirmed: 'The desk reported recording started.', unconfirmed: 'Start sent; the desk did not report recording within 5 s. Check the desk before relying on it.', unknown: 'The connection ended while a recording start was outstanding; the outcome is unknown. No retry.' },
+    stop: { pending: 'Stop sent; waiting for the desk to report recording stopped.', confirmed: 'The desk reported recording stopped.', unconfirmed: 'Stop sent; the desk did not report recording stopped within 5 s. Check the desk before relying on it.', unknown: 'The connection ended while a recording stop was outstanding; the outcome is unknown. No retry.' },
+  };
+  const publicRecordingOperation = op => !op ? null : op.text ? op : Object.freeze({ kind: op.kind, status: op.status, ...(op.code ? { code: op.code } : {}),
+    text: op.status === 'refused' ? recordingRefusalText(op.code) : RECORDING_OUTCOME_TEXT[op.kind][op.status] });
+  function recordingSnapshot() {
+    const recording = rc.state === null ? null : rc.state !== 0;
+    return Object.freeze({
+      present: rc.present === null ? null : rc.present >= 0.5, freespace: rc.freespace, dropouts: rc.dropouts, state: rc.state, recording,
+      // The desk counts time up while stopped, so elapsed exists only while the received state says recording.
+      elapsed: recording && rc.time !== null && rc.time >= 0 ? Math.floor(rc.time) : null,
+      session: rc.session, busy: rc.busy, lock: recordingLock(), operation: publicRecordingOperation(rc.op ?? rcLast),
+    });
+  }
   const snapshot = () => {
     if (socket) inspectCurrent(); // A read after sleep cannot resurrect old state before timers run.
     // Full readiness: received Ui24 AUX state and, for control sessions, an open writer.
     const qualified = phase === 'live' && (!controlEnabled || writerReady);
-    return { phase, qualified, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}), ...(auxControl ? { snapshots: snapshotsSnapshot() } : {}) };
+    return { phase, qualified, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}), ...(auxControl ? { snapshots: snapshotsSnapshot(), recording: recordingSnapshot() } : {}) };
   };
   const emit = (kind = 'state') => { for (const listener of listeners) listener(snapshot(), kind); };
   const clearTimers = () => { timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = null; timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
   function stop(next = 'disconnected', message = 'Disconnected — received state cleared') {
     ++generation;
-    resetSnapshots();
+    resetSnapshots(); resetRecording();
     cancelControl('Received state cleared; connect explicitly.', 'disconnect'); selected = null; attentionFlag = false; observed.clear(); receipts.clear(); eqObserved.clear(); processingRaw.clear(); sequence = 0;
     clearTimers();
     const old = socket, oldReceiver = receiver;
@@ -768,7 +855,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       // Control writers never populate actual state: their INIT may arrive late
       // and sender echoes are absent on observed firmware. One receiver owns it.
       if (!controlEnabled) receiveState(data);
-      else if (auxControl && receiveWriterSnapshot(data)) emit('controls');
+      else if (auxControl) { const snapshotsChanged = receiveWriterSnapshot(data), recordingChanged = receiveWriterRecording(data); if (snapshotsChanged || recordingChanged) emit('controls'); }
     };
     current.onerror = () => { if (active()) stop('error', 'Mixer connection failed — reconnect explicitly'); };
     current.onclose = () => { if (active()) stop('closed', 'Mixer connection closed — received state cleared'); };
@@ -806,6 +893,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     ...(auxControl ? panAPI : {}),
     ...(auxControl ? eqAPI : {}),
     ...(auxControl ? snapshotAPI : {}),
+    ...(auxControl ? recordingAPI : {}),
     connect,
     disconnect: () => stop(),
     snapshot,

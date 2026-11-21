@@ -2,7 +2,11 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
-## 0.6.1 — 2026-11-21 — F07-S06 (this PR)
+## 0.7.0 — 2026-11-21 — F07-S03 (this PR)
+
+- Multitrack recording: the header Record button starts recording in one tap and shows the desk's own elapsed time while recording; tapping it then offers Stop multitrack recording?. The button is disabled with a reason when no USB drive is in the desk, the desk is locked or busy, or the state is unknown. Outcomes appear in the footer and the Diagnostics log, which gains a Recording section. Automatic updates wait while a recording is active.
+
+## 0.6.1 — 2026-11-21 — F07-S06 ([#64](https://github.com/johnsherlock/mixmate/pull/64))
 
 - Install prompt fallback: when the browser has not offered installation 3 s after load (Brave never does; Chrome only when it deems the page installable), the install strip shows menu instructions (Android: browser menu → Install app or Add to Home screen). A later browser offer switches it to the Install button.
 
