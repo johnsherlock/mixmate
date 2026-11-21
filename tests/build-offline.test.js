@@ -84,7 +84,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.match(rootHTML, /connect-src ws:/);
     const metadata = JSON.parse(await readFile('package.json', 'utf8'));
     const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
-    assert.equal(metadata.version, '0.6.1'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
+    assert.equal(metadata.version, '0.7.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
     assert.ok(live.includes(metadata.version) && connection.includes(metadata.version));
     assert.equal(manifest.name, 'MixMate — IEM mixer'); assert.equal(manifest.id, 'mixmate/'); assert.equal(manifest.start_url, './'); assert.equal(manifest.scope, './');
     const shell = await readFile('src/iem/shell.html', 'utf8');
@@ -103,6 +103,12 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.match(demoHTML, /connect-src 'none'/);
     const transport = await readFile('src/iem/session-core.js', 'utf8');
     assert.deepEqual([...transport.matchAll(/\.send\(([^)]+)\)/g)].map(match => match[1]).sort(), ["'2::'", "'2::'", "'3:::ALIVE'", "'3:::ALIVE'", "'3:::INIT'", "'3:::INIT'", "message", "message"].sort()); // two typed owners: the SETD dispatch ordinal and the F07-S01 snapshot sender
+    // F07-S03: the recording toggle is a single typed encoder; its wire text exists only in recording-protocol.js and no other MTK command is spelled anywhere in src.
+    const sources = (await import('node:child_process')).execFileSync('grep', ['-rlE', 'MTK_|RECTOGGLE', 'src'], { encoding: 'utf8' }).trim().split('\n').sort();
+    assert.deepEqual(sources, ['src/iem/recording-protocol.js']);
+    const recordingProtocol = await readFile('src/iem/recording-protocol.js', 'utf8');
+    assert.deepEqual([...recordingProtocol.matchAll(/MTK_[A-Z_]+|RECTOGGLE/g)].map(match => match[0]), ['MTK_REC_TOGGLE']);
+    assert.ok(transport.includes('encodeRecordingToggleCommand()') && !transport.includes('MTK_'));
     assert.ok(!transport.includes('../protocol.js'));
     assert.match(transport, /createReadOnlySession\(options\) \{ return createSession\(false, options\)/);
     assert.match(transport, /createAuxLevelSession\(options\) \{ return createSession\(true, options\)/);

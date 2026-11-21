@@ -8,6 +8,7 @@ import { mountEqControls } from './eq-controls.js';
 import { createLiveConnectionUI, mountLiveController } from './live-controller.js';
 import { mountGroupEditor } from './group-editor.js';
 import { mountSnapshotControls } from './snapshot-controls.js';
+import { mountRecordingControls } from './recording-controls.js';
 import { createGroupEditorUI } from './group-editor-ui.js';
 import { SettingsRepository } from '../settings.js';
 import { prepareEntryOffline } from './entry-offline.js';
@@ -17,7 +18,7 @@ import { buildInfo } from '../build-info.js';
 const root = mountShell(document.getElementById('iem-root'), 'live');
 // F07-S05: capture the browser's install offer as early as possible (it can fire
 // any time after load); the strip is non-modal and sits in flow under the header.
-let connectionUI, snapshotControls;
+let connectionUI, snapshotControls, recordingControls;
 const storageOf = name => { try { return globalThis[name]; } catch { return undefined; } };
 const installPrompt = createInstallPrompt({ container: root.querySelector('.mm-app'), before: root.querySelector('.mm-navigation'), storage: storageOf('localStorage'),
   onState: value => connectionUI?.diagnostics.install(value, () => installPrompt.reshow()) });
@@ -43,12 +44,14 @@ panControls = mountPanControls({ root, session, controller, dialogOwner, debug }
 eqControls = mountEqControls({ root, session, controller, debug });
 // F07-S02: header Snapshot (recall) and Save snapshot dialogs over the session's typed snapshot API.
 snapshotControls = mountSnapshotControls({ root, session, ui: connectionUI, dialogOwner });
+// F07-S03: header Record button and Stop recording dialog over the session's typed recording API.
+recordingControls = mountRecordingControls({ root, session, ui: connectionUI, dialogOwner });
 connectionUI.diagnostics.install({ text: installPrompt.description(), canShow: false }, () => installPrompt.reshow());
 // F07-S05 (user decision 2026-11-21): automatic online updates. A waiting worker is
 // applied (skipWaiting + one reload) only while updateBusy() is false; otherwise it
 // is applied as soon as the session ends, the gesture/operation finishes or the dialog closes.
 const updates = createUpdateManager({ serviceWorker: navigator.serviceWorker, window, document, storage: storageOf('sessionStorage'),
-  busy: snapshot => updateBusy({ session, dialogOwner, snapshotControls, snapshot, explicitConnecting: () => controller.explicitConnecting() }),
+  busy: snapshot => updateBusy({ session, dialogOwner, snapshotControls, recordingControls, snapshot, explicitConnecting: () => controller.explicitConnecting() }),
   carry: () => controller.autoSuppressed(),
   onState: value => { connectionUI.diagnostics.updates(value.text); if (value.announce) connectionUI.message(value.text); } });
 // Meter emits cannot change what is busy; other emits pass their snapshot so no extra copy is taken.

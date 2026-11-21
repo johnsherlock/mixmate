@@ -584,3 +584,19 @@ F07-S05 review round 1 (root live acceptance, [story](stories/F07-S05.md#review-
 | Desktop | Generic line only on touch devices; nothing on a plain desktop (phone/tablet app; desktop browsers show their own install affordance). | None. |
 | Version | 0.6.1 (patch) with CHANGELOG entry. | None. |
 | Post-merge docs | F07-S05 recorded as merged (PR #63, `5cd755c`) in story, feature, backlog and handoff; handoff records the F07 authorization. | None. |
+
+## 2026-11-21 — F07-S03 multitrack recording (root decisions, in review)
+
+[F07-S03](stories/F07-S03.md), user-authorized 2026-11-21 (rest of F07 in the order F07-S06 → F07-S03 → F07-S04; F07-S06 merged as PR #64, `4c6c574`). Contract: [recording contract](iem-recording-contract.md); decision record [ADR-0011](adr/0011-multitrack-recording-contract.md) (ADR-0010 is reserved by F01-S05).
+
+| Item | Decision / status | Next action and owner |
+| --- | --- | --- |
+| Allowlist | New row: exactly `3:::MTK_REC_TOGGLE`, `createAuxControlSession` writer only; typed `startRecording()` / `stopRecording()`. Never on the read-only/level-only factories or the companion. Excluded: `RECTOGGLE`, MTK playback, `MTK_REC`/`MTK_REC_STOP`/pause/jump/set-session, session delete/rename/list. | None. |
+| Never blind | A toggle has no direction: start only when received `rec.currentState` is exactly 0, stop only when received and non-zero. | None. |
+| Prerequisites | Qualified session, received state, start needs truthy received `present`, `rec.busy` received and < 0.5, lock (`pass` non-empty ⇒ `player` exactly 1; unknown refuses), one operation, no retry/queue/replay. | None. |
+| Beyond the brief | Stop does not require `present` (native does not; a pulled drive must not trap the user); REC_ERR also settles a pending stop as refused; any non-zero state counts as recording (value while recording unverified); recording does not refuse during a level gesture. | Reviewer to confirm. |
+| Outcomes | start `confirmed` (state ≠ 0 within 5 s) / `refused` (REC_ERR) / `unconfirmed`; stop `confirmed` / `unconfirmed`; `unknown` on disconnect. Elapsed time only from received `rec.time` while recording. | None. |
+| Unverified | State value(s) while recording, busy transitions, stop reply, mid-take drive removal, freespace unit. | Needs a USB drive in the desk; root records live start/stop acceptance in the story. Not waived. |
+| Updates | `updateBusy` treats a pending recording operation and an active recording while connected as busy. | None. |
+| Version | 0.7.0 (minor) with CHANGELOG entry. | None. |
+| F07-S06 | Recorded as merged (PR #64, `4c6c574`, final head `3a516a3`) in story, feature, backlog and handoff. | None. |

@@ -47,6 +47,12 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
   const snapshotRows = { show: row(snapshots, 'Show'), current: row(snapshots, 'Current'), list: row(snapshots, 'List'), operation: row(snapshots, 'Last operation'), lock: row(snapshots, 'Lock') };
   const emptySnapshots = { show: 'unavailable', current: 'unavailable', list: 'unavailable', operation: 'none', lock: 'unavailable' };
 
+  // F07-S03: received multitrack recording state and the last recording operation (text only; free space is the desk's raw value, units unverified).
+  const recordingSection = section('Recording');
+  const recordingRows = { drive: row(recordingSection, 'Drive'), freespace: row(recordingSection, 'Free space'), dropouts: row(recordingSection, 'Dropouts'), state: row(recordingSection, 'State'), elapsed: row(recordingSection, 'Elapsed'),
+    session: row(recordingSection, 'Session'), busy: row(recordingSection, 'Busy'), lock: row(recordingSection, 'Recording lock'), operation: row(recordingSection, 'Last recording operation') };
+  const emptyRecording = { drive: 'unavailable', freespace: 'unavailable', dropouts: 'unavailable', state: 'unavailable', elapsed: 'unavailable', session: 'unavailable', busy: 'unavailable', lock: 'unavailable', operation: 'none' };
+
   const recent = section('Recent messages'), log = make('ol', 'mm-diag-list mm-diag-log'); recent.append(log);
 
   const settingsSection = section('Settings'), settings = make('p', '', 'Checking local settings storage…');
@@ -63,7 +69,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
   demo.href = './demo.html'; test.href = './connection-test.html'; test.title = 'Settings and connection test';
   nav.append(demo, test); linksSection.append(nav);
 
-  const entries = []; let state = { auto: null, rig: '', status: null, connected: '', note: '', snapshots: emptySnapshots };
+  const entries = []; let state = { auto: null, rig: '', status: null, connected: '', note: '', snapshots: emptySnapshots, recording: emptyRecording };
   const messageNode = () => $('.mm-message');
   let transient = '', lasting = '', transientTimer;
   const paintSlot = () => { const node = messageNode(), value = transient || lasting; if (node) { node.textContent = value; node.setAttribute('title', value); } };
@@ -82,6 +88,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
     auto.textContent = pass ? `${pass.reason} pass · ${pass.outcome}` : 'No automatic pass yet';
     attempts.replaceChildren(...(pass?.attempts || []).map(item => make('li', '', `${item.address} — ${item.result}`)));
     for (const [key, node] of Object.entries(snapshotRows)) node.textContent = state.snapshots[key];
+    for (const [key, node] of Object.entries(recordingRows)) node.textContent = state.recording[key];
     paintLog();
   };
 
@@ -132,6 +139,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
     rig(text) { if (state.rig !== text) { state = { ...state, rig: text }; refresh(); } },
     // Snapshot rows: plain strings built by the snapshot controls from received state.
     snapshots(value) { state = { ...state, snapshots: value ? Object.fromEntries(Object.keys(emptySnapshots).map(key => [key, String(value[key] ?? emptySnapshots[key])])) : emptySnapshots }; refresh(); },
+    recording(value) { state = { ...state, recording: value ? Object.fromEntries(Object.keys(emptyRecording).map(key => [key, String(value[key] ?? emptyRecording[key])])) : emptyRecording }; refresh(); },
     autoPass(pass) { state = { ...state, auto: pass ? { ...pass, attempts: pass.attempts.map(item => ({ ...item })) } : null }; refresh(); },
     // Footer message slot: only actionable feedback. A transient message clears
     // after MESSAGE_TTL_MS or at the next deliberate gesture; a lasting condition
