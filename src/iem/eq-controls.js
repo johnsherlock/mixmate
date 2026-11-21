@@ -192,7 +192,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
   // a pair equal) are usable; filterPreview = positions requested by the active
   // cut gesture (distinct from received); lastCut remembers the last ON position
   // per output for this mount (session-local, never persisted).
-  let filterEditable = false, filterPreview = null;
+  let filterEditable = false, filtersOk = false, filterPreview = null;
   const lastCut = new Map();
   const RESTART_OUTSIDE = 'Curve changed on the desk; points restarted from the current curve.';
   const RESTART_INTERRUPTED = 'The last point change was interrupted; points restarted from the current curve.';
@@ -322,7 +322,11 @@ export function mountEqControls({ root, session, controller, window = globalThis
     if (gesture && !control?.gestureActive) { gesture = null; previewValues = null; filterPreview = null; gestures?.cancel(); drag = null; }
     // F06-S05: remember the last ON position per output; derive cut availability.
     for (const filter of AUX_EQ_FILTERS) if (!filterPreview && cutIsOn(filter, readback.filters[filter]) && readback.filters.ok) lastCut.set(`${auxIndex}.${filter}`, readback.filters[filter]);
-    filterEditable = Boolean(editable && readback.filters.ok);
+    // A pair's sides echo a few ms apart: while this owner's cut gesture or own filter send is live
+    // the transient inequality is our own outstanding echo, so the cuts stay editable and unflagged.
+    const ownLive = owned(control) && Boolean(control.eqFilters) && (control.gestureActive || control.pending || control.dispatching);
+    filtersOk = readback.filters.ok || ownLive && readback.filters.complete;
+    filterEditable = Boolean(editable && filtersOk);
     // Between gestures, keep handles/shape over the curve the next gesture will
     // edit: when the editable coordinate (requested values while own echoes are
     // pending, else complete equal received bands once the owner allows editing)
@@ -349,7 +353,7 @@ export function mountEqControls({ root, session, controller, window = globalThis
     // Compact read-only state: a readback reason, else the owner's one-line reason
     // (the full text also stays in the app's header/footer status and the title).
     const readbackOk = ['mono', 'linked'].includes(readback.link) && readback.complete && readback.equal;
-    const stateText = editable ? eqFilterCompactState(readback) : readbackOk && owned(control) ? control.reason || control.status : eqCompactState(readback);
+    const stateText = editable ? (filtersOk ? '' : eqFilterCompactState(readback)) : readbackOk && owned(control) ? control.reason || control.status : eqCompactState(readback);
     stateBadge.textContent = stateText; stateBadge.hidden = !stateText; stateBadge.setAttribute('title', editable ? '' : ownerText);
     stateBadge.dataset.state = editable ? 'editable' : 'read-only';
     if (diag) renderDiagnostics(readback, control, showHint ? `${hint} ${ownerText}` : ownerText);

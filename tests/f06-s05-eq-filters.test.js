@@ -323,6 +323,21 @@ test('UI: read-only cuts show a compact reason (unequal sides / waiting) while t
   waiting.eq.destroy(); waiting.session.disconnect();
 });
 
+test('UI: a pair echoing side A then side B during a streamed cut drag never shows read-only cuts', () => {
+  const ui = uiFixture({ filters: [[0.1, 1], [0.1, 1], [0, 1]] }); ui.context.selectedAux = 0; ui.eq.open(0);
+  const [low, high] = ui.all('[data-eq-filter]'), state = ui.find('.mm-live-eq-state'), svg = svgOf(ui);
+  const stable = label => { assert.equal(low.disabled, false, label); assert.equal(high.disabled, false, label); assert.equal(state.hidden, true, label); };
+  press(ui.find('[data-eq-filter-handle="hpf"]').children[1], 'pointerdown', { clientX: clientXFor(0.1), clientY: 37 });
+  press(svg, 'pointermove', { clientX: clientXFor(0.3), clientY: 37 }); assert.deepEqual(ui.writes(), ['3:::SETD^a.0.eq.hpf^0.3', '3:::SETD^a.1.eq.hpf^0.3']); stable('after step');
+  ui.receiver.receive('3:::SETD^a.0.eq.hpf^0.3'); stable('side A echoed, B not yet');
+  ui.receiver.receive('3:::SETD^a.1.eq.hpf^0.3'); stable('both echoed');
+  ui.advance(120); press(svg, 'pointermove', { clientX: clientXFor(0.4), clientY: 37 }); ui.receiver.receive('3:::SETD^a.0.eq.hpf^0.4'); stable('second step, A only');
+  assert.equal(ui.session.snapshot().control.gestureActive, true, 'own echoes never stop the drag');
+  press(svg, 'pointerup', { clientX: clientXFor(0.4), clientY: 37 }); stable('pending after release, B outstanding');
+  ui.receiver.receive('3:::SETD^a.1.eq.hpf^0.4'); stable('settled');
+  ui.eq.destroy(); ui.session.disconnect();
+});
+
 test('UI: the reset button also turns both cuts off; received cuts bend the displayed received curve (approximation, ?debug note only)', () => {
   const ui = uiFixture({ debug: true, filters: [[0.3, 0.8], [0.3, 0.8], [0.3, 0.8]] }); ui.eq.open(2);
   assert.match(ui.find('[data-eq-reset]').attributes['aria-label'], /turn both cuts off/);
