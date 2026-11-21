@@ -12,7 +12,7 @@ import { createGroupEditorUI } from './group-editor-ui.js';
 import { SettingsRepository } from '../settings.js';
 import { prepareEntryOffline } from './entry-offline.js';
 import { createInstallPrompt } from './install.js';
-import { createUpdateManager, updateBusy, updatedMessage } from './updates.js';
+import { createUpdateManager, updateBusy, updatedMessage, consumeUpdateSuppress } from './updates.js';
 import { buildInfo } from '../build-info.js';
 const root = mountShell(document.getElementById('iem-root'), 'live');
 // F07-S05: capture the browser's install offer as early as possible (it can fire
@@ -33,7 +33,9 @@ const view = mountReadOnlyView(root, { debug, onMessage: text => connectionUI.me
 connectionUI = createLiveConnectionUI(root, { levels: true, pan: true, dialogOwner });
 // F02-S05 (user decision 2026-11-20): only this live IEM entry connects
 // automatically to known addresses; demo.html and connection-test.html do not.
-controller = mountLiveController({ session, repository, view, ui: connectionUI, autoConnect: true });
+// F07-S05: an explicit Disconnect before an automatic update reload stays in force for that one reload.
+const initialSuppressed = consumeUpdateSuppress(storageOf('sessionStorage'));
+controller = mountLiveController({ session, repository, view, ui: connectionUI, autoConnect: true, initialSuppressed });
 mountGroupEditor({ repository, controller, ui: createGroupEditorUI(root, connectionUI), setEnabled: value => view.groupEditing(value, controller.context().unavailableReason),
   confirmClear: () => window.confirm('Clear all source selections from this group draft? Save group to apply the change.') });
 channelDetail = mountChannelDetail({ root, dialogOwner, onOpen: model => { controller.clearLevelContext(); return view.detailModel(model.id); } });
@@ -46,10 +48,13 @@ connectionUI.diagnostics.install({ text: installPrompt.description(), canShow: f
 // applied (skipWaiting + one reload) only while updateBusy() is false; otherwise it
 // is applied as soon as the session ends, the gesture/operation finishes or the dialog closes.
 const updates = createUpdateManager({ serviceWorker: navigator.serviceWorker, window, document, storage: storageOf('sessionStorage'),
-  busy: () => updateBusy({ session, dialogOwner, snapshotControls }),
+  busy: snapshot => updateBusy({ session, dialogOwner, snapshotControls, snapshot, explicitConnecting: () => controller.explicitConnecting() }),
+  carry: () => controller.autoSuppressed(),
   onState: value => { connectionUI.diagnostics.updates(value.text); if (value.announce) connectionUI.message(value.text); } });
-session.subscribe(() => updates.evaluate());
+// Meter emits cannot change what is busy; other emits pass their snapshot so no extra copy is taken.
+session.subscribe((snapshot, kind) => { if (kind !== 'meters') updates.evaluate(snapshot); });
 dialogOwner.subscribe(() => updates.evaluate());
+if (initialSuppressed) connectionUI.log('Staying disconnected: you disconnected before the update.');
 if (updates.consumeNotice()) connectionUI.message(updatedMessage(buildInfo()));
 prepareEntryOffline(root.querySelector('.mm-offline-state'), { onPaint: () => connectionUI.refresh(), updates });
 

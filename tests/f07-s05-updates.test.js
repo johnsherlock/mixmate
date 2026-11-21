@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createUpdateManager, updateBusy, updatedMessage, UPDATE_APPLIED_KEY, UPDATE_NOTICE_KEY, READY_TEXT } from '../src/iem/updates.js';
+import { createUpdateManager, updateBusy, updatedMessage, consumeUpdateSuppress, UPDATE_APPLIED_KEY, UPDATE_NOTICE_KEY, UPDATE_SUPPRESS_KEY, READY_TEXT } from '../src/iem/updates.js';
 import { createDialogOwner } from '../src/iem/dialog-owner.js';
 import { prepareEntryOffline, DEV_OFFLINE_TEXT } from '../src/iem/entry-offline.js';
 
@@ -19,12 +19,12 @@ const store = (data = new Map()) => ({ data, getItem: key => data.has(key) ? dat
 const NEW = 'b'.repeat(16);
 const entryDocument = { baseURI: 'https://example.test/mixmate/', querySelector: () => ({ content: 'a'.repeat(64) }), querySelectorAll: () => [] };
 
-function setup({ storage = store(), version = NEW, workerReplies = true, now = () => 1000 } = {}) {
+function setup({ storage = store(), version = NEW, workerReplies = true, now = () => 1000, carry = () => false } = {}) {
   const serviceWorker = Object.assign(new Events(), { controller: {} }), window = new Events(), document = Object.assign(new Events(), { visibilityState: 'visible' });
   const reloads = [], states = [], timers = fakeTimers(), state = { busy: false };
   const worker = { sent: [], postMessage(message, [port]) { this.sent.push(message); if (workerReplies) port.postMessage({ applied: message.previous !== version, version }); } };
   const registration = { updates: 0, update() { this.updates++; return Promise.resolve(); }, waiting: worker, active: {} };
-  const manager = createUpdateManager({ serviceWorker, window, document, storage, busy: () => state.busy, reload: () => reloads.push(1), onState: value => states.push(value), timers, now });
+  const manager = createUpdateManager({ serviceWorker, window, document, storage, busy: () => state.busy, carry, reload: () => reloads.push(1), onState: value => states.push(value), timers, now });
   return { serviceWorker, window, document, reloads, states, timers, state, worker, registration, manager, storage };
 }
 async function applyNow(t) { t.manager.attach(t.registration); t.manager.waiting(true); await tick(); }
@@ -161,4 +161,29 @@ test('dev server: no registration is attempted and the confusing error is replac
   // A production build still shows an accurate registration error.
   const prod = {}, real = prepareEntryOffline(prod, { navigator: { serviceWorker: new Events() }, document: entryDocument, storage: store(), dev: false, verify: async () => { throw Error('Failed to register a ServiceWorker: bad MIME'); } });
   await real.whenIdle(); assert.ok(prod.textContent.includes('Failed to register a ServiceWorker')); real.destroy();
+});
+
+test('F07-S05 review: an explicit Disconnect is carried across exactly one automatic update reload', async () => {
+  for (const [suppressed, expected] of [[true, '1'], [false, '0']]) {
+    const t = setup({ carry: () => suppressed }); await applyNow(t); t.serviceWorker.emit('controllerchange');
+    assert.equal(t.reloads.length, 1); assert.equal(t.storage.data.get(UPDATE_SUPPRESS_KEY), expected);
+    assert.equal(consumeUpdateSuppress(t.storage), suppressed); assert.equal(consumeUpdateSuppress(t.storage), false); // one reload only
+    t.manager.destroy();
+  }
+  assert.equal(consumeUpdateSuppress({ getItem() { throw Error('x'); }, removeItem() { throw Error('x'); } }), false);
+});
+
+test('F07-S05 review: an explicit Connect that is still connecting is busy; an automatic pass is not; the emitted snapshot is used without another copy', () => {
+  const session = { snapshot() { throw Error('must not copy when a snapshot is given'); } }, dialogOwner = createDialogOwner();
+  assert.equal(updateBusy({ session, dialogOwner, snapshot: { phase: 'connecting' }, explicitConnecting: () => true }), true);
+  assert.equal(updateBusy({ session, dialogOwner, snapshot: { phase: 'connecting' }, explicitConnecting: () => false }), false);
+  assert.equal(updateBusy({ session, dialogOwner, snapshot: { phase: 'live' } }), true);
+  assert.equal(updateBusy({ session, dialogOwner, snapshot: { phase: 'idle' } }), false);
+});
+
+test('F07-S05 review: evaluate passes the emitted snapshot to busy()', async () => {
+  const seen = [], t = setup(); t.manager.destroy();
+  const manager = createUpdateManager({ serviceWorker: t.serviceWorker, window: t.window, document: t.document, storage: t.storage, busy: hint => { seen.push(hint); return true; }, reload() {}, timers: t.timers });
+  manager.attach(t.registration); manager.waiting(true); manager.evaluate({ phase: 'live' });
+  assert.deepEqual(seen.at(-1), { phase: 'live' }); manager.destroy();
 });

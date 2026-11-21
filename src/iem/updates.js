@@ -5,6 +5,7 @@
 export const UPDATE_APPLIED_KEY = 'mixmate-update-applied';
 export const UPDATE_NOTICE_KEY = 'mixmate-update-notice';
 export const UPDATE_RELOAD_AT_KEY = 'mixmate-update-reload-at';
+export const UPDATE_SUPPRESS_KEY = 'mixmate-update-suppress';
 export const RELOAD_BACKSTOP_MS = 10000;
 export const updatedMessage = info => `Updated to v${info.version} (${info.commit}).`;
 export const READY_TEXT = 'Update ready — applies when you disconnect';
@@ -18,8 +19,15 @@ export const READY_TEXT = 'Update ready — applies when you disconnect';
 // address does not answer on this network) has no state to lose: reloading simply
 // restarts the automatic pass in the new page, so it does not defer an update.
 // The Connect dialog while no session is active holds only a typed address.
-export function updateBusy({ session, dialogOwner, snapshotControls }) {
-  const snapshot = session.snapshot();
+export function consumeUpdateSuppress(storage) {
+  let value = false;
+  try { value = storage?.getItem(UPDATE_SUPPRESS_KEY) === '1'; storage?.removeItem(UPDATE_SUPPRESS_KEY); } catch { /* Best effort. */ }
+  return value;
+}
+export function updateBusy({ session, dialogOwner, snapshotControls, explicitConnecting, snapshot: given }) {
+  // `given` is the snapshot a session emit already built; otherwise one copy is taken.
+  const snapshot = given || session.snapshot();
+  if (snapshot.phase === 'connecting' && explicitConnecting?.()) return true; // never drop the user's own Connect attempt
   if (['connected', 'partial', 'live'].includes(snapshot.phase)) return true;
   const control = snapshot.control;
   if (control && (control.gestureActive || control.pending || control.dispatching)) return true;
@@ -30,7 +38,7 @@ export function updateBusy({ session, dialogOwner, snapshotControls }) {
 }
 
 export function createUpdateManager({
-  serviceWorker, window = globalThis.window, document = globalThis.document, storage, busy = () => false, reload, onState = () => {},
+  serviceWorker, window = globalThis.window, document = globalThis.document, storage, busy = () => false, carry = () => false, reload, onState = () => {},
   MessageChannelClass = globalThis.MessageChannel, timers = globalThis, now = () => Date.now(), replyMs = 3000, applyMs = 10000,
 }) {
   const reloadPage = reload || (() => window.location.reload());
@@ -51,6 +59,8 @@ export function createUpdateManager({
     const last = Number(read(UPDATE_RELOAD_AT_KEY));
     if (Number.isFinite(last) && last > 0 && now() - last < RELOAD_BACKSTOP_MS) { activated = false; emit('manual', 'Update installed. Reload MixMate to use it.'); return; }
     if (!write(UPDATE_NOTICE_KEY, '1') || !write(UPDATE_RELOAD_AT_KEY, String(now()))) { activated = false; emit('manual', 'Update installed. Reload MixMate to use it.'); return; }
+    // An explicit Disconnect stays in force across this one reload (the new page is not a user app open).
+    write(UPDATE_SUPPRESS_KEY, carry() ? '1' : '0');
     activated = false; emit('applying', 'Updating…');
     reloadPage();
   }
@@ -77,10 +87,10 @@ export function createUpdateManager({
     try { worker.postMessage({ type: 'APPLY_UPDATE', previous }, [channel.port2]); }
     catch { timers.clearTimeout(replyTimer); finish(); applying = false; emit('manual', 'Update ready — close all MixMate windows and reopen to apply'); }
   }
-  function evaluate() {
+  function evaluate(hint) {
     if (destroyed || phase === 'manual') return;
     if (!activated && !(waiting && !applying)) return;
-    if (busy()) {
+    if (busy(hint)) {
       if (phase !== 'ready') { emit('ready', READY_TEXT, { announce: !announced }); announced = true; }
       return;
     }
@@ -105,6 +115,8 @@ export function createUpdateManager({
     evaluate,
     check,
     // True once after an automatic update reload (sessionStorage flag).
+    // True once after an update reload when an explicit Disconnect was in force.
+    consumeSuppress: () => consumeUpdateSuppress(storage),
     consumeNotice() { const value = read(UPDATE_NOTICE_KEY) === '1'; if (value) { try { storage.removeItem(UPDATE_NOTICE_KEY); } catch { /* Best effort. */ } } return value; },
     state: () => ({ phase, text }),
     destroy() { destroyed = true; clearTimers(); serviceWorker?.removeEventListener?.('controllerchange', onControllerChange); window?.removeEventListener?.('online', onOnline); document?.removeEventListener?.('visibilitychange', onVisible); },

@@ -94,7 +94,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
 }
 
 export function mountLiveController({ session, repository, view, ui, document = globalThis.document, window = globalThis.window, createID = () => globalThis.crypto.randomUUID(),
-  autoConnect: autoConnectEnabled = false, timers = globalThis, now = () => Date.now(), attemptMs = AUTO_CONNECT_ATTEMPT_MS }) {
+  autoConnect: autoConnectEnabled = false, initialSuppressed = false, timers = globalThis, now = () => Date.now(), attemptMs = AUTO_CONNECT_ATTEMPT_MS }) {
   let destroyed = false, settings = null, settingsReady = false, selectedAux = null;
   let boundProfileId = null, contextRevision = 0, previousPhase = 'idle', rigMessage = '', creating = null, failedName = null;
   let previousObserved = false;
@@ -102,7 +102,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
   let navIntent = 0, navPending = Promise.resolve(), rigPending = Promise.resolve(), navigationMessage = '', previousExpanded = null, previousControl = null;
   // Automatic connection state: an explicit Disconnect suppresses every
   // automatic trigger until the next explicit Connect or app open.
-  let suppressed = false, addressTouched = false, attempt = null, reachedLive = false, lastAutoSuccess = -Infinity, autoMessage = '';
+  let suppressed = Boolean(initialSuppressed), addressTouched = false, attempt = null, reachedLive = false, lastAutoSuccess = -Infinity, autoMessage = '';
   // Footer status: the address of the current/last attempt and the last failure
   // (`lost` after a live connection dropped, else the address that did not answer).
   let lastFailure = null, lastStatusText = '', autoPass = null;
@@ -524,6 +524,10 @@ export function mountLiveController({ session, repository, view, ui, document = 
     whenRigIdle: () => rigPending,
     context,
     autoConnecting: () => Boolean(autoConnect?.running()),
+    // F07-S05: an explicit Disconnect's suppression, carried across one automatic update reload.
+    autoSuppressed: () => suppressed,
+    // F07-S05: a user-initiated Connect that has not yet received state (an automatic pass is excluded).
+    explicitConnecting: () => session.snapshot().phase === 'connecting' && !autoConnect?.running(),
     subscribeContext(listener) { contextListeners.add(listener); listener(context()); return () => contextListeners.delete(listener); },
     selectAux(index) {
       const snapshot = session.snapshot(), candidate = projectLiveState(snapshot, index);

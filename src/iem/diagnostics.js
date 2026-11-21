@@ -146,6 +146,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
     clearMessage() { timers.clearTimeout(transientTimer); transientTimer = undefined; transient = ''; paintSlot(); },
     condition(text) { const value = String(text || ''); if (value === lasting) return; lasting = value; if (value) api.log(value); paintSlot(); },
     currentMessage: () => transient || lasting,
+    transientMessage: () => transient,
     // Bounded, in-memory only (never persisted).
     log(text) {
       const value = String(text || '').trim();

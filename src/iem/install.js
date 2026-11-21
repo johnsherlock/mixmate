@@ -22,7 +22,7 @@ export function createInstallPrompt({ container, before = null, window = globalT
   const document = container.ownerDocument;
   const make = (tag, className, text = '') => { const node = document.createElement(tag); if (className) node.className = className; node.textContent = text; return node; };
   const strip = make('div', 'mm-install'), label = make('span', 'mm-install-text'), go = make('button', 'mm-install-go', 'Install MixMate'), dismissButton = make('button', 'mm-install-dismiss', '×');
-  strip.hidden = true; strip.setAttribute('role', 'status'); go.type = 'button'; dismissButton.type = 'button'; dismissButton.setAttribute('aria-label', 'Dismiss install prompt'); dismissButton.setAttribute('title', 'Dismiss');
+  strip.hidden = true; strip.setAttribute('role', 'status'); go.type = 'button'; dismissButton.type = 'button'; go.dataset.action = 'install'; dismissButton.dataset.action = 'dismiss-install'; // data-action keeps them enabled when the live view disables the buttons present at mount dismissButton.setAttribute('aria-label', 'Dismiss install prompt'); dismissButton.setAttribute('title', 'Dismiss');
   strip.append(label, go, dismissButton);
   container.insertBefore(strip, before);
   const read = () => { try { return storage?.getItem(INSTALL_DISMISSED_KEY) === '1'; } catch { return false; } };
@@ -40,7 +40,7 @@ export function createInstallPrompt({ container, before = null, window = globalT
   const paint = () => {
     const current = kind();
     const showing = !destroyed && !dismissed && !session && (current === 'installable' || current === 'instructions');
-    strip.hidden = !showing; go.hidden = current !== 'installable';
+    strip.hidden = !showing; go.hidden = current !== 'installable'; go.disabled = false; dismissButton.disabled = false;
     label.textContent = current === 'installable' ? 'Install MixMate as an app' : current === 'instructions' ? IOS_INSTRUCTION : '';
     try { onState({ kind: current, text: description(), dismissed, canShow: dismissed && (current === 'installable' || current === 'instructions') }); } catch { /* Display observer only. */ }
   };
@@ -63,7 +63,7 @@ export function createInstallPrompt({ container, before = null, window = globalT
   go.addEventListener('click', onGo); dismissButton.addEventListener('click', onDismiss);
   paint();
   return {
-    strip, go, dismissButton, kind, description,
+    strip, go, dismissButton, kind, description, refresh: paint,
     // Diagnostics "Show install prompt": forget the dismissal on this device.
     reshow() { dismissed = false; write(false); paint(); },
     destroy() { destroyed = true; window?.removeEventListener?.('beforeinstallprompt', onBefore); window?.removeEventListener?.('appinstalled', onInstalled); go.removeEventListener('click', onGo); dismissButton.removeEventListener('click', onDismiss); strip.remove(); },

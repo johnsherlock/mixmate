@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInstallPrompt, INSTALL_DISMISSED_KEY, IOS_INSTRUCTION } from '../src/iem/install.js';
 import { domFixture } from './helpers/fake-dom.js';
+import { mountReadOnlyView } from '../src/iem/live-view.js';
+import { tidyLive } from '../src/iem/live-shell.js';
+import { createDiagnostics } from '../src/iem/diagnostics.js';
+import { createGroupEditorUI } from '../src/iem/group-editor-ui.js';
 
 class Events {
   handlers = new Map();
@@ -66,4 +70,41 @@ test('iOS/iPadOS Safari gets the one-line instruction; other browsers without an
     t.prompt.dismissButton.emit('click'); assert.equal(t.prompt.strip.hidden, true);
   }
   const plain = setup(); assert.equal(plain.prompt.kind(), 'unsupported'); assert.equal(plain.prompt.strip.hidden, true); assert.match(plain.states.at(-1).text, /Not offered/);
+});
+
+test('F07-S05 review P1: the buttons stay enabled after the real live view disables every button present at mount (either order)', () => {
+  const keys = ['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'], old = Object.fromEntries(keys.map(key => [key, globalThis[key]]));
+  try {
+    for (const installFirst of [true, false]) {
+      const dom = domFixture(), { document, root } = dom, nav = root.querySelector('.mm-navigation');
+      const window = Object.assign(new Events(), { matchMedia: () => ({ matches: false }) });
+      Object.assign(globalThis, { document, window, matchMedia: () => ({ matches: true }), innerHeight: 844, ResizeObserver: class { observe() {} disconnect() {} } });
+      let prompt; const mount = () => { prompt = createInstallPrompt({ container: root, before: nav, window, navigator: { userAgent: 'Chrome' }, storage: store() }); };
+      if (installFirst) mount();
+      const view = mountReadOnlyView(root); // disables every button present at mount except the exempt actions
+      if (!installFirst) mount();
+      const event = { prompts: 0, preventDefault() {}, prompt() { this.prompts++; return Promise.resolve(); }, userChoice: Promise.resolve({ outcome: 'accepted' }) };
+      window.emit('beforeinstallprompt', event);
+      assert.equal(prompt.strip.hidden, false); assert.equal(prompt.go.disabled, false); assert.equal(prompt.dismissButton.disabled, false);
+      assert.ok(root.querySelectorAll('button').some(button => button.disabled), 'the view still disabled its own buttons');
+      prompt.go.emit('click'); assert.equal(event.prompts, 1);
+      prompt.destroy(); view.destroy();
+    }
+  } finally { for (const key of keys) { if (old[key] === undefined) delete globalThis[key]; else globalThis[key] = old[key]; } }
+});
+
+test('F07-S05 review P2: a lasting "Groups unavailable" reason never replaces the update notice; it shows after the notice expires', () => {
+  const { root } = domFixture(); tidyLive(root);
+  const jobs = []; const timers = { setTimeout: fn => jobs.push(fn) - 1, clearTimeout() {} };
+  const diagnostics = createDiagnostics(root, { timers });
+  const connectionUI = { diagnostics, message: text => diagnostics.message(text), close() {}, beforeOpen() {}, condition: text => diagnostics.condition(text) };
+  const groups = createGroupEditorUI(root, connectionUI);
+  const slot = () => root.querySelector('.mm-message').textContent;
+  connectionUI.message('Updated to v0.6.0 (abc1234).');
+  groups.unavailable('Groups unavailable: connect to the desk to load groups for its current snapshot.');
+  assert.equal(slot(), 'Updated to v0.6.0 (abc1234).');
+  diagnostics.condition('Groups unavailable: connect to the desk to load groups for its current snapshot.');
+  assert.equal(slot(), 'Updated to v0.6.0 (abc1234).'); // a newer lasting condition does not overwrite it
+  jobs.at(-1)(); // transient expires
+  assert.match(slot(), /^Groups unavailable/);
 });
