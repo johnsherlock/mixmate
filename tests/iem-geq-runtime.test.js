@@ -14,10 +14,11 @@ import { domFixture, Node } from './helpers/fake-dom.js';
 // Fake transports only. No real mixer, browser or network is used.
 const bandLines = (aux, value = () => 0.5) => Array.from({ length: 31 }, (_, band) => `SETD^a.${aux}.eq.peak.${band}^${value(band)}`);
 const MONO = band => (band + 1) / 37;
-function baseFrame({ omit = [], bypass = [0, 0, 0] } = {}) {
+// F06-S05: a real desk also sends every output's hpf (0 = off) and lpf (1 = off).
+function baseFrame({ omit = [], bypass = [0, 0, 0], filters = [[0, 1], [0, 1], [0, 1]] } = {}) {
   const lines = ['SETS^model^ui24', 'SETD^a.0.matrix^0', 'SETD^a.1.matrix^0', 'SETD^a.2.matrix^0', 'SETD^a.0.stereoIndex^0', 'SETD^a.1.stereoIndex^1', 'SETD^a.2.stereoIndex^-1',
     'SETD^a.0.mix^0.4', 'SETD^a.1.mix^0.4', 'SETD^a.2.mix^0.4', 'SETD^a.0.eq.hpf.freq^0.1', 'SETD^a.5.eq.hpf.freq^0.1',
-    ...bypass.map((value, aux) => `SETD^a.${aux}.eq.bypass^${value}`), ...bandLines(0), ...bandLines(1), ...bandLines(2, MONO)];
+    ...bypass.map((value, aux) => `SETD^a.${aux}.eq.bypass^${value}`), ...filters.flatMap(([hpf, lpf], aux) => [`SETD^a.${aux}.eq.hpf^${hpf}`, `SETD^a.${aux}.eq.lpf^${lpf}`]), ...bandLines(0), ...bandLines(1), ...bandLines(2, MONO)];
   return '3:::' + lines.filter(line => !omit.some(path => line.startsWith(`SETD^${path}^`))).join('\n');
 }
 const GEQ_WRITE = /^3:::SETD\^a\.[0-9]\.eq\.peak\.(?:[0-9]|[12][0-9]|30)\^[0-9.e-]+$/;
@@ -228,7 +229,7 @@ test('EQ view: explicit open, visible approximation/bypass status, mutually excl
   assert.equal(ui.eq.section.hidden, false); assert.equal(ui.root.dataset.eqOpen, 'true'); assert.equal(ui.writes().length, 0, 'opening never writes');
   assert.match(ui.eq.section.textContent, /not verified DSP centres/); assert.equal(ui.find('.mm-live-eq-approximation').textContent, EQ_APPROXIMATION_NOTE);
   assert.match(ui.find('.mm-live-eq-bypass').textContent, /BYPASSED/); assert.match(ui.find('.mm-live-eq-details').textContent, /0\/31|31\/31 bands received/);
-  assert.match(ui.find('.mm-eq-unverified').textContent, /unverified · not available/); assert.equal(ui.all('[data-toggle-cut]').length, 0, 'no shelf/cut controls');
+  assert.deepEqual(ui.all('[data-eq-filter]').map(node => node.textContent), ['Low cut', 'High cut'], 'F06-S05 cut bank'); assert.equal(ui.all('[data-toggle-cut]').length, 0, 'no shelf controls'); assert.equal(ui.find('.mm-eq-unverified'), null);
   const gain = ui.find('[data-eq-param="gain"]'), cap = gain.parentElement.querySelector('.mm-fader-hit');
   assert.equal(gain.disabled, false); assert.equal(ui.find('[data-eq-point="1"]').disabled, false);
   press(cap, 'pointerdown'); press(cap, 'pointermove', { clientY: 60 });

@@ -39,7 +39,7 @@ test('GEQ exact bounded output-only encoder preserves precision without pan roun
 test('separate bounded receiver admits only GEQ bands/read-only bypass, preserving zero/false/precision', () => {
   const updates = parseAuxEqStateFrame('3:::SETD^a.9.eq.peak.30^0\nSETD^a.9.eq.bypass^0\r\nSETD^a.9.eq.peak.0^0.123456789012345\nSETD^a.9.eq.bypass^1');
   assert.deepEqual(updates.map(x => x.value), [0, false, 0.123456789012345, true]); assert.equal(updates[0].bandIndex, 30);
-  for (const path of ['i.0.eq.peak.0', 'm.eq.peak.l.0', 'a.10.eq.peak.0', 'a.01.eq.peak.0', 'a.0.eq.peak.31', 'a.0.eq.peak.00', 'a.0.eq.hpf', 'a.0.eq.lpf', 'a.0.afs.enabled', '__proto__.eq.peak.0']) assert.deepEqual(parseAuxEqStateFrame(`3:::SETD^${path}^0.5`), []);
+  for (const path of ['i.0.eq.peak.0', 'm.eq.peak.l.0', 'a.10.eq.peak.0', 'a.01.eq.peak.0', 'a.0.eq.peak.31', 'a.0.eq.peak.00', 'a.0.eq.hpf.freq', 'a.0.eq.hpf.slope', 'm.eq.hpf.l', 'm.eq.lpf.r', 'i.0.eq.hpf', 'a.10.eq.hpf', 'a.0.afs.enabled', '__proto__.eq.peak.0']) assert.deepEqual(parseAuxEqStateFrame(`3:::SETD^${path}^0.5`), []);
   for (const raw of ['', 'NaN', 'Infinity', 'false', '0.5^gain', '-0.1', '1.1', ' '.repeat(65), '0'.repeat(65)]) assert.deepEqual(parseAuxEqStateFrame(`3:::SETD^a.0.eq.peak.0^${raw}`), []);
   assert.deepEqual(parseAuxEqStateFrame('3:::SETD^a.0.eq.bypass^0.5\nSETS^a.0.eq.peak.0^0.5'), []);
   assert.deepEqual(parseAuxEqStateFrame('3:::' + 'x'.repeat(IEM_RECEIVE_LIMITS.frameBytes)), []);

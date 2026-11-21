@@ -3,7 +3,7 @@
 // Owned-adapter integration and remaining gates: docs/adr/0008-control-state-model.md.
 import { resolveAuxLevelTargets } from './aux-level-protocol.js';
 import { resolveAuxPanTargets, normalizeAuxPanPosition } from './aux-pan-protocol.js';
-import { resolveAuxEqTargets, eqArray, eqDataFields } from './aux-eq-protocol.js';
+import { resolveAuxEqTargets, resolveAuxEqFilters, AUX_EQ_FILTERS, eqArray, eqDataFields } from './aux-eq-protocol.js';
 import { resolveRelativeGroup, relativeGroupChange } from './relative-groups.js';
 
 export const OBSERVATION_WINDOW_MS = 2500;
@@ -75,12 +75,25 @@ export function createControlScope(input) {
     resolved = resolveRelativeGroup(received, group, auxIndex);
     closures = group.members.map(sourceId => resolveAuxLevelTargets(received, { kind: 'send', sourceId, auxIndex }).members.map(x => x.path));
   } else throw Error('Unsupported control scope.');
-  const members = resolved.members.map(x => {
+  let sourceMembers = resolved.members;
+  // F06-S05: the hpf/lpf positions join the GEQ write scope only when every path
+  // has actual readback and receipt and a reciprocal pair holds equal values;
+  // otherwise the filters stay read-only and the bands are unaffected.
+  if (kind === 'geq') {
+    const filters = resolveAuxEqFilters(received, resolved);
+    if (filters.status === 'ok' && filters.members.every(x => uint(receipts.get(x.path)) && receipts.get(x.path) > 0)) sourceMembers = [...sourceMembers, ...filters.members];
+  }
+  const members = sourceMembers.map(x => {
     if (!uint(receipts.get(x.path)) || receipts.get(x.path) === 0) throw Error('Actual per-path receipts required.');
     return { path: x.path, target: { ...x.target }, value: x.value, receipt: receipts.get(x.path), ...(kind === 'group' ? { scale: x.scale } : {}) };
   });
   if (!members.length || members.length > 128 || new Set(members.map(x => x.path)).size !== members.length) throw Error('Bounded deduplicated scope required.');
-  closures ??= kind === 'geq' ? members.slice(0, 31).map((x, i) => members.length === 62 ? [x.path, members[i + 31].path] : [x.path]) : [members.map(x => x.path)];
+  if (kind === 'geq') {
+    const bands = members.filter(x => x.target.bandIndex !== undefined), filters = members.filter(x => x.target.filter !== undefined);
+    closures = [...bands.slice(0, 31).map((x, i) => bands.length === 62 ? [x.path, bands[i + 31].path] : [x.path]),
+      ...(filters.length ? AUX_EQ_FILTERS.map(filter => filters.filter(x => x.target.filter === filter).map(x => x.path)) : [])];
+  }
+  closures ??= [members.map(x => x.path)];
   const scope = freeze({ kind, members, closures, identity: kind === 'group' ? JSON.stringify([resolved.groupId, resolved.membership]) : JSON.stringify([kind, target]) });
   scopes.add(scope); return scope;
 }
@@ -281,7 +294,7 @@ function validatedEvent(input, state) {
     if (!uint(event.revision) || event.type === 'new-generation' && !uint(event.generation)) throw Error('Invalid context event.');
   }
   if (event.type === 'preview') {
-    if (state.scope.kind === 'geq') { if (!eqArray(event.value, 31).every(unit)) throw Error('Invalid GEQ projection.'); }
+    if (state.scope.kind === 'geq') { if (!eqArray(event.value, state.scope.members.some(x => x.target.filter) ? 33 : 31).every(unit)) throw Error('Invalid GEQ projection.'); }
     else if (state.scope.kind === 'group' ? !finite(event.value) : !unit(event.value)) throw Error('Invalid typed intent.');
   }
   return event;
@@ -357,8 +370,9 @@ export function transitionControl(state, input) {
         const change = relativeGroupChange({ members: s.chain.anchor }, delta + value);
         delta = change.delta; expected = change.commands.map((command, i) => ({ path: s.scope.members[i].path, target: s.scope.members[i].target, value: command.value }));
       } else if (s.scope.kind === 'geq') {
-        const values = eqArray(value, 31); if (!values.every(unit)) throw Error('Invalid GEQ projection.');
-        expected = s.scope.members.map((x, i) => ({ path: x.path, target: x.target, value: values[i % 31] }));
+        // Bands 0..30 then (F06-S05, only when the scope has filters) hpf, lpf.
+        const values = eqArray(value, s.scope.members.some(x => x.target.filter) ? 33 : 31); if (!values.every(unit)) throw Error('Invalid GEQ projection.');
+        expected = s.scope.members.map(x => ({ path: x.path, target: x.target, value: values[x.target.filter ? 31 + AUX_EQ_FILTERS.indexOf(x.target.filter) : x.target.bandIndex] }));
       } else {
         if (!unit(value)) throw Error('Strict finite normalized intent required.');
         const normalized = s.scope.kind === 'pan' ? normalizeAuxPanPosition(value) : value;

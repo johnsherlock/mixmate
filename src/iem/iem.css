@@ -2599,7 +2599,9 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq-hint[hidden],#mixmate-iem-concept[data-mode="live"] .mm-live-eq-state[hidden]{display:none}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-requested{fill:none;stroke:#ecd3a7;stroke-width:2;stroke-dasharray:6 4}
 #mixmate-iem-concept[data-mode="live"] .mm-eq-shape{fill:none;stroke:#9fb0b8;stroke-width:1.5;stroke-dasharray:2 3}
-#mixmate-iem-concept[data-mode="live"] .mm-eq-unverified{margin:0;font-size:10px;color:#b5c0c8;align-self:stretch}
+/* F06-S05: Low/High cut handles (LC/HC) with a frequency label; the toggles are the shared .mm-eq-cut-bank buttons. */
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-cut-handle text{font-weight:600}
+#mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-eq-cut-bank button[aria-pressed="true"]{color:#edf1ee}
 /* F09-S09: the status/notes/legend/band readback below the graph exist only with ?debug (never created otherwise). */
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq-status{margin:0;font-size:11px}
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq .mm-caption{margin:0;font-size:10px;color:#b5c0c8}
