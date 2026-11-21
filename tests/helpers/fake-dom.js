@@ -57,7 +57,7 @@ export function domFixture() {
   const document = { hidden: false, activeElement: null, createElement(tag) { return Object.assign(new Node(this), { tag }); } };
   const documentEvents = new Node(document); document.addEventListener = documentEvents.addEventListener.bind(documentEvents); document.removeEventListener = documentEvents.removeEventListener.bind(documentEvents);
   const root = document.createElement('div'); document.root = root;
-  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-group-switches', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app', 'mm-preview']) { const node = document.createElement('div'); node.className = name; root.append(node); }
+  for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-group-switches', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app', 'mm-preview', 'mm-bottom', 'mm-offline-state', 'mm-page-state', 'mm-entry-links']) { const node = document.createElement('div'); node.className = name; root.append(node); }
   const edit = document.createElement('button'); edit.dataset.action = 'edit-groups'; root.querySelector('.mm-local-tabs').append(edit);
   const brand = document.createElement('button'); brand.className = 'mm-brand'; root.append(brand);
   const layer = document.createElement('div'); layer.className = 'mm-layer'; layer.hidden = true;

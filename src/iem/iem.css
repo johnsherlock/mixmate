@@ -2665,3 +2665,71 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-dirty{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* One line, sized so "-14.7 dB" fits a landscape bank strip; a wrap would resize the fader mid-drag. */
 #mixmate-iem-concept[data-mode="live"] .mm-strip > .mm-value{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px;line-height:20px;padding-inline:0}
+
+/* F09-S11: live footer (connection status, one message slot, Diagnostics) and the Diagnostics modal.
+   The live banner is gone; compact landscape keeps a slim footer where the banner used to be. */
+#mixmate-iem-concept[data-mode="live"] .mm-bottom,
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-bottom {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: nowrap;
+  gap: 8px;
+  padding: 2px 8px;
+  min-height: 26px;
+  overflow: hidden;
+}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-bottom {
+  min-height: 22px;
+  padding: 0 8px;
+}
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-desk {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-desk[data-state="connecting"] { color: #d4bd80; }
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-desk[data-state="failed"] { color: #e0a089; }
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-desk[data-state="idle"] { color: #aebac2; }
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-message {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #d4bd80;
+}
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-diagnostics-open {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  min-height: 22px;
+  font-size: 10px;
+  color: #e1d067;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+#mixmate-iem-concept .mm-dialog.mm-diag-dialog { width: min(560px, 100%); }
+#mixmate-iem-concept .mm-diag { display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+#mixmate-iem-concept .mm-diag-section h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #e1d067;
+}
+#mixmate-iem-concept .mm-diag-row { display: flex; gap: 8px; padding: 1px 0; }
+#mixmate-iem-concept .mm-diag-label { flex: 0 0 96px; color: #9fb0b9; }
+#mixmate-iem-concept .mm-diag-value { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: #e4ecee; }
+#mixmate-iem-concept .mm-diag-connection label { display: flex; flex-direction: column; gap: 4px; }
+#mixmate-iem-concept .mm-diag-connection .mm-dialog-actions { justify-content: flex-start; margin: 8px 0; }
+#mixmate-iem-concept .mm-diag-list { margin: 4px 0 0; padding-left: 18px; color: #c5d1d8; font-size: 11px; overflow-wrap: anywhere; }
+#mixmate-iem-concept .mm-diag-log { max-height: 140px; overflow: auto; }
+#mixmate-iem-concept .mm-diag .mm-caption { margin: 4px 0 0; font-size: 11px; }
+#mixmate-iem-concept .mm-diag-links { display: flex; gap: 14px; }
+#mixmate-iem-concept .mm-diag-links a { color: #e1d067; text-underline-offset: 3px; }

@@ -3,6 +3,7 @@ import { restoreDialogFocus } from './dialog-owner.js';
 import { projectLiveState, projectReceivedSourceCatalog } from './live-provider.js';
 import { projectGroupNavigation, resolveGroupNavigation } from './group-navigation.js';
 import { createAutoConnect, AUTO_CONNECT_ATTEMPT_MS } from './auto-connect.js';
+import { createDiagnostics } from './diagnostics.js';
 
 export const DEFAULT_MIXER_ADDRESS = '192.168.0.60';
 // A drop that recurs this soon after an automatic reconnection opens the
@@ -15,12 +16,14 @@ const SNAPSHOT_PATH = 'var.currentSnapshot';
 // F02-S05 (user decision 2026-11-20): the live Connect dialog is only the mixer
 // address, Connect, Disconnect while connected, Close and feedback. Rigs are
 // named by the desk's current snapshot; there is no rig picker or editor.
-export function createLiveConnectionUI(root, { levels = false, pan = false, dialogOwner } = {}) {
+// F09-S11 (user decision 2026-11-21): it is now minimal (at most one status
+// line); the session message, settings status and explanatory notes, the
+// banner links and a second Connect/Disconnect pair live in the Diagnostics modal.
+export function createLiveConnectionUI(root, { levels = false, pan = false, dialogOwner, timers } = {}) {
   const document = root.ownerDocument, $ = selector => root.querySelector(selector);
   const make = (tag, text = '') => { const node = document.createElement(tag); node.textContent = text; return node; };
-  const open = make('button', 'Connect to desk'), disconnect = make('button', 'Disconnect');
-  open.type = disconnect.type = 'button'; open.className = 'mm-connect-toggle'; disconnect.className = 'mm-session-disconnect';
-  $('.mm-preview').append(open, disconnect);
+  const diagnostics = createDiagnostics(root, { dialogOwner, levels, pan, ...(timers ? { timers } : {}) });
+  diagnostics.address.value = DEFAULT_MIXER_ADDRESS;
   const layer = $('.mm-layer'), form = make('form'); form.className = 'mm-live-connection';
   const address = make('input'), connect = make('button', levels ? 'Connect live IEM' : 'Connect read-only');
   address.value = DEFAULT_MIXER_ADDRESS; address.required = true; address.autocomplete = 'off'; address.spellcheck = false;
@@ -31,13 +34,10 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   const dialogDisconnect = make('button', 'Disconnect'); dialogDisconnect.type = 'button'; dialogDisconnect.hidden = true;
   const actions = make('div'); actions.className = 'mm-dialog-actions'; actions.append(connect, dialogDisconnect);
   const feedback = make('p'); feedback.className = 'mm-caption'; feedback.setAttribute('role', 'status');
-  const settings = make('p', 'Checking local settings storage…'), note = make('p', levels ? pan ? 'Known compatible levels and normalized pan are editable after connecting. Drag or use keys; changes are sent live while you drag (throttled).' : 'Known compatible levels are editable after connecting. Drag or use keys; changes are sent live while you drag (throttled).' : 'Only received state is shown. No mixer parameter writes.');
-  settings.className = note.className = 'mm-caption'; note.setAttribute('role', 'status'); settings.setAttribute('role', 'status');
-  const local = make('p', 'Groups are kept on this device for each desk snapshot name and work offline. Addresses that connect are remembered and tried automatically when the app opens or wakes.'); local.className = 'mm-caption';
-  form.append(addressLabel, known, actions, feedback, note, settings, local);
+  form.append(addressLabel, known, actions, feedback);
   $('.mm-dialog-body').replaceChildren(form); $('#mm-dialog-title').textContent = levels ? 'Connect live IEM' : 'Connect read-only IEM';
   const closeButton = $('.mm-dialog-head button'); closeButton.disabled = false;
-  const openButtons = [open, $('.mm-brand'), $('.mm-desk')].filter(Boolean);
+  const openButtons = [$('.mm-brand'), $('.mm-desk')].filter(Boolean);
   for (const button of openButtons) button.disabled = false;
   let focusBefore, beforeOpen = () => {}, connectionVisible = false, dialogLease = null;
   const openListeners = new Set();
@@ -76,15 +76,20 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
   const onCloseClick = event => { if (connectionVisible && (!dialogOwner || dialogOwner.owns(dialogLease))) { event.stopImmediatePropagation?.(); close(); } };
   closeButton.addEventListener('click', onCloseClick);
   return {
-    form, address, feedback, connect, disconnect, dialogDisconnect, settings, note, close, show, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
+    form, address, feedback, connect, dialogDisconnect, close, show, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
+    diagnostics, settings: diagnostics.settings, note: diagnostics.note, disconnect: diagnostics.disconnect,
+    // Footer message slot, status button and Diagnostics feed (all optional for other callers).
+    message: text => diagnostics.message(text), clearMessage: () => diagnostics.clearMessage(), condition: text => diagnostics.condition(text),
+    status: value => diagnostics.status(value), rig: text => diagnostics.rig(text), autoPass: pass => diagnostics.autoPass(pass), log: text => diagnostics.log(text), refresh: () => diagnostics.refresh(),
     onOpen(listener) { openListeners.add(listener); return () => openListeners.delete(listener); },
     visible: () => connectionVisible,
-    navigation: [...root.querySelectorAll('.mm-entry-links a')],
+    navigation: diagnostics.links,
     knownAddresses(addresses) {
       known.replaceChildren(...addresses.map(value => { const option = make('option'); option.value = value; return option; }));
+      diagnostics.knownAddresses(addresses);
     },
-    connected(value) { dialogDisconnect.hidden = !value; dialogDisconnect.disabled = !value; },
-    destroy() { root.removeEventListener('keydown', onKey); for (const button of openButtons) button.removeEventListener('click', show); closeButton.removeEventListener('click', onCloseClick); },
+    connected(value) { dialogDisconnect.hidden = !value; dialogDisconnect.disabled = !value; diagnostics.connected(value); },
+    destroy() { diagnostics.destroy(); root.removeEventListener('keydown', onKey); for (const button of openButtons) button.removeEventListener('click', show); closeButton.removeEventListener('click', onCloseClick); },
   };
 }
 
@@ -98,13 +103,23 @@ export function mountLiveController({ session, repository, view, ui, document = 
   // Automatic connection state: an explicit Disconnect suppresses every
   // automatic trigger until the next explicit Connect or app open.
   let suppressed = false, addressTouched = false, attempt = null, reachedLive = false, lastAutoSuccess = -Infinity, autoMessage = '';
+  // Footer status: the address of the current/last attempt and the last failure
+  // (`lost` after a live connection dropped, else the address that did not answer).
+  let lastFailure = null, lastStatusText = '', autoPass = null;
   // Work deferred while another dialog (groups, pan, EQ, detail) is open.
   let pendingTrigger = null, pendingDialog = false, lastSnapshotName, statusNotice = '';
   // Full readiness: received Ui24 AUX state and, for a control session, an open
   // writer as well as the qualified companion (snapshot `qualified`).
   const fullyReady = snapshot => snapshot.phase === 'live' && snapshot.qualified !== false;
   const otherDialog = () => Boolean(ui.dialogOwner?.active()) && !ui.visible?.();
-  const feedback = message => { if (ui.feedback) ui.feedback.textContent = message; };
+  // The Connect dialog's single status line; every message is also kept in the
+  // bounded Diagnostics log (in memory only).
+  const feedback = message => { if (ui.feedback) ui.feedback.textContent = message; ui.log?.(message); };
+  // The Connect dialog and the Diagnostics modal each have an address field;
+  // they always hold the same text.
+  const diag = ui.diagnostics, addressFields = [ui.address, diag?.address].filter(Boolean);
+  const setAddress = value => { for (const field of addressFields) field.value = value; };
+  const addressValidity = text => { for (const field of addressFields) { field.setCustomValidity?.(text); } };
   const profiles = () => settings?.profiles || [];
   const profile = () => profiles().find(rig => rig.id === boundProfileId);
   const owner = () => boundProfileId && profile() ? { kind: 'profile', id: boundProfileId } : null;
@@ -230,8 +245,37 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (!owner() && rigMessage && (settingsReady || isActive(previousPhase))) notes.unshift(rigMessage);
     return notes.filter(Boolean).join(' · ');
   }
+  const TERMINAL = ['error', 'closed', 'timeout', 'blocked', 'unsupported', 'invalid'];
+  function trackFailure(snapshot, dropped) {
+    if (fullyReady(snapshot)) { lastFailure = null; return; }
+    if (dropped) lastFailure = { lost: true, address: attempt?.address || '' };
+    else if (!isActive(snapshot.phase) && TERMINAL.includes(snapshot.phase) && attempt && !autoConnect?.running() && !lastFailure) lastFailure = { lost: false, address: attempt.address };
+  }
+  function connectionStatus(snapshot) {
+    const address = attempt?.address || '';
+    if (fullyReady(snapshot)) return { state: 'connected', text: address ? `Connected · ${address}` : 'Connected', address };
+    const trying = autoConnect?.current()?.address || address;
+    if (isActive(snapshot.phase) || autoConnect?.running()) return { state: 'connecting', text: trying ? `Connecting · ${trying}…` : 'Connecting…', address: trying };
+    if (lastFailure) return { state: 'failed', text: lastFailure.lost ? 'Connection lost' : `Couldn't reach ${lastFailure.address}`, address: lastFailure.address };
+    return { state: 'idle', text: 'Not connected', address: '' };
+  }
+  // Footer status button, Diagnostics connection/rig rows; display only.
+  function reportStatus(snapshot) {
+    const status = connectionStatus(snapshot);
+    if (status.text !== lastStatusText) {
+      lastStatusText = status.text; ui.log?.(status.text);
+      // One concise line in the Connect dialog; a longer notice (pass result) wins.
+      if (status.state === 'failed' && !statusNotice) { if (ui.feedback) ui.feedback.textContent = `${status.text}${status.text.startsWith('Couldn') ? '.' : '. Connect again.'}`; }
+    }
+    ui.status?.(status);
+    // Lasting conditions reach the footer slot while they hold.
+    ui.condition?.(navigationMessage.startsWith('View is temporary') ? navigationMessage : settingsReady && !owner() && /^Groups unavailable/.test(rigMessage) ? rigMessage : '');
+    ui.rig?.(owner() ? `Rig “${profile()?.name}”` : rigMessage || 'No rig');
+    ui.refresh?.();
+  }
   function render(snapshot = session.snapshot(), kind) {
     if (destroyed) return;
+    let dropped = false;
     if (kind !== 'meters') {
       autoConnect?.observe(snapshot.phase, fullyReady(snapshot));
       // Losing a connection that never received state (a failed attempt) does
@@ -239,7 +283,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
       if (isActive(previousPhase) && !isActive(snapshot.phase) && previousObserved) contextRevision++;
       previousObserved = isActive(snapshot.phase) && snapshot.observations?.size > 0;
       if (fullyReady(snapshot)) reachedLive = true;
-      const dropped = reachedLive && ['closed', 'error', 'timeout'].includes(snapshot.phase);
+      dropped = reachedLive && ['closed', 'error', 'timeout'].includes(snapshot.phase);
       if (!isActive(snapshot.phase)) reachedLive = false;
       recordAddress(snapshot);
       applyRig(snapshot);
@@ -270,6 +314,8 @@ export function mountLiveController({ session, repository, view, ui, document = 
     ui.connect.disabled = active; ui.disconnect.disabled = !active; ui.connected?.(active);
     ui.note.textContent = snapshot.detail;
     if (kind !== 'meters') {
+      trackFailure(snapshot, dropped);
+      reportStatus(snapshot);
       const current = receivedSnapshot(snapshot);
       // Received text only, rendered as text; an unusable name is not shown.
       view.snapshotName?.(current.name || 'Unavailable');
@@ -297,7 +343,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (destroyed || document.hidden) return false;
     // An automatic attempt changes context only when there was a selection.
     const changed = !automatic || selectedAux !== null || requestedNavigation !== null;
-    selectedAux = null; requestedNavigation = null; restoreCandidate = null; navIntent++; navigationMessage = ''; failedName = null; statusNotice = '';
+    selectedAux = null; requestedNavigation = null; restoreCandidate = null; navIntent++; navigationMessage = ''; failedName = null; statusNotice = ''; lastFailure = null;
     const last = profile();
     if (last?.navigation.mixId) restoreCandidate = structuredClone(last.navigation);
     if (changed) invalidateDraft();
@@ -311,12 +357,27 @@ export function mountLiveController({ session, repository, view, ui, document = 
     canAdvance: () => !destroyed && !document.hidden && !ui.dialogOwner?.active(),
     connect: address => startConnection(address, { automatic: true }),
     disconnect: () => session.disconnect(),
-    onProgress: ({ address, index, total }) => { autoMessage = `Connecting automatically to ${address} (${index + 1} of ${total})…`; feedback(autoMessage); },
+    onProgress: ({ reason, address, index, total }) => {
+      autoMessage = `Connecting automatically to ${address} (${index + 1} of ${total})…`; feedback(autoMessage);
+      if (index === 0) autoPass = { reason, attempts: [], outcome: 'running' };
+      autoPass?.attempts.push({ address, result: 'trying' }); ui.autoPass?.(autoPass);
+    },
+    onFailure: ({ address, reason }) => {
+      const item = autoPass?.attempts.findLast(entry => entry.address === address && entry.result === 'trying');
+      if (item) { item.result = reason === 'timeout' ? 'no answer in time (timeout)' : reason === 'refused' ? 'could not start (refused)' : `failed (${reason})`; ui.autoPass?.(autoPass); }
+    },
     // Called from render's observation step; that render shows the result.
-    onSuccess: ({ address }) => { lastAutoSuccess = now(); autoMessage = ''; feedback(`Connected automatically to ${address}.`); if (!addressTouched) ui.address.value = address; },
-    onExhausted: ({ tried }) => {
+    onSuccess: ({ address }) => {
+      const item = autoPass?.attempts.findLast(entry => entry.address === address && entry.result === 'trying');
+      if (item) item.result = 'connected'; if (autoPass) autoPass.outcome = 'connected'; ui.autoPass?.(autoPass);
+      lastAutoSuccess = now(); autoMessage = ''; feedback(`Connected automatically to ${address}.`); if (!addressTouched) setAddress(address); },
+    onExhausted: ({ reason, tried }) => {
       autoMessage = '';
+      autoPass ||= { reason: reason || 'open', attempts: [], outcome: '' };
+      autoPass.outcome = tried ? `no address answered (${tried} tried)` : 'no known address'; ui.autoPass?.(autoPass);
       if (destroyed) return;
+      const failed = autoPass?.attempts.at(-1);
+      lastFailure = tried && failed ? { lost: false, address: failed.address } : null;
       notify(tried ? `No known desk address answered (${tried} tried). Enter the mixer address and Connect.` : 'Enter the mixer address and Connect.');
       openDialog();
     },
@@ -341,7 +402,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     }
     // Another dialog (groups, pan, EQ, detail) is open: start when it closes.
     if (otherDialog()) { pendingTrigger = reason; return false; }
-    pendingTrigger = null;
+    pendingTrigger = null; autoPass = null;
     return autoConnect.start(settings.knownAddresses, reason);
   }
   // When the last dialog closes, continue deferred automatic work.
@@ -368,6 +429,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     pendingTrigger = null; pendingDialog = false;
     if (!autoConnect?.running()) return false;
     autoConnect.cancel(); autoMessage = '';
+    if (autoPass) { autoPass.outcome = 'cancelled'; for (const item of autoPass.attempts) if (item.result === 'trying') item.result = 'cancelled'; ui.autoPass?.(autoPass); }
     if (retire && !fullyReady(session.snapshot())) session.disconnect();
     return true;
   }
@@ -378,27 +440,30 @@ export function mountLiveController({ session, repository, view, ui, document = 
   }
 
   const unsubscribe = session.subscribe(onSession);
-  listen(ui.address, 'input', () => { addressTouched = true; ui.address.setCustomValidity(''); });
+  for (const field of addressFields) listen(field, 'input', () => { addressTouched = true; addressValidity(''); for (const other of addressFields) if (other !== field) other.value = field.value; });
   // Using the Connect dialog stops automatic probing; an in-flight automatic
   // attempt is retired so it cannot connect behind the user's back.
   const offOpen = ui.onOpen?.(() => { if (cancelAuto({ retire: true })) feedback('Automatic connection stopped. Enter the mixer address and Connect.'); }) || (() => {});
-  listen(ui.form, 'submit', event => {
+  // The Connect dialog and the Diagnostics modal share one explicit Connect path.
+  const submitFrom = (field, afterStart) => event => {
     event.preventDefault();
     if (destroyed || document.hidden) return;
     cancelAuto({ retire: true });
     if (isActive(session.snapshot().phase)) return;
-    suppressed = false; ui.address.setCustomValidity('');
-    if (startConnection(ui.address.value)) ui.close();
-    else if (session.snapshot().phase === 'invalid') { ui.address.setCustomValidity(session.snapshot().detail); ui.address.reportValidity(); }
-  });
-  const explicitDisconnect = () => { suppressed = true; invalidate(); feedback('Disconnected. Automatic connection is off until you Connect again or reopen the app.'); };
+    suppressed = false; field.setCustomValidity('');
+    if (startConnection(field.value)) afterStart();
+    else if (session.snapshot().phase === 'invalid') { field.setCustomValidity(session.snapshot().detail); field.reportValidity(); }
+  };
+  listen(ui.form, 'submit', submitFrom(ui.address, () => ui.close()));
+  if (diag) listen(diag.form, 'submit', submitFrom(diag.address, () => {}));
+  const explicitDisconnect = () => { suppressed = true; invalidate(); lastFailure = null; reportStatus(session.snapshot()); feedback('Disconnected. Automatic connection is off until you Connect again or reopen the app.'); };
   listen(ui.disconnect, 'click', explicitDisconnect);
   listen(ui.dialogDisconnect, 'click', explicitDisconnect);
   listen(document, 'visibilitychange', () => {
-    if (document.hidden) { invalidate(); ui.close(); }
+    if (document.hidden) { invalidate(); ui.close(); diag?.close(); }
     else trigger('visible');
   });
-  listen(window, 'pagehide', () => { invalidate(); ui.close(); });
+  listen(window, 'pagehide', () => { invalidate(); ui.close(); diag?.close(); });
   listen(window, 'pageshow', event => { if (event?.persisted) trigger('wake'); });
   listen(window, 'online', () => trigger('online'));
   for (const link of ui.navigation || []) listen(link, 'click', event => {
@@ -409,7 +474,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     if (!settingsReady || destroyed) return;
     settings = snapshot.settings;
     ui.knownAddresses?.(settings.knownAddresses);
-    if (!addressTouched && !isActive(session.snapshot().phase) && settings.knownAddresses[0]) ui.address.value = settings.knownAddresses[0];
+    if (!addressTouched && !isActive(session.snapshot().phase) && settings.knownAddresses[0]) setAddress(settings.knownAddresses[0]);
     view.preferences(settings.preferences);
     if (JSON.stringify([owner(), definition()?.groups]) !== groupsSignature) session.invalidateLevelContext?.();
     // A deliberately deleted group is not an unavailable saved preference.
@@ -448,7 +513,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     const { settings: loaded, status } = repository.snapshot?.() || result;
     settings = loaded; settingsReady = true;
     ui.knownAddresses?.(settings.knownAddresses);
-    if (!addressTouched && !isActive(session.snapshot().phase)) ui.address.value = settings.knownAddresses[0] || DEFAULT_MIXER_ADDRESS;
+    if (!addressTouched && !isActive(session.snapshot().phase)) setAddress(settings.knownAddresses[0] || DEFAULT_MIXER_ADDRESS);
     view.preferences(settings.preferences);
     ui.settings.textContent = settingsStatusText(status);
     render();

@@ -42,7 +42,20 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   // Neither pure scopes nor public snapshots are accepted as transport authority.
   const modelTime = () => { const t = stamp(); return { mono: Math.max(0, t.mono), wall: Math.max(0, t.wall) }; };
   let basisTimer, basisTimerAt = null;
-  const step = event => { model = transitionControl(model, { ...event, now: modelTime() }); scheduleBasisExpiry(); };
+  // F09-S11 review: `attention` marks an outcome that stopped a user's actual
+  // intent (an active gesture or a pending/dispatching own send) or refused a
+  // deliberate action. Classified by state transition, never by wording; routine
+  // sent-unverified, selection changes and cancellations that stopped nothing
+  // never set it. Cleared by the next gesture, selection, connection or restart.
+  let attentionFlag = false;
+  const STOPPED = new Set(['interrupted', 'native-invalidated', 'precision-or-native-conflict', 'reentrant-invalidated', 'clock-invalidated', 'dispatch-expired', 'topology-invalidated', 'membership-invalidated', 'profile-invalidated', 'processing-invalidated', 'cancel-invalidated', 'missing-invalidated']);
+  const intentActive = m => Boolean(m && m.generation === generation && (m.gesture || m.operation && ['pending', 'dispatching'].includes(m.operation.status)));
+  const step = event => {
+    const intent = intentActive(model);
+    model = transitionControl(model, { ...event, now: modelTime() }); scheduleBasisExpiry();
+    if (intent && model && !model.gesture && !model.armed && STOPPED.has(model.status)) attentionFlag = true;
+    else if (model?.gesture || ['select', 'new-generation'].includes(event.type)) attentionFlag = false;
+  };
   // Re-render when the earliest bounded received-basis or own-echo wait ends,
   // so a missing desk echo never leaves controls blocked until another event.
   function scheduleBasisExpiry() {
@@ -115,10 +128,11 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     else if (model.generation !== generation) step({ type: 'new-generation', scope: current, generation, revision: ++revision });
     else step({ type: 'select', scope: current, revision: ++revision });
   }
-  function cancelControl(message = 'Adjustment cancelled; use a new gesture.', reason = 'cancel') {
+  function cancelControl(message = 'Adjustment cancelled; use a new gesture.', reason = 'cancel', refused = false) {
     revision++; cancelStream();
     if (model) step({ type: 'invalidate', reason, revision });
     timers.clearTimeout(confirmation); controlStatus = message;
+    if (refused) attentionFlag = true; // A deliberate action was refused: say why.
   }
   function inspectConfirmation() { if (model) step({ type: 'tick' }); }
   // Current owned GEQ outputs, from the private model scope only.
@@ -198,7 +212,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       ...(selected?.kind === 'geq' ? { eqRequested: eqSelected && preview ? eqValues(preview.expected) : eqSelected && chain?.touched ? eqValues(chain.requested) : null, eqCoordinate: eqSelected && chain ? eqValues(chain.requested) : null } : {}),
       ...(groupName ? { groupName } : {}), selected: selected ? { ...selected } : null, eligible, reason,
       armed: Boolean(owned && model.armed), gestureActive: Boolean(owned && model.gesture), pending: Boolean(owned && ['pending', 'dispatching'].includes(op?.status)), dispatching: Boolean(owned && op?.status === 'dispatching'),
-      requestedDiagnostic: op?.expected.map(({ path, value }) => ({ path, value })) ?? [], status: statusText(eligible), outcome: owned ? model.status : 'idle', previewDelta: preview?.gestureDelta ?? 0, lastDelta: chain?.delta ?? op?.delta ?? null,
+      requestedDiagnostic: op?.expected.map(({ path, value }) => ({ path, value })) ?? [], status: statusText(eligible), attention: attentionFlag ? statusText(eligible) : '', outcome: owned ? model.status : 'idle', previewDelta: preview?.gestureDelta ?? 0, lastDelta: chain?.delta ?? op?.delta ?? null,
       requestedValue: chain && !['group', 'geq'].includes(selected?.kind) ? preview?.expected[0]?.value ?? chain.requested[0]?.value : null,
       groupReference: groupLive ? groupReferencePosition({ members: chain.anchor }, preview?.delta ?? chain.delta) : null,
       groupRequested: groupLive ? (preview?.expected ?? chain.requested).map(x => ({ sourceId: x.target.sourceId, auxIndex: x.target.auxIndex, value: x.value })) : null,
@@ -322,7 +336,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       controlStatus = kind === 'geq' ? 'Live: changed GEQ bands are sent while you drag (throttled); release sends the final curve. Received band values remain distinct.'
         : 'Live: changes are sent while you drag (throttled); release sends the final value. Last received values remain distinct.';
       emit('controls'); return model.gesture?.token === token && model.armed ? token : null;
-    } catch (error) { cancelControl(error.message); emit('controls'); return null; }
+    } catch (error) { cancelControl(error.message, 'cancel', true); emit('controls'); return null; }
   }
   // Throttled live streaming (F09-S05): leading step immediately, then at most
   // one step per interval carrying the LATEST cached preview (no queue). Each
@@ -350,7 +364,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if ((Number(socket.bufferedAmount) || 0) > LIVE_BACKPRESSURE_BYTES) { deferStream(token, streamGap()); return; }
     const before = model.operation?.id;
     try { revalidate(false); step({ type: 'stream', token }); }
-    catch (error) { cancelControl(error.message); emit('controls'); return; }
+    catch (error) { cancelControl(error.message, 'cancel', true); emit('controls'); return; }
     if (model.operation?.id === before || model.operation?.status !== 'dispatching') return; // Unchanged preview: nothing to send.
     stream.lastAt = now(); stream.lastPaths = model.operation.expected.length;
     dispatch();
@@ -366,7 +380,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       const result = group ? groupReferencePosition({ members: model.chain.anchor }, model.gesture.preview.delta) : kind === 'geq' ? eqValues(model.gesture.preview.expected) : model.gesture.preview.expected[0].value;
       if (live) scheduleStream(token);
       return model?.gesture?.token === token ? result : null;
-    } catch (error) { cancelControl(error.message); emit('controls'); return null; }
+    } catch (error) { cancelControl(error.message, 'cancel', true); emit('controls'); return null; }
   }
   // Runtime GEQ authority accepts a requested-curve intent (points/draw samples),
   // never caller paths or raw band arrays. It is copied once, then mapped to the
@@ -406,7 +420,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       // needs no write and reports true (its live steps already returned).
       if (model.operation?.id !== before && model.operation?.status === 'dispatching') return dispatch();
       emit('controls'); return streamed;
-    } catch (error) { cancelControl(error.message); emit('controls'); return false; }
+    } catch (error) { cancelControl(error.message, 'cancel', true); emit('controls'); return false; }
   }
   function canEditTarget(target) {
     try {
@@ -500,7 +514,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   const clearTimers = () => { timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = null; timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
   function stop(next = 'disconnected', message = 'Disconnected — received state cleared') {
     ++generation;
-    cancelControl('Received state cleared; connect explicitly.', 'disconnect'); selected = null; observed.clear(); receipts.clear(); eqObserved.clear(); processingRaw.clear(); sequence = 0;
+    cancelControl('Received state cleared; connect explicitly.', 'disconnect'); selected = null; attentionFlag = false; observed.clear(); receipts.clear(); eqObserved.clear(); processingRaw.clear(); sequence = 0;
     clearTimers();
     const old = socket, oldReceiver = receiver;
     socket = receiver = null;

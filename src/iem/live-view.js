@@ -14,10 +14,10 @@ export function debugFlag(search = '') {
   const value = new URLSearchParams(search).get('debug');
   return value !== null && !['0', 'false', 'no', 'off'].includes(value.trim().toLowerCase());
 }
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false, onMessage = () => {}, onClearMessage = () => {}, onGestureStart = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
-  let groupEditing = false, auxSelected = false;
+  let groupEditing = false, auxSelected = false, attentionText = '', gestureWas = false;
   const meterLegend = document.createElement('p');
   meterLegend.className = 'mm-live-meter-legend';
   meterLegend.textContent = 'VU: post-fader · source VU is NOT AUX-send contribution · library scale; firmware unverified';
@@ -36,7 +36,6 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   $('.mm-navigation').hidden = false;
   $('.mm-local-tabs').hidden = false;
   $('.mm-snapshot-name').textContent = 'Unavailable';
-  $('.mm-desk').textContent = 'No socket connection';
   $('.mm-dirty').textContent = 'Read-only · no parameter writes';
   $('.mm-rec-state').textContent = 'Recording status unavailable';
   const shortcuts = $('.mm-group-switches');
@@ -140,6 +139,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (target?.kind === 'group' && canEditLevel && !canEditLevel(target)) {
         $('.mm-feedback').textContent = 'Group not editable yet: waiting for the desk to report the last member change. Try again in a moment.';
         $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
+        onMessage($('.mm-feedback').textContent);
         return null;
       }
       if (target && !selectedTarget(target)) {
@@ -391,7 +391,12 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     empty.children[1].textContent = terminal ? terminalMessage : 'Connect explicitly to your desk. Unknown or unsupported state stays unavailable; Demo is a separate simulation.';
     $('.mm-feedback').setAttribute('title', `${model.status} · ${targetLabel}: ${control?.reason || control?.status || ''}`);
     $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
-    $('.mm-desk').textContent = model.connectionPhase ? `${model.modelLabel} · ${model.connectionPhase}` : 'No socket connection';
+    // F09-S11: only an interrupted/cancelled/native-changed outcome reaches the footer slot; routine status stays in Diagnostics.
+    // The session classifies by state transition (a stopped gesture or pending send); this view only displays it.
+    const attention = control && !control.gestureActive && typeof control.attention === 'string' ? control.attention : '';
+    if (control?.gestureActive && !gestureWas) onGestureStart();
+    gestureWas = Boolean(control?.gestureActive);
+    if (attention !== attentionText) { const previous = attentionText; attentionText = attention; if (attention) onMessage(attention); else onClearMessage(previous); }
     const selected = model.selectedAux !== undefined && model.selectedAux !== null;
     root.dataset.auxView = String(selected);
     root.style.setProperty('--mm-mix-color', model.selectedMix ? outputColour(model.selectedMix.themeIndex ?? model.selectedMix.auxIndex) : overviewColour);
@@ -431,8 +436,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       const app = $('.mm-app');
       try {
         const promise = document.fullscreenElement ? document.exitFullscreen?.() : app.requestFullscreen?.();
-        promise?.catch(() => { $('.mm-feedback').textContent = 'Fullscreen unavailable; use the installed app.'; });
-      } catch { $('.mm-feedback').textContent = 'Fullscreen unavailable; use the installed app.'; }
+        promise?.catch(() => { $('.mm-feedback').textContent = 'Fullscreen unavailable; use the installed app.'; onMessage('Fullscreen unavailable; use the installed app.'); });
+      } catch { $('.mm-feedback').textContent = 'Fullscreen unavailable; use the installed app.'; onMessage('Fullscreen unavailable; use the installed app.'); }
     }
   }
   root.addEventListener('click', click);
