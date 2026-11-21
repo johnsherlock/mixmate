@@ -2,6 +2,7 @@ import { restoreDialogFocus } from './dialog-owner.js';
 import { buildInfo } from '../build-info.js';
 
 export const DIAGNOSTICS_LOG_LIMIT = 30;
+export const MESSAGE_TTL_MS = 8000;
 const pad = value => String(value).padStart(2, '0');
 export const clockText = date => `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 
@@ -10,7 +11,7 @@ export const clockText = date => `${pad(date.getHours())}:${pad(date.getMinutes(
 // the hidden status sink) is written with textContent only. Nothing here sends
 // anything, persists anything or owns a socket: the live controller wires the
 // Connect/Disconnect controls to the same explicit paths as the Connect dialog.
-export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now = () => new Date(), levels = true, pan = true } = {}) {
+export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now = () => new Date(), levels = true, pan = true, timers = globalThis } = {}) {
   const document = root.ownerDocument, $ = selector => root.querySelector(selector);
   const make = (tag, className = '', text = '') => { const node = document.createElement(tag); if (className) node.className = className; node.textContent = text; return node; };
   const view = make('div', 'mm-diag');
@@ -55,6 +56,8 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
 
   const entries = []; let state = { auto: null, rig: '', status: null, connected: '', note: '' };
   const messageNode = () => $('.mm-message');
+  let transient = '', lasting = '', transientTimer;
+  const paintSlot = () => { const node = messageNode(), value = transient || lasting; if (node) { node.textContent = value; node.setAttribute('title', value); } };
   const paintLog = () => log.replaceChildren(...[...entries].reverse().map(entry => make('li', '', `${entry.time} ${entry.text}`)));
   const paint = () => {
     offline.textContent = sinkText('.mm-offline-state') || 'Offline copy not verified';
@@ -115,14 +118,19 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
     },
     rig(text) { if (state.rig !== text) { state = { ...state, rig: text }; refresh(); } },
     autoPass(pass) { state = { ...state, auto: pass ? { ...pass, attempts: pass.attempts.map(item => ({ ...item })) } : null }; refresh(); },
-    // Footer message slot: only actionable feedback. Full text stays in the title.
+    // Footer message slot: only actionable feedback. A transient message clears
+    // after MESSAGE_TTL_MS or at the next deliberate gesture; a lasting condition
+    // (temporary view, groups unavailable) shows while it holds and while no
+    // transient message is showing. Full text stays in the title.
     message(text) {
-      const node = messageNode(), value = String(text || '');
-      if (node) { node.textContent = value; node.setAttribute('title', value); }
-      if (value) api.log(value);
+      const value = String(text || '');
+      timers.clearTimeout(transientTimer); transientTimer = undefined; transient = value;
+      if (value) { api.log(value); transientTimer = timers.setTimeout(() => { transientTimer = undefined; transient = ''; paintSlot(); }, MESSAGE_TTL_MS); transientTimer?.unref?.(); }
+      paintSlot();
     },
-    clearMessage() { const node = messageNode(); if (node) { node.textContent = ''; node.setAttribute('title', ''); } },
-    currentMessage: () => messageNode()?.textContent || '',
+    clearMessage() { timers.clearTimeout(transientTimer); transientTimer = undefined; transient = ''; paintSlot(); },
+    condition(text) { const value = String(text || ''); if (value === lasting) return; lasting = value; if (value) api.log(value); paintSlot(); },
+    currentMessage: () => transient || lasting,
     // Bounded, in-memory only (never persisted).
     log(text) {
       const value = String(text || '').trim();
@@ -132,7 +140,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
       refresh();
     },
     entries: () => entries.map(entry => ({ ...entry })),
-    destroy() { opener?.removeEventListener('click', onOpen); if (lease) close(lease); },
+    destroy() { timers.clearTimeout(transientTimer); opener?.removeEventListener('click', onOpen); if (lease) close(lease); },
   };
   return api;
 }

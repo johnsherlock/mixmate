@@ -479,11 +479,19 @@ PR #58 passed CI and root live acceptance at `f3ffae6`; the independent reviewer
 Implementation on `codex/f09-s11-live-ui-tidy` (from main `ed741a0`). User request of 2026-11-21. Routine decisions, recorded for review:
 
 - **Live banner removed;** its information moves to the new Diagnostics modal (footer button). Demo, `demo.html` and `connection-test.html` are unchanged and keep their banner.
-- **Footer** = connection status button (`Connected · <ip>`, `Connecting · <ip>…`, `Couldn't reach <ip>`, `Connection lost`, `Not connected`), one actionable message slot, Diagnostics button. Routine status is Diagnostics-only. *Judgement call:* what counts as actionable is an explicit list (group not editable, fullscreen unavailable, group save/delete/unavailable, interrupted / cancelled / native-changed control outcomes, matched by text in `live-view.js`); other control statuses stay in Diagnostics.
+- **Footer** = connection status button (`Connected · <ip>`, `Connecting · <ip>…`, `Couldn't reach <ip>`, `Connection lost`, `Not connected`), one actionable message slot, Diagnostics button. Routine status is Diagnostics-only. *Superseded by review round 1 below:* the first cut matched wording; it is now classified by state transition.
 - **Compact landscape** now shows a slim 22 px live footer (it was hidden there) so the status and Diagnostics stay reachable; the removed banner more than pays for the height.
 - **Diagnostics** shows build commit/time, version, offline line, connection controls (same explicit Connect/Disconnect paths), the last automatic pass with per-attempt reasons, desk/state text, a 30-entry in-memory log, settings status/notes and the Demo / Settings links. It closes when the page is hidden (like the Connect dialog) so a resumed session can reconnect automatically.
 - **Build info:** `__BUILD_COMMIT__` / `__BUILD_TIME__` via Vite `define`; `unknown` fallbacks for node tests. *Trade-off:* the build time is wall-clock, so the offline worker version changes on every build even for identical sources (it already changes per commit).
 - **Auto-connect** gained an additive `onFailure` diagnostic hook only; timing and rules are unchanged.
 - **Bug found while verifying in a browser:** `mountReadOnlyView` disables every button present at mount; the Diagnostics button is explicitly re-enabled (covered by a test).
 - **Not verified by the story agent:** real desk behaviour, the deployed GitHub Pages build's commit string, and real-device layout (only a 375 px emulation of a production preview was inspected; the app also closes dialogs when the pane is hidden, which hid the modal from one screenshot).
+
+### F09-S11 review round 1 (2026-11-21, PR #59 at `37251f1`)
+
+Reviewer APPROVE with P2s; root live acceptance found R1. Fixed on the same branch:
+
+- **Rule:** the message slot shows `control.attention` (set in `session-core.js` by transition: a user's gesture or pending/dispatching send was stopped by interrupt/native/topology/membership/profile/processing/clock/deadline/cancel, or a deliberate action was refused) plus lasting conditions. Wording is not matched. Cancellations that stopped no intent (R1: connect-time "Received topology changed…", "Definition owner changed…", "Adjustment cancelled; use a new gesture.") and routine sent-unverified stay in the Diagnostics log.
+- Lasting conditions ("View is temporary…", "Groups unavailable: …") show in the slot while they hold; transient messages clear after 8 s or at the next gesture.
+- *Trade-offs:* "Groups unavailable: connect to the desk…" now also shows in the footer while offline with no last-used rig. A selection change that stops a gesture (user's own tap) is deliberately not an alert. Not verified on the desk by the story agent.
 

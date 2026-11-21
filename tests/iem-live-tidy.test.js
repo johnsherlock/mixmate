@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { domFixture, Node } from './helpers/fake-dom.js';
 import { tidyLive } from '../src/iem/live-shell.js';
 import { createDialogOwner } from '../src/iem/dialog-owner.js';
-import { createDiagnostics, DIAGNOSTICS_LOG_LIMIT } from '../src/iem/diagnostics.js';
+import { createDiagnostics, DIAGNOSTICS_LOG_LIMIT, MESSAGE_TTL_MS } from '../src/iem/diagnostics.js';
 import { buildInfo } from '../src/build-info.js';
 import { createLiveConnectionUI, mountLiveController } from '../src/iem/live-controller.js';
 import { AUTO_CONNECT_ATTEMPT_MS } from '../src/iem/auto-connect.js';
@@ -61,7 +61,7 @@ async function app({ known = [], autoConnect = false } = {}) {
   const repository = new SettingsRepository({ indexedDB: undefined }), settings = emptySettings();
   settings.knownAddresses = known; await repository.replace(settings);
   root.querySelector('.mm-diagnostics-open').disabled = true; // mountReadOnlyView disables every button present at mount
-  const owner = createDialogOwner(), ui = createLiveConnectionUI(root, { levels: true, pan: true, dialogOwner: owner });
+  const owner = createDialogOwner(), ui = createLiveConnectionUI(root, { levels: true, pan: true, dialogOwner: owner, timers });
   const view = { renders: [], render(model) { this.renders.push(model); }, preferences() {}, snapshotName() {}, destroy() {} };
   const document = Object.assign(new Events(), { hidden: false }), window = new Events();
   Object.assign(document, { activeElement: null });
@@ -221,24 +221,51 @@ test('recent messages are bounded, newest first, time-stamped and kept in memory
   diag.show(); const items = texts(dom.root, '.mm-diag-log li'); assert.equal(items.length, DIAGNOSTICS_LOG_LIMIT); assert.equal(items[0], '09:05:07 message 39');
 });
 
-test('message slot shows actionable feedback only; routine status stays out of the footer', () => {
+test('message slot shows the session\'s attention outcomes only; routine status stays out of the footer', () => {
   const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
-  const dom = domFixture(), { root } = dom;
-  for (const name of ['mm-app']) { /* present in the fixture */ void name; }
+  const dom = domFixture(), { root } = dom, timers = new Clock();
   tidyLive(root);
   Object.assign(globalThis, { document: dom.document, window: new Node(dom.document), matchMedia: () => ({ matches: true }), innerHeight: 300, ResizeObserver: class { observe() {} disconnect() {} } });
-  const diag = createDiagnostics(root, { dialogOwner: createDialogOwner() }), cleared = [];
+  const diag = createDiagnostics(root, { dialogOwner: createDialogOwner(), timers }), cleared = [];
   let view;
   try {
-    view = mountReadOnlyView(root, { onMessage: text => diag.message(text), onClearMessage: text => { cleared.push(text); if (diag.currentMessage() === text) diag.clearMessage(); } });
-    const slot = root.querySelector('.mm-message'), render = status => view.render({ status: 'Ui24 model received', connectionPhase: 'live', modelLabel: 'Ui24 model received', mixes: [], sources: [], control: { selected: null, eligible: true, armed: true, status } });
+    view = mountReadOnlyView(root, { onMessage: text => diag.message(text), onGestureStart: () => diag.clearMessage(), onClearMessage: text => { cleared.push(text); if (diag.currentMessage() === text) diag.clearMessage(); } });
+    const slot = root.querySelector('.mm-message');
+    const render = (status, extra = {}) => view.render({ status: 'Ui24 model received', connectionPhase: 'live', modelLabel: 'Ui24 model received', mixes: [], sources: [], control: { selected: null, eligible: true, armed: true, status, attention: '', ...extra } });
     render('Ready to edit current received state.'); assert.equal(slot.textContent, '', 'routine control status is not shown');
+    render('Sent; application unverified. Requested coordinate retained; no retry. Some values may have changed.'); assert.equal(slot.textContent, '', 'a normal sent-unverified outcome is routine, whatever its wording');
     assert.equal(root.querySelector('.mm-desk').textContent, 'Not connected', 'the live view no longer writes the footer status button');
-    render('Adjustment interrupted; obsolete adjustment cancelled. Values already sent live while dragging stay applied; no rollback.');
-    assert.match(slot.textContent, /Adjustment interrupted/); assert.equal(slot.attributes.title, slot.textContent, 'full text in the title');
+    const stopped = 'Local group definition changed; select the current group.';
+    render(stopped, { attention: stopped }); assert.equal(slot.textContent, stopped, 'a stopped gesture is shown whatever its wording'); assert.equal(slot.attributes.title, stopped, 'full text in the title');
     render('Ready to edit current received state.'); assert.equal(slot.textContent, '', 'cleared when the outcome is superseded'); assert.equal(cleared.length, 1);
     diag.message('Fullscreen unavailable; use the installed app.'); render('Ready to edit current received state.');
     assert.equal(slot.textContent, 'Fullscreen unavailable; use the installed app.', 'an explicit message is not wiped by a routine render');
-    assert.ok(diag.entries().some(entry => /interrupted/.test(entry.text)), 'actionable messages are logged for Diagnostics');
+    render('Gesture', { gestureActive: true }); assert.equal(slot.textContent, '', 'the next deliberate gesture clears a transient message');
+    assert.ok(diag.entries().some(entry => /select the current group/.test(entry.text)), 'actionable messages are logged for Diagnostics');
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
+});
+
+test('a transient slot message clears after 8 s; a lasting condition stays while it holds and never hides a newer transient message', () => {
+  const dom = domFixture(), timers = new Clock(); tidyLive(dom.root);
+  const diag = createDiagnostics(dom.root, { dialogOwner: createDialogOwner(), timers }), slot = dom.root.querySelector('.mm-message');
+  diag.message('Try again in a moment.'); assert.equal(slot.textContent, 'Try again in a moment.');
+  timers.tick(MESSAGE_TTL_MS - 1); assert.equal(slot.textContent, 'Try again in a moment.'); timers.tick(1); assert.equal(slot.textContent, '');
+  diag.condition('View is temporary; not saved on this device.'); timers.tick(60000); assert.equal(slot.textContent, 'View is temporary; not saved on this device.', 'lasting condition stays');
+  diag.message('Fullscreen unavailable.'); assert.equal(slot.textContent, 'Fullscreen unavailable.'); timers.tick(MESSAGE_TTL_MS); assert.equal(slot.textContent, 'View is temporary; not saved on this device.', 'condition returns after the transient message');
+  diag.condition(''); assert.equal(slot.textContent, '', 'cleared when the condition stops holding');
+});
+
+test('lasting conditions reach the footer slot: groups unavailable without a snapshot name, temporary view', async () => {
+  const a = await app();
+  try {
+    a.ui.address.value = '10.0.0.5'; a.ui.form.emit('submit'); a.sockets[0].open();
+    a.sockets[0].receive(LIVE.replace('\nSETS^var.currentSnapshot^IMGL FIBBERS', ''));
+    const slot = a.root.querySelector('.mm-message');
+    assert.match(slot.textContent, /^Groups unavailable: the desk has not reported a current snapshot name/);
+    a.timers.tick(9000); assert.match(slot.textContent, /^Groups unavailable/, 'persists while the condition holds');
+    a.sockets[0].receive('3:::SETS^var.currentSnapshot^IMGL FIBBERS'); await a.controller.whenRigIdle(); await flush();
+    assert.doesNotMatch(slot.textContent, /Groups unavailable/, 'cleared when a rig is bound');
+    a.controller.selectAux(0); await a.controller.whenNavigationIdle(); await flush();
+    assert.equal(slot.textContent, 'View is temporary; not saved on this device.', 'memory-only storage is a lasting condition');
+  } finally { await a.close(); }
 });

@@ -19,10 +19,10 @@ const SNAPSHOT_PATH = 'var.currentSnapshot';
 // F09-S11 (user decision 2026-11-21): it is now minimal (at most one status
 // line); the session message, settings status and explanatory notes, the
 // banner links and a second Connect/Disconnect pair live in the Diagnostics modal.
-export function createLiveConnectionUI(root, { levels = false, pan = false, dialogOwner } = {}) {
+export function createLiveConnectionUI(root, { levels = false, pan = false, dialogOwner, timers } = {}) {
   const document = root.ownerDocument, $ = selector => root.querySelector(selector);
   const make = (tag, text = '') => { const node = document.createElement(tag); node.textContent = text; return node; };
-  const diagnostics = createDiagnostics(root, { dialogOwner, levels, pan });
+  const diagnostics = createDiagnostics(root, { dialogOwner, levels, pan, ...(timers ? { timers } : {}) });
   diagnostics.address.value = DEFAULT_MIXER_ADDRESS;
   const layer = $('.mm-layer'), form = make('form'); form.className = 'mm-live-connection';
   const address = make('input'), connect = make('button', levels ? 'Connect live IEM' : 'Connect read-only');
@@ -79,7 +79,7 @@ export function createLiveConnectionUI(root, { levels = false, pan = false, dial
     form, address, feedback, connect, dialogDisconnect, close, show, dialogOwner, beforeOpen(callback) { beforeOpen = callback; },
     diagnostics, settings: diagnostics.settings, note: diagnostics.note, disconnect: diagnostics.disconnect,
     // Footer message slot, status button and Diagnostics feed (all optional for other callers).
-    message: text => diagnostics.message(text), clearMessage: () => diagnostics.clearMessage(),
+    message: text => diagnostics.message(text), clearMessage: () => diagnostics.clearMessage(), condition: text => diagnostics.condition(text),
     status: value => diagnostics.status(value), rig: text => diagnostics.rig(text), autoPass: pass => diagnostics.autoPass(pass), log: text => diagnostics.log(text), refresh: () => diagnostics.refresh(),
     onOpen(listener) { openListeners.add(listener); return () => openListeners.delete(listener); },
     visible: () => connectionVisible,
@@ -268,6 +268,8 @@ export function mountLiveController({ session, repository, view, ui, document = 
       if (status.state === 'failed' && !statusNotice) { if (ui.feedback) ui.feedback.textContent = `${status.text}${status.text.startsWith('Couldn') ? '.' : '. Connect again.'}`; }
     }
     ui.status?.(status);
+    // Lasting conditions reach the footer slot while they hold.
+    ui.condition?.(navigationMessage.startsWith('View is temporary') ? navigationMessage : settingsReady && !owner() && /^Groups unavailable/.test(rigMessage) ? rigMessage : '');
     ui.rig?.(owner() ? `Rig “${profile()?.name}”` : rigMessage || 'No rig');
     ui.refresh?.();
   }
