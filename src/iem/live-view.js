@@ -31,7 +31,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   main.append(sourceEmpty, bank); sends.append(main, pinned); content.replaceChildren(empty, grid, sends);
   const overviewStrips = new Map(), sourceStrips = new Map(), pinnedStrips = new Map();
   for (const button of root.querySelectorAll('button')) {
-    if (!['fullscreen', 'overview'].includes(button.dataset.action)) button.disabled = true;
+    if (!['fullscreen', 'overview', 'install', 'dismiss-install'].includes(button.dataset.action)) button.disabled = true;
   }
   $('.mm-navigation').hidden = false;
   $('.mm-local-tabs').hidden = false;

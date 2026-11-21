@@ -17,3 +17,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+  version-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # F07-S05: shipped app files changed => package.json version must increase.
+      - run: node scripts/check-version.js "origin/${{ github.base_ref }}"

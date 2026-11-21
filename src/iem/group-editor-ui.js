@@ -227,7 +227,8 @@ export function createGroupEditorUI(root, connectionUI) {
     unavailable(text) {
       const status = $(".mm-feedback");
       if (status) { status.textContent = text; status.setAttribute?.("aria-label", text); }
-      if (text) connectionUI.message?.(text);
+      // F07-S05: a lasting reason never replaces a transient message that is showing (e.g. the update notice); the controller's lasting condition shows it afterwards.
+      if (text && !connectionUI.diagnostics?.transientMessage?.() && connectionUI.diagnostics?.currentMessage?.() !== text) connectionUI.message?.(text);
     },
     destroy() {
       for (const [target, type, callback] of listeners)

@@ -45,7 +45,7 @@ class Events {
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const texts = (root, selector) => root.querySelectorAll(selector).map(node => node.textContent);
 
-async function app({ known = [], autoConnect = false } = {}) {
+async function app({ known = [], autoConnect = false, initialSuppressed = false } = {}) {
   const dom = domFixture(), { root } = dom, sockets = [], timers = new Clock();
   tidyLive(root);
   class FakeSocket {
@@ -65,7 +65,7 @@ async function app({ known = [], autoConnect = false } = {}) {
   const view = { renders: [], render(model) { this.renders.push(model); }, preferences() {}, snapshotName() {}, destroy() {} };
   const document = Object.assign(new Events(), { hidden: false }), window = new Events();
   Object.assign(document, { activeElement: null });
-  const controller = mountLiveController({ session, repository, view, ui, document, window, timers, now: () => timers.now, autoConnect, createID: (() => { let n = 0; return () => `rig-${++n}`; })() });
+  const controller = mountLiveController({ session, repository, view, ui, document, window, timers, now: () => timers.now, autoConnect, initialSuppressed, createID: (() => { let n = 0; return () => `rig-${++n}`; })() });
   await controller.ready;
   const desk = root.querySelector('.mm-desk');
   return { dom, root, sockets, timers, session, repository, owner, ui, view, controller, window, document, desk,
@@ -268,4 +268,21 @@ test('lasting conditions reach the footer slot: groups unavailable without a sna
     a.controller.selectAux(0); await a.controller.whenNavigationIdle(); await flush();
     assert.equal(slot.textContent, 'View is temporary; not saved on this device.', 'memory-only storage is a lasting condition');
   } finally { await a.close(); }
+});
+
+test('F07-S05: initialSuppressed (explicit Disconnect carried over an update reload) keeps automatic connection off until an explicit Connect', async () => {
+  const carried = await app({ known: ['192.168.0.60'], autoConnect: true, initialSuppressed: true });
+  assert.equal(carried.sockets.length, 0); assert.equal(carried.controller.autoSuppressed(), true);
+  carried.window.emit('online'); carried.document.emit('visibilitychange'); assert.equal(carried.sockets.length, 0);
+  await carried.close();
+  const normal = await app({ known: ['192.168.0.60'], autoConnect: true });
+  assert.ok(normal.sockets.length > 0); assert.equal(normal.controller.autoSuppressed(), false); await normal.close();
+});
+
+test('F07-S05: explicitConnecting is true only for a user-initiated attempt, not an automatic pass', async () => {
+  const automatic = await app({ known: ['192.168.0.60'], autoConnect: true });
+  assert.equal(automatic.session.snapshot().phase, 'connecting'); assert.equal(automatic.controller.explicitConnecting(), false); await automatic.close();
+  const manual = await app({ known: [] });
+  manual.ui.address.value = '192.168.0.60'; manual.ui.form.emit('submit');
+  assert.equal(manual.session.snapshot().phase, 'connecting'); assert.equal(manual.controller.explicitConnecting(), true); await manual.close();
 });

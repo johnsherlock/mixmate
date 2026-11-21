@@ -32,7 +32,8 @@ self.addEventListener('install', event => {
     const cache = await caches.open(CACHE);
     await Promise.all(URLS.map((url, i) => cache.put(url, responses[i])));
   })());
-  // Updates wait for existing app windows to close; never replace a live session.
+  // F07-S05: an installed update waits until a page asks for it (APPLY_UPDATE
+  // below); the live app only asks while no desk session or operation is active.
 });
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
@@ -55,6 +56,14 @@ self.addEventListener('fetch', event => {
   event.respondWith(caches.open(CACHE).then(cache => verifiedAsset(cache, target)));
 });
 self.addEventListener('message', event => {
+  if (event.data?.type === 'APPLY_UPDATE') {
+    // F07-S05 (user decision 2026-11-21): the only skipWaiting. A page that already
+    // applied this exact version in the current session is told so instead (no reload loop).
+    const repeat = event.data.previous === VERSION;
+    event.ports[0]?.postMessage({ applied: !repeat, version: VERSION });
+    if (!repeat) event.waitUntil(self.skipWaiting());
+    return;
+  }
   if (event.data?.type !== 'VERIFY_OFFLINE' || !event.ports[0]) return;
   event.waitUntil((async () => {
     try {
