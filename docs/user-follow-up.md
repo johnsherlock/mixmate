@@ -533,3 +533,24 @@ F07-S01 (PR #60, merged `b916b31`) accepted P3s:
 - Closed risk: the `settings.block.*` INIT line form (root read the raw lines: `SETS^settings.block.pass^<string>`, empty on this desk, and `SETD^settings.block.<x>^0|1`; matches the parser).
 
 F07-S02 routine decisions (root, [story](stories/F07-S02.md)): header Snapshot opens a Recall dialog (list, current marked and preselected, warning, Cancel/Recall; modal while pending; confirmed closes with an 8 s footer message); Save opens an overwrite-current dialog (no save-as; the `reported` wording is a report only); header buttons are disabled with a title reason when not qualified, no show/current name, lock locked/unknown or pending; Diagnostics gains a Snapshots group and logs every operation; no dirty indicator (the desk's "snapshot modified" state is unverified). Review round 1 (root): the "Recalled <name>." success message in the footer slot is kept as a deliberate decision (a recall result is user-meaningful feedback even when not an error); the save wording was softened to "Save sent for <name>; the desk reported a show change (contents not verified)."; every open preselects the desk's current snapshot; pending focuses the dialog and traps Tab. Beyond the brief: × and Escape are inert while an operation is pending; the outcome is tracked outside the dialog so replacement or a rig switch never loses it; a list the desk does not send within 5 s shows "did not send its snapshot list".
+
+## 2026-11-21 — F01-S05 side-loaded Android APK drafted (root)
+
+The user asked how to distribute MixMate as an APK and iOS app, then asked to draft a story focused on a side-loaded APK downloadable from GitHub first. [F01-S05](stories/F01-S05.md) is drafted and **not authorized** for implementation.
+
+| Item | Decision / status | Next action and owner |
+| --- | --- | --- |
+| Packaging approach | Recommended Capacitor Android shell over the existing Vite build; Android only for now; iOS and Play Store deferred by the user's focus. TWA rejected for this story because it keeps the HTTPS→`ws://` local-network dependency. | Formal ADR-0010 lands in the story PR. |
+| Distribution | Signed APK plus SHA-256 attached to a GitHub Release by a CI workflow; users sideload. No in-app update check or runtime fetch. | First tag/Release needs user confirmation. |
+| Signing key | User creates the keystore and GitHub secrets; agent never handles key material. | User, when the story is authorized. |
+| Dependency exception | Independent of the F02-S05 → F07-S01 → F07-S02 batch (completed 2026-11-21; F07-S03/S04 not authorized): no protocol, allowlist, guard, session or settings-schema change. | Root confirms at authorization. |
+| Open choices | Application ID (recommended `io.github.johnsherlock.mixmate`), APK contents (recommended live IEM only), minimum Android version. | User. |
+| Release gate | APK becomes an F08-S01 target; story-level device evidence does not pass F08-S01. | F08-S01. |
+
+## F07-S02 accepted P3s (recorded 2026-11-21, closing docs)
+
+F07-S02 (PR #61, merged `2e9e46f`, final approved head `a61e1d1`):
+
+- (a) One explicit click on Recall recalls the preselected current snapshot, discarding unsaved desk changes. Intended; the dialog shows a warning.
+- (b) When the dialog has been replaced, an unconfirmed or unknown outcome shows in the footer only for the 8 s message TTL; Diagnostics keeps it.
+- (c) The story's test count is corrected to 17 (three added in review round 1).
