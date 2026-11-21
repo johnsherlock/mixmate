@@ -554,3 +554,19 @@ F07-S02 (PR #61, merged `2e9e46f`, final approved head `a61e1d1`):
 - (a) One explicit click on Recall recalls the preselected current snapshot, discarding unsaved desk changes. Intended; the dialog shows a warning.
 - (b) When the dialog has been replaced, an unconfirmed or unknown outcome shows in the footer only for the 8 s message TTL; Diagnostics keeps it.
 - (c) The story's test count is corrected to 17 (three added in review round 1).
+
+## 2026-11-21 — F07-S05 automatic updates, install prompt and versioning (root decisions, in review)
+
+[F07-S05](stories/F07-S05.md), user-authorized 2026-11-21 outside the S03/S04 order.
+
+| Item | Decision / status | Next action and owner |
+| --- | --- | --- |
+| Dependency exception | F07-S05 does not depend on F07-S03/S04 (not authorized): no protocol, allowlist, session or settings-schema change. | None. |
+| Automatic updates | Replaces "no forced update/reload during a session" (AGENTS.md, distribution audit, ADR-0001 amendment; no new ADR number, ADR-0010 is reserved by the drafted F01-S05). Checks on open/`online`/visible; a finished worker is applied (message + one reload) only when no session past socket open, gesture, send, snapshot operation or non-Connect dialog is active, else deferred until clear. | Root live acceptance on a deployed two-release update. |
+| Trade-off: abortable pass | A still-`connecting` automatic pass (no state received) does not defer an update; the reload restarts the pass. Chosen so the "open on internet Wi-Fi" case updates immediately instead of waiting behind the failing pass and Connect dialog. | User may prefer deferring; one-line change in `updateBusy`. |
+| Trade-off: scope | Only the live entry auto-applies; demo/connection test keep wait-for-close. Applying skips waiting for every client of the scope (a demo tab keeps running its page on the new worker without a reload). | None. |
+| Loop guards | Worker refuses to re-apply a version the page already applied this session; 10 s reload backstop; no automatic reload without working `sessionStorage`; silent worker or missing `controllerchange` falls back to a manual message. | None. |
+| Install prompt | Non-modal strip under the header (about 32 px); `prompt()` only from the tap; iOS instruction; per-device dismissal in `localStorage`, re-show from Diagnostics; manifest unchanged (already meets criteria). | Real Chrome/iOS check by root. |
+| Versioning | 0.6.0; policy in AGENTS.md and orchestration; CI `version-check` job; `CHANGELOG.md`. `package.json` and the lockfile are not "shipped files" in the check (docs, tests, workflows also pass). | Branch protection may add `version-check` as a required check (user). |
+| Dev-server message | `import.meta.env.DEV` skips registration and shows the clear text; production errors unchanged. | None. |
+| Leftover docs | F07-S02 acceptance line and backlog row 8j tidied | None. |

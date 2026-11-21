@@ -38,6 +38,10 @@ The user has accepted mapping requested point/drawn EQ curves onto actual output
 
 No backend or internet is required at a gig. Settings are installation-local and can be lost if site data is cleared; export/import supplies a portable backup. Mobile transport feasibility remains a release-qualification gate in F08-S01; ADR-0002 permits independent implementation to continue while it is unresolved. Read-only delivery can proceed without AUX permission changes, while later controls may require explicit product decisions where the hardware cannot match the prototype exactly.
 
+## Amendment — automatic online updates (2026-11-21, F07-S05)
+
+The user decided that the app should update itself whenever it is opened with an internet connection (the desk's Wi-Fi has none, so a gig session normally never sees an update). This replaces the earlier consequence "updates wait for all windows to close; no forced update/reload during a session". Offline verification, current-entry/asset proof, the old-cache-until-new-precache-complete rule, `/mixmate/` scope and relative paths are unchanged. A completed install is activated by an explicit page message (the only `skipWaiting`) and the page reloads once, but only while no desk session, gesture, snapshot operation or dialog could be interrupted; otherwise the update is deferred until that clears. See [F07-S05](../stories/F07-S05.md) and the [distribution audit](../distribution-audit.md). No new ADR number was taken (ADR-0010 is reserved by the drafted F01-S05).
+
 ## References
 
 - [Feature backlog](../backlog.md)

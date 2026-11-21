@@ -37,16 +37,17 @@ function worker({ version = 'v1', network = bodies, storage = new Map(), assets 
     async keys() { return [...storage.keys()]; },
     async delete(key) { return storage.delete(key); },
   };
-  let claimed = false;
+  let claimed = false, skipped = 0;
   const source = template.replace('__VERSION__', version).replace('__ASSETS__', JSON.stringify(assets))
     .replace('__HASHES__', JSON.stringify(Object.fromEntries(Object.entries(bodies).map(([path, body]) => [path, digest(body)]))))
     .replace('__ENTRY_PROOFS__', JSON.stringify({ 'index.html': 'a'.repeat(64), 'iem.html': 'b'.repeat(64), 'demo.html': 'c'.repeat(64), 'connection-test.html': 'd'.repeat(64) }));
   vm.runInNewContext(source, {
-    self: { registration: { scope }, clients: { async claim() { claimed = true; } }, addEventListener(type, callback) { listeners[type] = callback; } },
+    self: { registration: { scope }, clients: { async claim() { claimed = true; } }, async skipWaiting() { skipped++; }, addEventListener(type, callback) { listeners[type] = callback; } },
     caches, fetch, URL, Request, Response, crypto: webcrypto,
   });
   return {
-    storage, requests, get claimed() { return claimed; },
+    storage, requests, get claimed() { return claimed; }, get skipped() { return skipped; },
+    async apply(previous) { let result; await this.event('message', { data: { type: 'APPLY_UPDATE', previous }, ports: [{ postMessage(value) { result = value; } }] }); return result; },
     async event(type, event = {}) { let work; listeners[type]({ ...event, waitUntil(promise) { work = promise; } }); await work; },
     async verify(required) { let result; await this.event('message', { data: { type: 'VERIFY_OFFLINE', ...(required ? { required } : {}) }, ports: [{ postMessage(value) { result = value; } }] }); return result; },
     async fetch(path, { mode = 'navigate', method = 'GET' } = {}) {
@@ -188,4 +189,17 @@ test('an older three-entry inventory cannot certify the new four-entry default a
   const sw = worker({ assets: Object.keys(bodies).filter(path => path !== 'connection-test.html') }); await sw.event('install');
   const required = { entry: new URL('index.html', scope).href, token: 'a'.repeat(64), assets: ['index.html', 'iem.html', 'demo.html', 'connection-test.html'].map(path => new URL(path, scope).href) };
   assert.equal((await sw.verify(required)).ready, false);
+});
+
+test('F07-S05: a waiting worker skips waiting only on an APPLY_UPDATE message, once per version, and never at install', async () => {
+  const sw = worker({ version: 'v2' });
+  await sw.event('install');
+  assert.equal(sw.skipped, 0); assert.equal(sw.claimed, false); // installing alone never replaces a session
+  assert.deepEqual(JSON.parse(JSON.stringify(await sw.apply(undefined))), { applied: true, version: 'v2' });
+  assert.equal(sw.skipped, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(await sw.apply('v2'))), { applied: false, version: 'v2' }); // already applied this session: no loop
+  assert.equal(sw.skipped, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(await sw.apply('v1'))), { applied: true, version: 'v2' });
+  assert.equal(sw.skipped, 2);
+  assert.equal((await sw.verify()).ready, true); // verification still works afterwards
 });

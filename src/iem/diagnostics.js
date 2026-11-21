@@ -20,6 +20,10 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
   const sinkText = selector => $(selector)?.textContent || '';
 
   const build = section('Build'), version = row(build, 'Version'), commit = row(build, 'Commit'), built = row(build, 'Built (UTC)'), offline = row(build, 'Offline');
+  // F07-S05: update state and install state; the optional button re-shows a dismissed install prompt.
+  const updateRow = row(build, 'Update'), installRow = row(build, 'Install'), reshow = make('button', '', 'Show install prompt');
+  reshow.type = 'button'; reshow.hidden = true; build.append(reshow); updateRow.textContent = 'No update waiting'; installRow.textContent = 'Unknown';
+  let onReshow = () => {}; const reshowClick = () => onReshow(); reshow.addEventListener('click', reshowClick);
   version.textContent = `v${info.version}`; commit.textContent = info.commit; built.textContent = info.time; offline.textContent = 'Offline copy not verified';
 
   const connection = section('Connection');
@@ -107,6 +111,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
   const visible = () => Boolean(lease && (!dialogOwner || dialogOwner.owns(lease)));
   const refresh = () => { if (visible()) paint(); };
   const opener = $('.mm-diagnostics-open');
+  opener?.setAttribute?.('title', `Diagnostics — MixMate v${info.version} (${info.commit})`);
   if (opener) opener.disabled = false; // The live view disables every button present at mount; this one is always available.
   const onOpen = () => show();
   opener?.addEventListener('click', onOpen);
@@ -122,6 +127,8 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
       if (desk) { desk.textContent = value.text; desk.dataset.state = value.state; desk.setAttribute?.('title', value.title || value.text); }
       refresh();
     },
+    updates(text) { updateRow.textContent = String(text || 'No update waiting'); refresh(); },
+    install(value, onShow) { installRow.textContent = String(value?.text || 'Unknown'); reshow.hidden = !value?.canShow; if (onShow) onReshow = onShow; refresh(); },
     rig(text) { if (state.rig !== text) { state = { ...state, rig: text }; refresh(); } },
     // Snapshot rows: plain strings built by the snapshot controls from received state.
     snapshots(value) { state = { ...state, snapshots: value ? Object.fromEntries(Object.keys(emptySnapshots).map(key => [key, String(value[key] ?? emptySnapshots[key])])) : emptySnapshots }; refresh(); },
@@ -148,7 +155,7 @@ export function createDiagnostics(root, { dialogOwner, info = buildInfo(), now =
       refresh();
     },
     entries: () => entries.map(entry => ({ ...entry })),
-    destroy() { timers.clearTimeout(transientTimer); opener?.removeEventListener('click', onOpen); if (lease) close(lease); },
+    destroy() { timers.clearTimeout(transientTimer); reshow.removeEventListener('click', reshowClick); opener?.removeEventListener('click', onOpen); if (lease) close(lease); },
   };
   return api;
 }

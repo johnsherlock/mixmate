@@ -21,6 +21,7 @@ The user-authorized batch **F02-S05 → F07-S01 → F07-S02**, plus the user-req
 | [F07-S02](stories/F07-S02.md) snapshot operations (Recall/Save dialogs) | [#61](https://github.com/johnsherlock/mixmate/pull/61) | `2e9e46f` (2026-11-21 10:01 UTC) | `a61e1d1` |
 
 - **Not authorized:** F07-S03 (recording) and F07-S04 (native UI access).
+- **In review (user-authorized 2026-11-21):** [F07-S05](stories/F07-S05.md) automatic online updates, install prompt and visible versioning (0.6.0). It has no dependency on F07-S03/S04; the exception is recorded in [follow-ups](user-follow-up.md). Version policy: [orchestration](orchestration.md#versioning-policy-f07-s05).
 - **Drafted, not authorized:** [F01-S05](stories/F01-S05.md) (side-loaded Android APK; open decisions for the user: application ID, APK contents, minimum Android version, signing key and first Release; planned ADR-0010).
 - **No implementation is authorized until the user says so.** Backlog priority alone does not authorize execution.
 

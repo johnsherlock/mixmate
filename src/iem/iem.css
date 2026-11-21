@@ -2742,3 +2742,40 @@ body {
 #mixmate-iem-concept .mm-snapshot-dialog-body select { max-width: 100%; text-overflow: ellipsis; }
 #mixmate-iem-concept .mm-snapshot-dialog-body .mm-dialog-actions { margin-top: 4px; }
 #mixmate-iem-concept .mm-snapshot-dialog-body .mm-dialog-actions button:disabled { opacity: 0.5; }
+
+/* F07-S05: non-modal install strip. In normal flow under the header (never an overlay),
+   one short line; it takes its own height so faders and the footer stay uncovered. */
+#mixmate-iem-concept .mm-install {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 2px 8px;
+  background: #22282d;
+  color: #d4bd80;
+  font-size: 11px;
+}
+#mixmate-iem-concept .mm-install .mm-install-text {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#mixmate-iem-concept .mm-install button {
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+#mixmate-iem-concept .mm-install .mm-install-dismiss {
+  min-width: 28px;
+  padding: 2px 6px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-install {
+  padding: 0 6px;
+  font-size: 10px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-install button {
+  min-height: 22px;
+}

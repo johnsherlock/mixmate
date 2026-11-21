@@ -33,3 +33,7 @@ Deliver the handoff through the reviewed PR process, in the final story PR when 
 Once handed off, **stop**; do not begin another story. Do not create a desktop chat or claim responsibility transferred without explicit user authorization and a supported mechanism. Normally report that the user should open a fresh orchestrator chat and read AGENTS plus the handoff. This repository checkpoint transfers knowledge, not account usage or implicit extra scope.
 
 Reference: OpenAI's [workflow guidance](https://developers.openai.com/cookbook/examples/codex/iterating-development-workflows-with-codex) supports repository guidance and phase handoffs; the specific batch, stop and safety rules above are project/user decisions, not claims of automatic desktop-session transfer.
+
+## Versioning policy (F07-S05)
+
+From 2026-11-21 (user decision), every story PR that changes shipped app files (`src/`, `public/`, `index.html`, `iem.html`, `demo.html`, `connection-test.html`, `vite.config.js`, `scripts/`) bumps the `package.json` version (and `package-lock.json`): semver patch for fixes, minor for features. The PR adds a newest-first `CHANGELOG.md` entry (version, date, story/PR, one line). `scripts/check-version.js` runs in `ci.yml` on pull requests and fails when shipped files changed without an increase over the base branch; docs-only, test-only and workflow-only PRs pass. Diagnostics shows version, commit and build time.
