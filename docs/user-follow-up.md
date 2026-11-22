@@ -1,6 +1,6 @@
 # User follow-ups and parked decisions
 
-## 2026-11-21 F06-S05 AUX EQ high-pass / low-pass filters (user request, root decisions, in review)
+## 2026-11-21 F06-S05 AUX EQ high-pass / low-pass filters (user request, root decisions, merged)
 
 User request: "We're missing the high/low pass filter in the EQ. See the demo app and native ui." Story: [F06-S05](stories/F06-S05.md) (0.9.0). Evidence and wire forms: [EQ contract](iem-aux-eq-contract.md#f06-s05-aux-eq-filters--2026-11-21), [ADR-0006 amendment](adr/0006-aux-geq-curve-contract.md#f06-s05-amendment--aux-eq-high-pass--low-pass-filters-user-request-2026-11-21).
 
@@ -16,6 +16,27 @@ User request: "We're missing the high/low pass filter in the EQ. See the demo ap
 | Unverified | Filter slope (no AUX GEQ slope path), mono-output behaviour on the desk, DSP response of the cuts. | Root's live acceptance on SPARE AUX 9/10 and a mono output; F08-S01 for devices. |
 | Version | 0.9.0 (minor) with CHANGELOG entry. | None. |
 | PR #67 leftovers | Backlog header sentence and F01-S05 dependency line updated: F07-S03/S04 and F07-S06 are merged. | None. |
+| Merged (recorded 2026-11-22) | F06-S05 merged as [PR #68](https://github.com/johnsherlock/mixmate/pull/68), merge `c1bfe3f`, final approved head `de5e387`; review and live record https://github.com/johnsherlock/mixmate/pull/68#issuecomment-7065042504. | None. |
+| Accepted P3 (F06-S05) | A new filter or band gesture started within the echo window (up to 2.5 s) after a filter release may be refused once (basis wait); the next attempt works. | Observe on the desk; no action unless it annoys. |
+| Accepted P3 (F06-S05) | If one side's echo is dropped, the cuts stay read-only ("L/R cuts unequal") until the next change or a reconnect. | Observe; revisit only if seen live. |
+| Accepted P3 (F06-S05) | Mono-output and filter-slope behaviour remain untested live. | Root, when a mono output and slope observation are available. |
+
+## 2026-11-22 F09-S12 UI tweaks (user request, root decisions, in review)
+
+User request after testing on real devices: an **All Groups** button, **Create Group / Edit Group**, a group dB readout that makes sense, **nudge buttons** on every fader, real **FX names**, a **fader fill** like the native app and a **wider snapshot name**. Story: [F09-S12](stories/F09-S12.md) (0.10.0). Evidence (Ui24R 3.0.7865-ui24): `f.<n>.name` is received empty for the four FX returns and `f.<n>.fxtype` is `SETD` 0 Reverb / 1 Delay / 2 Chorus / 3 Room (native `E_FX`).
+
+| Item | Decision / status | Next action and owner |
+| --- | --- | --- |
+| Nudge values (user decision 2026-11-22) | Up **+3 dB**, down **−1.5 dB**, in the dB-linear display scale. They are the only two numbers in [`src/iem/nudge-config.js`](../src/iem/nudge-config.js) (`NUDGE_UP_DB`, `NUDGE_DOWN_DB`); the user will tweak them there. | User edits the constants if wanted. |
+| Nudge semantics | Channel/master ±N dB; up from −∞/bottom segment lands on the −70 dB floor, down below −70 dB goes to −∞, clamp +10 dB. A group applies one common display-scale delta to every member, clamped at the first member limit (top: loudest at max; bottom: quietest at position 0). One press = one deliberate gesture through the typed level/group API (begin, preview, commit); no new outbound message, no allowlist change, no hold repeat, click only; disabled with a reason when not editable. | None. |
+| All Groups | Navigation only (`controller.allGroups()` = collapse the expanded group), immediately left of All Channels, active on the group fader view, writes nothing. | None. |
+| Create / Edit Group | One header button: **Create Group** opens a new empty group; **Edit Group** (a group expanded) opens that group. `editor.open(id)` without an id is now a new group. | None. |
+| Group readout | Loudest member's received level, requested preview during a gesture, "—" unknown; the always-0.0 Δ text is removed. Docs updated ([presentation](iem-presentation.md), [groups](iem-groups.md), [relative groups](iem-relative-groups.md)). | None. |
+| FX names | Receive-only `f.<n>.fxtype` (0–3, else ignored); empty received name shows `FX<n> <Type>` (`FX<n>` unknown type), non-empty name wins; IDs unchanged. | Root confirms on the desk. |
+| Fader fill | Yellow bottom-to-cap, light blue for FX; CSS only, driven by the cap ratio. The native app's exact yellow was not sampled (desk not contacted). | User may ask for a different shade. |
+| Snapshot name | Landscape grids +50% (90–170 → 135–255 px, etc.); phone portrait (≤480 px) puts the snapshot on its own row and the utilities on a third row to reach the width. Checked in a browser harness only. | Check on the real phone and tablet (F08-S01 gate for device qualification). |
+| Version | 0.10.0 (minor) with CHANGELOG entry. | None. |
+| Live acceptance | On the desk: nudges (source, master, group on SPARE AUX), boundaries, FX names, readout, fill, snapshot width. | Root. |
 
 ## 2026-11-21 native UI overlay added to F01-S05 (user decision)
 

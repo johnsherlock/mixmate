@@ -8,7 +8,7 @@ import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
 import { parseIemStateFrame } from '../src/iem/protocol.js';
-import { positionToScale, scaleToPosition, FADER_SCALE_MIN, FADER_SCALE_TOP_DB } from '../src/iem/fader-scale.js';
+import { positionToScale, scaleToPosition, positionDbText, FADER_SCALE_MIN, FADER_SCALE_TOP_DB } from '../src/iem/fader-scale.js';
 
 test('logical overview uses five reciprocal pairs and preserves unequal individual readbacks', () => {
   const frame = '3:::SETS^model^ui24\n' + Array.from({ length: 10 }, (_, index) =>
@@ -243,7 +243,7 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     const bank = root.querySelector('.mm-strip-scroll'), shortcuts = root.querySelector('.mm-group-switches'), button = shortcuts.children[0];
     const group = bank.children[0];
     assert.equal(button.textContent, profile.groups[0].name); assert.equal(button.attributes.title, profile.groups[0].name); assert.equal(button.innerHTML, undefined);
-    assert.equal(shortcuts.children.length, 3); assert.equal(shortcuts.children[2].textContent, 'All Channels');
+    assert.equal(shortcuts.children.length, 4); assert.equal(shortcuts.children[2].textContent, 'All Groups', 'F09-S12: All Groups sits immediately left of All Channels'); assert.equal(shortcuts.children[3].textContent, 'All Channels');
     assert.equal(group.querySelector('input'), undefined); assert.equal(group.querySelector('.mm-meter-pair'), undefined);
     assert.match(group.querySelector('.mm-group-level-placeholder').attributes['aria-label'], /read-only/);
     root.emit('click', { target: { closest: selector => selector === 'button' ? button : null } }); assert.deepEqual(actions, ['7_group-Z']);
@@ -264,7 +264,7 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     view.render(projectGroupNavigation(received, profile, { view: 'groups', expandedGroupId: '7_group-Z' }));
     assert.equal(bank.children[2], unresolved); assert.equal(unresolved.querySelector('input'), input); assert.equal(unresolved.querySelector('.mm-fader-hit'), cap);
     assert.equal(unresolved.dataset.unresolved, 'false'); assert.equal(unresolved.querySelector('.mm-strip-name').textContent, '<img>i.20');
-    root.emit('click', { target: { closest: selector => selector === 'button' ? shortcuts.children[2] : null } }); assert.deepEqual(actions, ['7_group-Z', 'all']);
+    root.emit('click', { target: { closest: selector => selector === 'button' ? shortcuts.children[3] : null } }); assert.deepEqual(actions, ['7_group-Z', 'all']);
     view.render(projectGroupNavigation(base, profile, { view: 'channels' }));
     assert.deepEqual(bank.children.map(node => node.dataset.id), ['i.0@0', 'f.1@0']); assert.equal(root.querySelector('.mm-pinned').children.length, 1);
     view.render(projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'empty' }));
@@ -382,14 +382,15 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     assert.equal(article.querySelector('.mm-meter-pair'), undefined); assert.equal(input.disabled, false); assert.equal(input.min, String(FADER_SCALE_MIN)); assert.equal(input.max, String(FADER_SCALE_TOP_DB)); assert.equal(input.step, 'any'); assert.equal(input.dataset.keyStep, '0.5'); assert.equal(Number(input.value), positionToScale(0.4), 'cap starts at the loudest member level on the dB scale');
     assert.deepEqual(article.querySelector('.mm-ruler').children.map(node => node.textContent), ['+10', '0', '−12', '−24', '−40', '−60', '−70', '−∞'], 'dB ticks replace the POSITION label (−70 floor since F09-S07)');
     assert.equal(article.querySelector('.mm-ruler').children.at(-1).dataset.tick, 'off', 'the −∞ label is tagged so compact CSS can drop it');
-    assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.equal(article.querySelector('.mm-delta-prefix').textContent, 'Δ '); assert.equal(article.querySelector('.mm-delta-amount').textContent, '0.0 dB');
+    assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.equal(article.querySelector('.mm-delta-prefix'), undefined); assert.equal(article.querySelector('.mm-value').textContent, positionDbText(0.4), 'F09-S12: group readout = loudest member received level (not a Δ)');
     assert.equal(root.querySelector('.mm-pinned').children.length, 0); assert.equal(root.querySelector('.mm-level-enable'), undefined);
     const name = article.querySelector('.mm-strip-name'), select = article.querySelector('.mm-group-level-select');
     root.emit('click', { target: { closest: selector => selector === 'button' ? name : null } }); root.emit('click', { target: { closest: selector => selector === 'button' ? select : null } }); assert.deepEqual(actions, ['nav:band', 'level:band']);
     const wrap = input.parentElement, event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });
     root.querySelector('.mm-content').emit('pointerdown', event(100)); root.querySelector('.mm-content').emit('pointermove', event(60)); assert.equal(Number(input.value), positionToScale(0.523456));
     bank.scrollLeft = 87; control.previewDelta = 0.523456; control.groupRequested = [{ sourceId: 'i.0', auxIndex: 0, value: 0.45 }]; view.render(model); view.renderMeters(model);
-    assert.equal(article.querySelector('.mm-delta-amount').textContent, '+0.5 dB', 'Δ prefix stays a separate span compact CSS can hide');
+    control.groupReference = 0.45; view.render(model);
+    assert.equal(article.querySelector('.mm-value').textContent, positionDbText(0.45), 'during a gesture the readout shows the loudest member requested preview level');
     const member = bank.children[1];
     assert.equal(Number(member.querySelector('input').value), positionToScale(0.45), 'member cap previews the requested common delta'); assert.equal(member.dataset.groupRequested, 'true');
     assert.equal(member.querySelector('.mm-live-strip-state'), undefined, 'F09-S07: no per-strip state line');
@@ -400,14 +401,14 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     assert.equal(member.querySelector('input').attributes['aria-describedby'], described.id);
     assert.equal(article.querySelector('.mm-pan-button'), undefined, 'no group bottom note');
     assert.equal(bank.children[0], article); assert.equal(article.querySelector('input'), input); assert.equal(article.querySelector('.mm-fader-hit'), cap); assert.equal(bank.scrollLeft, 87);
-    control.armed = false; control.eligible = false; control.gestureActive = false; control.groupRequested = null; view.render(model); assert.equal(Number(input.value), positionToScale(0.4));
+    control.armed = false; control.eligible = false; control.gestureActive = false; control.groupRequested = null; control.groupReference = null; view.render(model); assert.equal(Number(input.value), positionToScale(0.4));
     assert.equal(bank.children[1].dataset.groupRequested, 'false'); assert.equal(Number(bank.children[1].querySelector('input').value), positionToScale(0.4), 'member returns to received actual'); assert.equal(input.disabled, false); assert.equal(article.querySelector('.mm-meter-pair'), undefined);
     profile.groups.push({ id: 'other', name: 'Other', members: ['i.0'] });
     control.eligible = true; control.lastDelta = 3;
     view.render(projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: null }));
-    assert.equal(bank.children[0].querySelector('.mm-delta-amount').textContent, '+3.0 dB');
+    assert.equal(bank.children[0].querySelector('.mm-value').textContent, positionDbText(0.4), 'group master (collapsed list) reads the loudest member level');
     assert.equal(bank.children[1].querySelector('input').disabled, false);
-    assert.equal(bank.children[1].querySelector('.mm-delta-amount').textContent, '0.0 dB');
+    assert.equal(bank.children[1].querySelector('.mm-value').textContent, positionDbText(0.4));
     assert.equal(bank.children[1].querySelector('.mm-pan-button'), undefined, 'F09-S07: no bottom group note text');
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
 });

@@ -81,7 +81,7 @@ body {
 }
 #mixmate-iem-concept .mm-top {
   display: grid;
-  grid-template-columns: 90px minmax(90px, 170px) minmax(120px, 1fr) auto;
+  grid-template-columns: 90px minmax(135px, 255px) minmax(120px, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -1005,7 +1005,7 @@ body {
     display: none;
   }
   #mixmate-iem-concept .mm-top {
-    grid-template-columns: 83px minmax(80px, 140px) minmax(100px, 1fr) auto;
+    grid-template-columns: 83px minmax(120px, 210px) minmax(100px, 1fr) auto;
     gap: 7px;
     padding: 6px 8px;
   }
@@ -1039,7 +1039,7 @@ body {
 }
 @media (max-width: 700px) {
   #mixmate-iem-concept .mm-top {
-    grid-template-columns: 72px 95px minmax(90px, 1fr) auto;
+    grid-template-columns: 72px 143px minmax(90px, 1fr) auto;
     gap: 5px;
   }
   #mixmate-iem-concept .mm-brand {
@@ -2643,14 +2643,6 @@ body {
 /* Development-only Details (?debug): Pan shares the bottom row with it. */
 #mixmate-iem-concept[data-mode="live"][data-debug="true"] .mm-strip > .mm-pan-button,
 #mixmate-iem-concept[data-mode="live"][data-debug="true"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan]{right:auto;width:calc(100% - 58px)}
-/* Group Δ readout fits at every size (root 1280×800 finding): the readout box is
-   its own inline-size container; narrow boxes drop the "Δ " prefix, narrower ones
-   shrink the font. Box and fader geometry are unchanged. */
-#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value{container:mm-delta / inline-size;min-width:0}
-#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-group > .mm-value .mm-delta-prefix{display:none}
-@container mm-delta (max-width: 104px){#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value .mm-delta-prefix{display:none}}
-@container mm-delta (max-width: 80px){#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value .mm-delta-amount{font-size:12px}}
-@container mm-delta (max-width: 64px){#mixmate-iem-concept[data-mode="live"] .mm-group > .mm-value .mm-delta-amount{font-size:10px}}
 /* Ruler labels never overlap: the ruler is a size container as tall as the
    travel. -70/-inf are 5/85 of it apart and -60/-70 10/85 (+10/0 too); below
    ~11px of spacing drop the -inf label first, then the -70 label. */
@@ -2780,4 +2772,35 @@ body {
 }
 #mixmate-iem-concept[data-compact="true"] .mm-install button {
   min-height: 22px;
+}
+
+/* F09-S12 (user request 2026-11-22). Header snapshot name box 50% wider on phone/tablet
+   landscape grids (the header grid columns above); portrait stacks the clock on its own row. */
+
+/* Nudge buttons: a fixed-height strip-head row under the dB readout, so strip and
+   fader geometry never change while dragging. Amounts live in src/iem/nudge-config.js. */
+#mixmate-iem-concept[data-mode="live"] .mm-nudge{display:flex;gap:4px;margin:3px 7px 0;flex-shrink:0}
+#mixmate-iem-concept[data-mode="live"] .mm-nudge button{flex:1 1 0;min-width:0;box-sizing:border-box;height:26px;min-height:26px;padding:0;font-size:12px;line-height:1}
+#mixmate-iem-concept[data-mode="live"] .mm-nudge button:disabled{opacity:.45}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-nudge{margin:2px 4px 0;gap:3px}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-nudge button{height:22px;min-height:22px;font-size:11px}
+#mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-nudge button{height:20px;min-height:20px}
+
+/* Track fill from the bottom to the cap (read by the native app the same way): yellow for
+   inputs/line/player/AUX masters/groups, light blue for FX returns. --mm-fill is the 0..1
+   cap ratio written with the cap position (gestures.js sync); the stop follows the thumb
+   centre. Pure paint on the existing track: no layout change. */
+#mixmate-iem-concept[data-mode="live"] .mm-strip{--mm-fill-colour:var(--mm-yellow)}
+#mixmate-iem-concept[data-mode="live"] .mm-strip[data-fx="true"]{--mm-fill-colour:#7fd0f5}
+#mixmate-iem-concept[data-mode="live"] .mm-vertical:is([data-channel],[data-group],[data-master]){--mm-fill-stop:calc(14.5px + (100% - 29px) * var(--mm-fill, 0))}
+#mixmate-iem-concept[data-mode="live"] .mm-vertical:is([data-channel],[data-group],[data-master])::-webkit-slider-runnable-track{background:linear-gradient(to top,var(--mm-fill-colour) var(--mm-fill-stop),transparent var(--mm-fill-stop)),linear-gradient(90deg,#070b0e,#141b20)}
+#mixmate-iem-concept[data-mode="live"] .mm-vertical:is([data-channel],[data-group],[data-master])::-moz-range-track{background:linear-gradient(to top,var(--mm-fill-colour) var(--mm-fill-stop),transparent var(--mm-fill-stop)),#0d151a}
+
+/* Phone portrait (up to 480px): the second header row cannot give the snapshot box 50% more
+   width next to the four utility buttons, so it takes the full row and the utilities move to a
+   third row (right-aligned). The clock stays alone on row 1 beside the brand. Tablet portrait
+   already has far more than +50% beside the utilities and is unchanged. */
+@media (max-width: 480px) {
+  #mixmate-iem-concept[data-orientation="portrait"] .mm-snapshot{grid-column:1 / -1;grid-row:2}
+  #mixmate-iem-concept[data-orientation="portrait"] .mm-utilities{grid-column:1 / -1;grid-row:3;justify-content:flex-end}
 }

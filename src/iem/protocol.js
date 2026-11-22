@@ -33,6 +33,9 @@ function describePath(path) {
   if (path === 'var.currentSnapshot') return { kind: 'device', field: 'currentSnapshot', path };
   const aux = /^a\.([0-9])\.(name|mix|pan|mute|stereoIndex|matrix)$/.exec(path);
   if (aux) return { kind: 'aux', auxIndex: Number(aux[1]), field: AUX_FIELDS[aux[2]], path };
+  // F09-S12: receive-only FX type (SETD 0..3) so unnamed FX returns can be labelled.
+  const fxType = /^f\.([0-3])\.fxtype$/.exec(path);
+  if (fxType) return { kind: 'source', ...sourceDescriptor('f', fxType[1]), field: 'fxtype', path };
   const source = /^([ilpf])\.(0|[1-9][0-9]?)\.(name|stereoIndex)$/.exec(path);
   if (source) {
     const descriptor = sourceDescriptor(source[1], source[2]);
@@ -57,6 +60,7 @@ function decodeValue(command, raw, field) {
   const value = Number(numberText);
   if (!Number.isFinite(value)) return undefined;
   if (field === 'stereoIndex') return [-1, 0, 1].includes(value) ? value : undefined;
+  if (field === 'fxtype') return [0, 1, 2, 3].includes(value) ? value : undefined;
   if (['mute', 'matrix', 'post', 'postproc'].includes(field)) return value === 0 ? false : value === 1 ? true : undefined;
   return value >= 0 && value <= 1 ? value : undefined;
 }

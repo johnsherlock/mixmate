@@ -549,6 +549,8 @@ export function mountLiveController({ session, repository, view, ui, document = 
       chooseNavigation({ view: 'groups', expandedGroupId: current.view === 'groups' && current.expandedGroupId === id ? null : id });
       return true;
     },
+    // F09-S12: back to the main group fader view, exactly what collapsing the expanded group does; writes nothing.
+    allGroups() { if (selectedAux !== null) { const current = localNavigation(); if (current.view !== 'groups' || current.expandedGroupId) chooseNavigation({ view: 'groups', expandedGroupId: null }); } },
     allChannels() { if (selectedAux !== null && localNavigation().view !== 'channels') chooseNavigation({ view: 'channels', expandedGroupId: null }); },
     overview() { selectedAux = null; chooseNavigation({ view: definition()?.groups.length ? 'groups' : 'channels', expandedGroupId: null }); },
     selectLevel(target) {
