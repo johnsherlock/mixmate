@@ -39,7 +39,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   $('.mm-snapshot-name').textContent = 'Unavailable';
   $('.mm-dirty').textContent = 'Read-only · no parameter writes';
   $('.mm-rec-state').textContent = 'Recording status unavailable';
-  const shortcuts = $('.mm-group-switches');
+  const shortcuts = $('.mm-group-switches'), localTabs = $('.mm-local-tabs'), editButton = $('[data-action="edit-groups"]');
   const shortcutNodes = new Map(), levelTargets = new WeakMap();
 
   let control = null, preview = null, selectedAux = null, bankModels = [];
@@ -104,12 +104,16 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const selectedTarget = target => control?.selected && JSON.stringify(target) === JSON.stringify(control.selected);
   function renderShortcuts(model, selected) {
     if (!shortcuts) return;
+    // With no AUX selected the shortcut row is hidden, so the button returns to its original place after Mix EQ.
+    if (!selected && editButton && editButton.parentElement !== localTabs) localTabs.append(editButton);
     // F09-S12: All Groups sits immediately left of All Channels; it is the
     // same navigation as collapsing the expanded group and writes nothing.
-    const choices = [...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })), { key: 'all-groups', name: 'All Groups', mode: 'groups' }, { key: 'channels', name: 'All Channels', mode: 'channels' }];
+    // F09-S13: the existing Create/Edit Group node (never recreated) sits immediately right of All Groups.
+    const choices = [...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })), { key: 'all-groups', name: 'All Groups', mode: 'groups' }, ...(editButton && selected ? [{ key: 'edit-groups', node: editButton }] : []), { key: 'channels', name: 'All Channels', mode: 'channels' }];
     const keys = new Set(choices.map(choice => choice.key));
     for (const [key, button] of shortcutNodes) if (!keys.has(key)) { button.remove(); shortcutNodes.delete(key); }
     for (const [index, choice] of choices.entries()) {
+      if (choice.node) { if (shortcuts.children[index] !== choice.node) shortcuts.insertBefore(choice.node, shortcuts.children[index] || null); continue; }
       let button = shortcutNodes.get(choice.key);
       if (!button) {
         button = element('button', ''); button.type = 'button';

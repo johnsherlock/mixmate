@@ -2,11 +2,15 @@
 
 Date: 2026-11-09. Story: [F03-S02](stories/F03-S02.md). Baseline: reviewed `main` at `c721b9f` (F03-S01 / PR #16). No mixer connection, writer, meter decoder or active wire-permission change is part of this story.
 
-## Current F09-S12 UI tweaks — 2026-11-22
+## Current F09-S13 button order — 2026-11-22
+
+User request; live entry only. Story: [F09-S13](stories/F09-S13.md). With an AUX selected the shortcut row reads All Mixes, group shortcuts, **All Groups, Create Group / Edit Group, All Channels**, then Mix EQ. `renderShortcuts` moves the existing `[data-action="edit-groups"]` node (listeners and keyed identity preserved, never recreated) into `.mm-group-switches` directly after All Groups. In the overview (no AUX selected) the shortcut row is hidden, so the node returns to `.mm-local-tabs` after Mix EQ. Behaviour is unchanged (Create Group opens a new group; Edit Group opens the expanded one).
+
+## F09-S12 UI tweaks — 2026-11-22
 
 User request of 2026-11-22 after device testing; live entry only (the Demo is unchanged). Story: [F09-S12](stories/F09-S12.md).
 
-- **All Groups** (`.mm-all-groups`, `data-mode="groups"`) sits immediately left of All Channels in the shortcut row. It calls `controller.allGroups()`, the same navigation as collapsing the expanded group, and writes nothing. It is `aria-pressed` while the group fader view is current (no group expanded).
+- **All Groups** (`.mm-all-groups`, `data-mode="groups"`) sits immediately left of All Channels in the shortcut row (F09-S13 inserts Create/Edit Group between them). It calls `controller.allGroups()`, the same navigation as collapsing the expanded group, and writes nothing. It is `aria-pressed` while the group fader view is current (no group expanded).
 - **Create Group / Edit Group:** the header button (`data-action="edit-groups"`) reads Create Group (`aria-label` "Create a new group") and opens the editor on a new empty group; with a group expanded it reads Edit Group (`aria-label` "Edit group <name>") and opens that group. The editor's catalog selector, "+ New" and Delete stay inside the editor.
 - **Group readout:** the group strip's value is the loudest member's displayed level (received, or the requested preview while this owner's gesture/echoes are live; "—" when unknown), in the normal level text format. The former "Δ" prefix/amount spans and their container-query CSS are removed; it is not a received group level.
 - **Nudge buttons:** `.mm-nudge` holds ▲ and ▼ side by side directly below the value readout on every live level fader (group, source send, AUX master); fixed height (26 px, 22 compact, 20 ultra-compact), so strip geometry does not change during drags. Up raises by `NUDGE_UP_DB` (3 dB), down lowers by `NUDGE_DOWN_DB` (1.5 dB) in the dB-linear display scale; **both amounts are defined only in [`src/iem/nudge-config.js`](../src/iem/nudge-config.js)** (user decision 2026-11-22; edit that file to change them) and the labels "Raise <name> by 3 dB" / "Lower <name> by 1.5 dB" are built from them. Channel/master: up from −∞ or the bottom segment lands on the −70 dB floor, down below −70 dB goes to −∞, clamped at +10 dB. Group: one common display-scale delta from the loudest member, clamped at the first member limit. One click is one gesture through the typed begin/preview/commit path with every guard unchanged; no hold repeat; disabled with a reason when the fader is not editable. Pointer travel over the buttons never starts a gesture.
