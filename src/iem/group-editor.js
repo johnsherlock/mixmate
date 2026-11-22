@@ -108,6 +108,7 @@ export function mountGroupEditor({
     baseline = group ? clone(group) : null;
     draft = group ? clone(group) : { id: createID(), name: "", members: [] };
     ui.name.value = draft.name;
+    ui.title?.(group ? `Edit group ${group.name}` : "Create group");
     ui.choices(groups(), group?.id || null);
     ui.deletable?.(Boolean(group));
     ui.message.textContent =

@@ -90,6 +90,8 @@ export function createGroupEditorUI(root, connectionUI) {
   connectionUI.beforeOpen?.(() => handlers?.close());
   return {
     name,
+    // Dialog title follows the editor's current draft: new vs existing group.
+    title(text) { if (active) $("#mm-dialog-title").textContent = text; },
     cancel,
     save,
     message,

@@ -18,7 +18,7 @@ export function debugFlag(search = '') {
 export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllGroups = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false, onMessage = () => {}, onClearMessage = () => {}, onGestureStart = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
-  let groupEditing = false, auxSelected = false, attentionText = '', gestureWas = false;
+  let groupRefusal = false, groupEditing = false, auxSelected = false, attentionText = '', gestureWas = false;
   const meterLegend = document.createElement('p');
   meterLegend.className = 'mm-live-meter-legend';
   meterLegend.textContent = 'VU: post-fader · source VU is NOT AUX-send contribution · library scale; firmware unverified';
@@ -136,6 +136,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       // outstanding, another target dispatching) never steals the selection;
       // it says why and starts nothing.
       if (target?.kind === 'group' && canEditLevel && !canEditLevel(target)) {
+        groupRefusal = true;
         $('.mm-feedback').textContent = 'Group not editable yet: waiting for the desk to report the last member change. Try again in a moment.';
         $('.mm-feedback').setAttribute('aria-label', $('.mm-feedback').textContent);
         onMessage($('.mm-feedback').textContent);
@@ -185,8 +186,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   };
   function nudge(input, up) {
     const refuse = reason => { const text = `Level not changed: ${reason}`; $('.mm-feedback').textContent = text; $('.mm-feedback').setAttribute('aria-label', text); onMessage(text); };
+    groupRefusal = false;
     const token = faderHandlers.onBegin(input);
-    if (!token) { if (!$('.mm-feedback').textContent.startsWith('Group not editable')) refuse(control?.reason || 'not editable right now; try again in a moment.'); return; }
+    if (!token) { if (!groupRefusal) refuse(control?.reason || 'not editable right now; try again in a moment.'); return; }
     const next = faderHandlers.onPreview(input, token, nudgeTarget(input, up));
     if (next === null) { faderHandlers.onCancel(input, token); refuse(control?.reason || 'the desk guard refused this step.'); return; }
     input.value = String(next); input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -481,6 +483,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   function click(event) {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
+    if (swallow.has(button)) { swallow.delete(button); event.preventDefault?.(); return; }
     if (detailButtons.has(button)) { gestures.cancel(); onOpenDetail(detailModels.get(detailButtons.get(button))); return; }
     if (button.dataset.openPan !== undefined) { gestures.cancel(); onOpenPan({ sourceId: button.dataset.openPan, auxIndex: Number(button.dataset.panAux) }); }
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
@@ -499,6 +502,20 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       } catch { $('.mm-feedback').textContent = 'Fullscreen unavailable; use the installed app.'; onMessage('Fullscreen unavailable; use the installed app.'); }
     }
   }
+  // Holding Enter/Space on a nudge button must never stack gestures: ignore keyboard
+  // auto-repeat, and swallow the click a Space release would fire after a held repeat.
+  const repeated = new WeakSet();
+  function keydown(event) {
+    const button = event.target?.closest?.('button');
+    if (!button || button.dataset.nudge === undefined) return;
+    if (event.repeat) { event.preventDefault(); repeated.add(button); }
+  }
+  function keyup(event) {
+    const button = event.target?.closest?.('button');
+    if (button && repeated.has(button)) { repeated.delete(button); if (event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space') { event.preventDefault(); swallow.add(button); } }
+  }
+  const swallow = new WeakSet();
+  root.addEventListener('keydown', keydown); root.addEventListener('keyup', keyup);
   root.addEventListener('click', click);
   return {
     render, renderMeters,
@@ -522,6 +539,6 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     },
     preferences(preferences) { root.dataset.preferredOrientation = preferences.orientation; root.dataset.showMeters = String(preferences.showMeters); layout.apply(); },
     clear() { gestures.cancel(); render({ status: 'Not connected — no received mixer state', mixes: [] }); },
-    destroy() { meterLegend.remove(); root.removeEventListener('click', click); gestures.destroy(); layout.destroy(); stopClock(); },
+    destroy() { meterLegend.remove(); root.removeEventListener('click', click); root.removeEventListener('keydown', keydown); root.removeEventListener('keyup', keyup); gestures.destroy(); layout.destroy(); stopClock(); },
   };
 }

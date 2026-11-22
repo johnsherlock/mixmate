@@ -16,6 +16,7 @@ async function fixture(options = {}) {
   let context = { profileId: 'rig-a', revision: 1, ready: true, selectedAux: 0, sources: [{ sourceId: 'i.2', name: '<img src=x> Literal' }, { sourceId: 'f.0', name: 'Synthetic FX' }] };
   const listeners = new Set(), ui = {
     name: { value: '' }, save: { disabled: false }, cancel: {}, message: {}, status: {},
+    title(text) { this.titleText = text; },
     show(name) { this.visible = true; this.rigName = name; }, hide() { this.visible = false; },
     members(catalog, selected) { this.catalog = structuredClone(catalog); this.selected = [...selected]; this.memberPaints = (this.memberPaints || 0) + 1; },
     choices(groups, id) { this.groups = structuredClone(groups); this.selectedGroup = id; },
@@ -309,3 +310,12 @@ test('F02-S05 groups belong only to the bound snapshot rig; no rig means unavail
   await app.close();
 });
 
+
+test('F09-S12 review: the editor dialog is titled Create group for a new group and Edit group <name> for an existing one', async () => {
+  const app = await fixture();
+  app.editor.open(); assert.equal(app.ui.titleText, 'Create group');
+  app.ui.actions.selectGroup('existing'); assert.equal(app.ui.titleText, 'Edit group Original');
+  app.ui.actions.selectGroup(null); assert.equal(app.ui.titleText, 'Create group');
+  app.ui.actions.close(); app.editor.open('existing'); assert.equal(app.ui.titleText, 'Edit group Original');
+  await app.close();
+});

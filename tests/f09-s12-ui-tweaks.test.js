@@ -293,3 +293,34 @@ test('All Groups button calls only the navigation handler; no session write', as
     assert.deepEqual(calls, ['groups', 'channels']); assert.equal(app.writes().length, 0);
   } finally { app.close(); }
 });
+
+test('review: keyboard auto-repeat on a nudge button never stacks gestures; a Space release after a held repeat fires nothing extra', async () => {
+  const app = await rig({ nav: { view: 'channels' } });
+  try {
+    const button = app.nudge(app.strip('i.0'), 'up'); let prevented = 0;
+    // Enter: the first keydown activates (one click); every repeat keydown is cancelled so no more clicks are generated.
+    app.root.emit('keydown', { target: button, key: 'Enter', repeat: false, preventDefault() { prevented++; } });
+    app.click(button);
+    for (let n = 0; n < 5; n++) app.root.emit('keydown', { target: button, key: 'Enter', repeat: true, preventDefault() { prevented++; } });
+    assert.equal(prevented, 5, 'repeat keydowns are cancelled');
+    app.advance(3000); assert.equal(app.writes().length, 2, 'exactly one nudge (both linked sides)');
+    // Space held: repeats cancelled, and the release click after a repeat is swallowed.
+    app.advance(3000); app.receiver.receive('3:::' + app.writes().map(m => m.slice(4)).join('\n'));
+    const before = app.writes().length;
+    for (let n = 0; n < 3; n++) app.root.emit('keydown', { target: button, key: ' ', repeat: n > 0, preventDefault() {} });
+    app.root.emit('keyup', { target: button, key: ' ', preventDefault() {} });
+    app.click(button); app.advance(3000);
+    assert.equal(app.writes().length, before, 'no extra nudge after a held Space');
+    app.click(button); assert.ok(app.writes().length > before, 'a later deliberate press works');
+  } finally { app.close(); }
+});
+
+test('review: a stale "Group not editable" message never hides a new, different refusal reason', async () => {
+  const app = await rig({ nav: { view: 'channels' }, handlers: { onBeginLevel: () => null } });
+  try {
+    // A refused nudge shows its own reason every time, even after the group-refusal text was shown earlier.
+    app.root.querySelector('.mm-feedback').textContent = 'Group not editable yet: waiting for the desk to report the last member change. Try again in a moment.';
+    app.click(app.nudge(app.strip('i.0'), 'up'));
+    assert.match(app.messages.at(-1), /^Level not changed: /); assert.match(app.root.querySelector('.mm-feedback').textContent, /^Level not changed: /);
+  } finally { app.close(); }
+});
