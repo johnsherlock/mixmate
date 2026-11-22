@@ -126,7 +126,7 @@ for (const memory of [false, true]) test(`F04-S05 deleting the expanded group re
   try {
     app.connect(); app.controller.selectAux(0); app.controller.toggleGroup('7_group-Z'); await app.controller.whenNavigationIdle();
     assert.equal(app.controller.context().expandedGroupId, '7_group-Z');
-    assert.equal(editor.open(), true); assert.equal(editor.snapshot().id, '7_group-Z');
+    assert.equal(ui.actions.open(), true); assert.equal(editor.snapshot().id, '7_group-Z');
     ui.actions.requestDelete(); await ui.actions.confirmDelete();
     assert.deepEqual(app.repository.snapshot().settings.profiles[0].groups.map(group => group.id), ['empty']);
     assert.equal(app.controller.context().expandedGroupId, null);
@@ -236,7 +236,7 @@ test('incoming state/meters never save navigation or override a chosen group, an
   socket.receive('3:::SETS^i.0.name^Synthetic rename'); assert.equal(writes, 0); assert.equal(app.view.last.expandedGroupId, 'empty');
   const ui = { name: field(''), cancel: field(''), save: field(''), message: field(''), status: field(''), show() {}, hide() {}, members(sources, members) { this.catalog = sources; this.ordered = members; }, choices(groups, id) { this.selected = id; }, busy() {}, saved() {}, bind(actions) { this.actions = actions; }, destroy() {} };
   const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui });
-  editor.open(); assert.equal(ui.selected, 'empty'); assert.deepEqual(ui.catalog.map(source => source.id), ['i.0', 'i.2', 'l.0', 'p.1', 'f.1']); assert.deepEqual(ui.ordered, []); ui.name.value = 'Renamed empty'; await ui.actions.save();
+  ui.actions.open(); assert.equal(ui.selected, 'empty'); assert.deepEqual(ui.catalog.map(source => source.id), ['i.0', 'i.2', 'l.0', 'p.1', 'f.1']); assert.deepEqual(ui.ordered, []); ui.name.value = 'Renamed empty'; await ui.actions.save();
   assert.equal(app.view.last.expandedGroupId, 'empty'); assert.equal(app.view.last.sources[0].name, 'Renamed empty'); assert.equal(app.controller.context().profileId, 'rig-a'); assert.equal(app.sockets.length, 1);
   editor.destroy(); await app.close();
 });
@@ -301,4 +301,40 @@ test('F09-S08: the live setup and Edit Groups dialogs have no Export settings co
     assert.equal(bound.exportSettings, undefined); assert.match(ui.message.textContent, /temporary.*lost when this page closes/);
     assert.equal(app.sockets.length, 1); editor.destroy();
   } finally { await app.close(); }
+});
+
+// F09-S12 (user request 2026-11-22): All Groups and Create/Edit Group.
+test('F09-S12 All Groups returns to the group fader view like collapsing, saves only navigation and sends nothing', async () => {
+  const app = await fixture();
+  try {
+    const socket = app.connect(); app.controller.selectAux(0); app.controller.toggleGroup('7_group-Z'); await app.controller.whenNavigationIdle();
+    assert.equal(app.controller.context().expandedGroupId, '7_group-Z');
+    const sent = [...socket.sent];
+    app.controller.allGroups(); await app.controller.whenNavigationIdle();
+    assert.equal(app.controller.context().expandedGroupId, null); assert.equal(app.view.last.view, 'groups'); assert.equal(app.view.last.expandedGroupId, null);
+    assert.deepEqual(app.repository.snapshot().settings.profiles[0].navigation, { mixId: 'a.0', view: 'groups', expandedGroupId: null });
+    app.controller.allChannels(); await app.controller.whenNavigationIdle(); assert.equal(app.view.last.view, 'channels');
+    app.controller.allGroups(); await app.controller.whenNavigationIdle(); assert.equal(app.view.last.view, 'groups');
+    const renders = app.view.renders; app.controller.allGroups(); await app.controller.whenNavigationIdle(); assert.equal(app.view.renders, renders, 'already there: no change');
+    assert.deepEqual(socket.sent, sent, 'navigation writes nothing to the mixer');
+    app.controller.overview(); app.controller.allGroups(); await app.controller.whenNavigationIdle(); assert.equal(app.controller.context().selectedAux, null, 'no AUX: nothing to show');
+  } finally { await app.close(); }
+});
+
+test('F09-S12 the header button opens the editor on a NEW group unless a group is expanded (Edit Group)', async () => {
+  const app = await fixture(), ui = editorUI();
+  const editor = mountGroupEditor({ repository: app.repository, controller: app.controller, ui });
+  try {
+    app.connect(); app.controller.selectAux(0); await app.controller.whenNavigationIdle();
+    assert.equal(ui.actions.open(), true, 'Create Group'); assert.equal(editor.snapshot().name, ''); assert.deepEqual(editor.snapshot().members, []);
+    assert.ok(!['7_group-Z', 'empty'].includes(editor.snapshot().id), 'a new group id, not an existing group');
+    ui.actions.close();
+    assert.equal(editor.open(), true); assert.deepEqual(editor.snapshot().members, [], 'programmatic open without an id is also a new group');
+    ui.actions.close();
+    app.controller.toggleGroup('7_group-Z'); await app.controller.whenNavigationIdle();
+    assert.equal(ui.actions.open(), true, 'Edit Group'); assert.equal(editor.snapshot().id, '7_group-Z');
+    ui.actions.close();
+    app.controller.allGroups(); await app.controller.whenNavigationIdle();
+    assert.equal(ui.actions.open(), true); assert.equal(editor.snapshot().members.length, 0, 'back to Create Group after All Groups');
+  } finally { editor.destroy(); await app.close(); }
 });

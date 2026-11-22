@@ -2,6 +2,8 @@
 
 ## Current F09-S06 display scale and drag geometry — 2026-11-19
 
+**F09-S12 (user request 2026-11-22):** every live level fader (group, source send, AUX master) also has ▲/▼ nudge buttons below its readout: +3 dB / −1.5 dB in this display scale ([`src/iem/nudge-config.js`](../src/iem/nudge-config.js)); up from −∞/bottom segment lands on the −70 dB floor, down below −70 dB goes to −∞, clamp +10 dB. Each press is one gesture through `beginLevelGesture` / `previewLevelGesture` / `commitLevelGesture` with all guards unchanged; no new message. See [presentation](iem-presentation.md#current-f09-s12-ui-tweaks--2026-11-22).
+
 **User decision (2026-11-20, F09-S08):** the display scale is unchanged, but group faders now travel to −∞: one common delta in display-scale units, stopping when the quietest member reaches position 0 or the loudest reaches position 1 ([relative groups](iem-relative-groups.md#current-f09-s08-travel-to--in-display-scale-units--2026-11-20)). The group strip tracks member gestures and never flickers "Level unavailable". Single faders are unchanged. The −70 dB group floor below is superseded.
 
 **User decision (2026-11-20, F09-S07):** the dB-linear span now runs +10…−70 dB (`FADER_SCALE_FLOOR_DB = −70`, `FADER_SCALE_MIN = −75`; −70 dB is desk position ≈0.0252, still above 0) and the group floor is −70 dB; ticks are +10/0/−12/−24/−40/−60/−70/−∞ (compact layouts drop the −∞ label rather than overlap −70). Live strips no longer render a per-strip state line (status stays in the single-line header/footer and the fader space's tooltip) and the per-strip **Details** button is development-only (`index.html?debug`). The −60/−65 figures below are superseded.

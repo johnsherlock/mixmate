@@ -123,7 +123,9 @@ export function mountGroupEditor({
     }
     binding = { ...owner(), revision: context.revision };
     ui.show(ownerLabel());
-    selectGroup(id || context.expandedGroupId || groups()[0]?.id || null);
+    // F09-S12: opens on the requested group, or on a NEW empty group when none is
+    // given (the catalog selector and Delete stay inside the editor).
+    selectGroup(id || null);
     return true;
   }
   function toggle(id) {
@@ -371,7 +373,10 @@ export function mountGroupEditor({
     if (draft && (!available() || !validBinding())) close();
     else paintMembers();
   });
-  ui.bind({ open, close, selectGroup, toggle, clear, save, requestDelete, cancelDelete, confirmDelete });
+  // The header button: "Edit Group" (a group is expanded) opens that group,
+  // "Create Group" always opens a new one.
+  const openFromButton = () => open(context.expandedGroupId || null);
+  ui.bind({ open: openFromButton, close, selectGroup, toggle, clear, save, requestDelete, cancelDelete, confirmDelete });
   return {
     open,
     close,

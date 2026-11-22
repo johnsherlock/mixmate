@@ -5,7 +5,8 @@ import { startLocalClock } from './clock.js';
 import { sourceLabel } from './live-provider.js';
 import { outputColour, overviewColour } from './theme.js';
 import { panDisplayText } from './pan-display.js';
-import { FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
+import { NUDGE_UP_DB, NUDGE_DOWN_DB } from './nudge-config.js';
+import { FADER_SCALE_FLOOR_DB, FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
@@ -14,7 +15,7 @@ export function debugFlag(search = '') {
   const value = new URLSearchParams(search).get('debug');
   return value !== null && !['0', 'false', 'no', 'off'].includes(value.trim().toLowerCase());
 }
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false, onMessage = () => {}, onClearMessage = () => {}, onGestureStart = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllGroups = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false, onMessage = () => {}, onClearMessage = () => {}, onGestureStart = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupEditing = false, auxSelected = false, attentionText = '', gestureWas = false;
@@ -64,11 +65,6 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (target?.kind === 'send' && ids.includes(target.sourceId) && target.auxIndex === selectedAux && !strip.input.disabled) strip.input.value = String(value);
     }
   }
-  // One decimal so the group Δ fits a compact landscape strip; two in the title.
-  // F09-S07: the readout is a fixed "Δ " prefix span plus an amount span, so
-  // compact landscape can hide the prefix (CSS) instead of truncating.
-  const deltaAmount = (value, digits = 1) => `${value > 0 ? '+' : ''}${value.toFixed(digits)} dB`;
-  const deltaText = (value, digits = 1) => `Δ ${deltaAmount(value, digits)}`;
   // F09-S06 dB-linear level display: input values are scale units (dB from
   // -70 to +10, plus a short bottom segment down to -inf); the private session
   // still receives and returns desk positions 0..1.
@@ -108,26 +104,29 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const selectedTarget = target => control?.selected && JSON.stringify(target) === JSON.stringify(control.selected);
   function renderShortcuts(model, selected) {
     if (!shortcuts) return;
-    const choices = [...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })), { key: 'channels', name: 'All Channels' }];
+    // F09-S12: All Groups sits immediately left of All Channels; it is the
+    // same navigation as collapsing the expanded group and writes nothing.
+    const choices = [...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })), { key: 'all-groups', name: 'All Groups', mode: 'groups' }, { key: 'channels', name: 'All Channels', mode: 'channels' }];
     const keys = new Set(choices.map(choice => choice.key));
     for (const [key, button] of shortcutNodes) if (!keys.has(key)) { button.remove(); shortcutNodes.delete(key); }
     for (const [index, choice] of choices.entries()) {
       let button = shortcutNodes.get(choice.key);
       if (!button) {
         button = element('button', ''); button.type = 'button';
-        if (choice.id) button.dataset.toggleGroup = choice.id; else button.dataset.mode = 'channels';
+        if (choice.id) button.dataset.toggleGroup = choice.id; else button.dataset.mode = choice.mode;
         shortcutNodes.set(choice.key, button); shortcuts.append(button);
       }
       if (shortcuts.children[index] !== button) shortcuts.insertBefore(button, shortcuts.children[index] || null);
       if (button.textContent !== choice.name) button.textContent = choice.name;
       button.setAttribute('title', choice.name);
-      const active = choice.id ? model.view === 'groups' && model.expandedGroupId === choice.id : model.view === 'channels' || model.view === undefined;
-      button.className = `${choice.id ? 'mm-group-shortcut' : 'mm-all-channels'}${active ? ' mm-active' : ''}`;
+      const active = choice.id ? model.view === 'groups' && model.expandedGroupId === choice.id
+        : choice.mode === 'groups' ? model.view === 'groups' && !model.expandedGroupId : model.view === 'channels' || model.view === undefined;
+      button.className = `${choice.id ? 'mm-group-shortcut' : choice.mode === 'groups' ? 'mm-all-groups' : 'mm-all-channels'}${active ? ' mm-active' : ''}`;
       button.setAttribute('aria-pressed', String(active)); button.disabled = !selected;
     }
     shortcuts.hidden = !selected;
   }
-  const gestures = installFaderGestures(content, {
+  const faderHandlers = {
     // Accepted prototype shortcut: a double tap on a master cap opens that AUX's
     // GEQ view. It never writes; the tapped cap's own gesture was cancelled.
     onMasterEQ(_, input) { const target = levelTargets.get(input); if (onOpenEq && target?.kind === 'master') onOpenEq(target.auxIndex); },
@@ -167,7 +166,46 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       preview = null; onCommitLevel(token, position);
     },
     onCancel(input, token) { preview = null; onCancelLevel(token); },
-  }), layout = observeIemLayout(root, () => { bankLayout(); gestures.sync(); }), stopClock = startLocalClock($('.mm-clock'));
+  };
+  const gestures = installFaderGestures(content, faderHandlers), layout = observeIemLayout(root, () => { bankLayout(); gestures.sync(); }), stopClock = startLocalClock($('.mm-clock'));
+  // F09-S12 nudge (user decision 2026-11-22; amounts in nudge-config.js). One
+  // press is one deliberate gesture through the same begin/preview/commit path as
+  // a cap drag (so every private guard, throttle, own-echo and pair rule applies
+  // unchanged): no new message, no repeat on hold, never from a scroll (a click only).
+  const clampScale = value => Math.max(FADER_SCALE_MIN, Math.min(FADER_SCALE_TOP_DB, value));
+  // Channel/master: ±N dB in the display scale; up from the bottom segment lands on
+  // the -70 dB floor, down below the floor goes to -inf, clamped at the +10 dB top.
+  // Group: the common display-scale delta from the loudest member (the cap); the
+  // private owner clamps it at the first member limit.
+  const nudgeTarget = (input, up) => {
+    const current = Number(input.value);
+    if (groupInputs.has(input)) return clampScale(current + (up ? NUDGE_UP_DB : -NUDGE_DOWN_DB));
+    if (up) return current < FADER_SCALE_FLOOR_DB ? FADER_SCALE_FLOOR_DB : clampScale(current + NUDGE_UP_DB);
+    return current - NUDGE_DOWN_DB < FADER_SCALE_FLOOR_DB ? FADER_SCALE_MIN : current - NUDGE_DOWN_DB;
+  };
+  function nudge(input, up) {
+    const refuse = reason => { const text = `Level not changed: ${reason}`; $('.mm-feedback').textContent = text; $('.mm-feedback').setAttribute('aria-label', text); onMessage(text); };
+    const token = faderHandlers.onBegin(input);
+    if (!token) { if (!$('.mm-feedback').textContent.startsWith('Group not editable')) refuse(control?.reason || 'not editable right now; try again in a moment.'); return; }
+    const next = faderHandlers.onPreview(input, token, nudgeTarget(input, up));
+    if (next === null) { faderHandlers.onCancel(input, token); refuse(control?.reason || 'the desk guard refused this step.'); return; }
+    input.value = String(next); input.dispatchEvent(new Event('input', { bubbles: true }));
+    faderHandlers.onCommit(input, token);
+  }
+  const nudgeInputs = new WeakMap();
+  function createNudge(input) {
+    const box = element('div', 'mm-nudge'), up = element('button', 'mm-nudge-up', '▲'), down = element('button', 'mm-nudge-down', '▼');
+    up.type = down.type = 'button'; up.dataset.nudge = 'up'; down.dataset.nudge = 'down'; up.disabled = down.disabled = true;
+    nudgeInputs.set(up, input); nudgeInputs.set(down, input); box.append(up, down);
+    return { box, up, down };
+  }
+  function updateNudge(strip, name, enabled, reason) {
+    const { up, down } = strip.nudge, why = enabled ? '' : ` (unavailable: ${reason})`;
+    for (const [button, text] of [[up, `Raise ${name} by ${NUDGE_UP_DB} dB`], [down, `Lower ${name} by ${NUDGE_DOWN_DB} dB`]]) {
+      if (button.disabled === enabled) button.disabled = !enabled;
+      button.setAttribute('aria-label', text + why); button.setAttribute('title', text + why);
+    }
+  }
   function createStrip(kind) {
     const article = element('article', `mm-strip ${kind === 'source' ? 'mm-channel' : kind === 'group' ? 'mm-group' : 'mm-master'}`);
     const head = element('div', 'mm-strip-head'), name = element('button', 'mm-strip-name'), description = element('span', 'mm-strip-detail');
@@ -186,24 +224,25 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       if (select) { select.type = 'button'; selection.append(select); }
       if (!control) head.append(selection);
       const unavailable = element('div', 'mm-group-level-placeholder', 'Level unavailable');
-      const deltaPrefix = element('span', 'mm-delta-prefix', 'Δ '), delta = element('span', 'mm-delta-amount', '—'); output.append(deltaPrefix, delta);
+      output.textContent = '—';
       // Full-range group fader on the display scale (F09-S06): the cap starts at
       // the loudest member's displayed level; every member gets the same scale Δ,
       // so all move the same distance (top: loudest at max; bottom: quietest at
       // −∞ since F09-S08; a member already at −∞ allows no downward travel).
       unavailable.setAttribute('aria-label', 'Relative group level unavailable · read-only');
       space.append(scale, unavailable);
-      let input;
+      let input, nudgeControls = null;
       if (control) {
         input = element('input', 'mm-vertical'); input.type = 'range'; levelInput(input); input.disabled = true; input.dataset.group = '';
         space.append(input);
       }
       if (control) {
         selection.className = 'mm-group-control-note mm-group-selection';
-        selection.setAttribute('title', 'Group master · cap follows the loudest member · one common Δ per gesture · no aggregate level or VU');
-        article.append(head, output, space, selection);
+        selection.setAttribute('title', 'Group master · cap and readout follow the loudest member · one common Δ per gesture · no aggregate level or VU');
+        nudgeControls = createNudge(input);
+        article.append(head, output, nudgeControls.box, space, selection);
       } else article.append(head, output, space);
-      const strip = { kind, article, name, description, output, delta, space, input, select, unavailable, status: statusNode(article, input || output) };
+      const strip = { kind, article, name, description, output, nudge: nudgeControls, space, input, select, unavailable, status: statusNode(article, input || output) };
       if (input) groupInputs.set(input, strip);
       return strip;
     }
@@ -225,8 +264,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       panReadout = element('span', 'mm-pan-readout'); pan.append(short, panReadout);
       article.dataset.panBrowse = 'true';
     }
-    space.append(scale, input, meter); article.append(head, output, space, pan, meterCaption);
-    return { kind, article, name, description, output, space, input, pan, panReadout, panPrefix, panValue, meter, tracks, meterCaption, meterLabel, meterStatus, status: statusNode(article, input) };
+    const nudgeControls = createNudge(input);
+    space.append(scale, input, meter); article.append(head, output, nudgeControls.box, space, pan, meterCaption);
+    return { kind, article, name, description, output, nudge: nudgeControls, space, input, pan, panReadout, panPrefix, panValue, meter, tracks, meterCaption, meterLabel, meterStatus, status: statusNode(article, input) };
   }
   function updateMeter(strip, model) {
     if (strip.kind === 'group') return;
@@ -303,13 +343,16 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           if (preview?.input !== strip.input) strip.input.value = scaleText(reference);
           strip.unavailable.hidden = available;
         }
-        // The common Δ is in display-scale units: dB above −70 dB; within the
-        // short bottom segment it is the same on-screen distance (F09-S08).
-        const delta = chosen ? control.gestureActive ? control.previewDelta || 0 : control.lastDelta || 0 : 0;
-        const amount = available ? deltaAmount(delta) : '—';
-        if (strip.delta.textContent !== amount) strip.delta.textContent = amount;
-        strip.output.setAttribute('title', available ? `${deltaText(delta, 2)} (scale units: dB above −70 dB, equal distance below)` : 'Group adjustment unavailable');
-        strip.output.setAttribute('aria-label', available ? 'Requested gesture delta; not received group level or hardware balance' : 'Group adjustment unavailable');
+        // F09-S12 (user decision 2026-11-22): the readout is the loudest member's
+        // displayed level (where the cap sits): received, or this owner's requested
+        // common-delta preview while its gesture/echoes are live. It is not a
+        // received group level or a hardware balance claim; "—" when unknown.
+        const shown = chosen && unitPosition(control?.groupReference) ? control.groupReference : model.referencePosition;
+        const amount = available ? positionDbText(shown) : '—';
+        if (strip.output.textContent !== amount) strip.output.textContent = amount;
+        strip.output.setAttribute('title', available ? `Loudest member of ${model.name} (cap position); one common Δ moves every member` : 'Group level unavailable');
+        strip.output.setAttribute('aria-label', available ? `Loudest member of group ${model.name}: ${amount}; not a received group level or hardware balance` : 'Group level unavailable');
+        if (strip.nudge) updateNudge(strip, model.name, strip.input?.disabled === false, available ? control?.reason || 'Not editable right now' : 'Group level unavailable');
         setState(strip, chosen ? control.reason || control.status : model.stateText);
         strip.article.dataset.actionable = String(!available || chosen && (control?.pending || !control?.eligible));
         const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
@@ -368,6 +411,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       strip.input.setAttribute('aria-label', `${model.name} ${strip.input.disabled ? 'received level, adjustment unavailable' : 'level preview; cap drag, double track tap or arrow keys; changes are sent live while you drag'}`);
       if (preview?.input !== strip.input) strip.input.value = groupPreview ? scaleText(groupValue) : isCoordinate(model) && !strip.input.disabled && typeof preview?.value === 'number' ? String(preview.value) : requested && unitPosition(control.requestedValue) ? scaleText(control.requestedValue) : known ? scaleText(model.position) : String(FADER_SCALE_MIN);
       strip.article.dataset.actionable = String(strip.input.disabled || isSelected && (control?.pending || !control?.eligible));
+      // F09-S12: a channel/master nudge needs the same editability plus a known level to step from.
+      updateNudge(strip, model.name, !strip.input.disabled && (known || requested || groupPreview), !control ? 'Not connected' : !known ? 'No received level' : control.reason || 'Not editable right now');
+      strip.article.dataset.fx = String(Boolean(model.sourceId?.startsWith('f.')));
       const diagnostic = JSON.stringify(control?.requestedDiagnostic || []);
       if ((isSelected || requested) && control?.requestedDiagnostic?.length) strip.requestedSignature = diagnostic;
       const inactive = !isSelected && control?.requestedDiagnostic?.length && strip.requestedSignature === diagnostic;
@@ -415,11 +461,22 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     pinned.hidden = Boolean(model.expandedGroupId);
     empty.hidden = selected || model.mixes.length > 0;
     sourceEmpty.hidden = !selected || (model.sources || []).length > 0;
-    sourceEmpty.textContent = model.view === 'groups' ? 'No local groups yet. Edit Groups to create one.' : 'No source sends received for this AUX yet.';
+    sourceEmpty.textContent = model.view === 'groups' ? 'No local groups yet. Create Group to add one.' : 'No source sends received for this AUX yet.';
     publishDetails();
     renderShortcuts(model, selected);
+    renderEditLabel(model, selected);
     bankLayout();
     gestures.prepare();
+  }
+  // F09-S12: "Create Group" opens the editor on a new group; with a group expanded
+  // the same button reads "Edit Group" and opens that group.
+  function renderEditLabel(model, selected) {
+    const button = $('[data-action="edit-groups"]');
+    if (!button) return;
+    const expanded = selected ? (model.groups || []).find(group => group.id === model.expandedGroupId) : null;
+    const text = expanded ? 'Edit Group' : 'Create Group', label = expanded ? `Edit group ${expanded.name}` : 'Create a new group';
+    if (button.textContent !== text) button.textContent = text;
+    button.setAttribute('aria-label', label); button.dataset.groupAction = expanded ? 'edit' : 'create';
   }
   function click(event) {
     const button = event.target.closest('button');
@@ -431,6 +488,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if (button.dataset.selectGroupLevel !== undefined) { gestures.cancel(); onSelectGroupLevel(button.dataset.selectGroupLevel); }
     if (button.dataset.toggleGroup !== undefined) { gestures.cancel(); onToggleGroup(button.dataset.toggleGroup); }
     if (button.dataset.mode === 'channels') { gestures.cancel(); onAllChannels(); }
+    if (button.dataset.mode === 'groups') { gestures.cancel(); onAllGroups(); }
+    if (button.dataset.nudge !== undefined && nudgeInputs.has(button)) { gestures.cancel(); nudge(nudgeInputs.get(button), button.dataset.nudge === 'up'); }
     if (button.dataset.action === 'overview') { gestures.cancel(); onOverview(); }
     if (button.dataset.action === 'fullscreen') {
       const app = $('.mm-app');
@@ -454,7 +513,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       groupEditing = enabled;
       root.dataset.groupEditing = String(enabled);
       const button = root.querySelector('[data-action="edit-groups"]');
-      if (button) { button.disabled = false; button.title = enabled ? 'Edit groups for this snapshot, kept on this device' : reason || 'Local group settings are loading'; }
+      if (button) { button.disabled = false; button.title = enabled ? (button.dataset.groupAction === 'edit' ? 'Edit this group; kept on this device' : 'Create a group for this snapshot, kept on this device') : reason || 'Local group settings are loading'; }
       $('.mm-local-tabs').hidden = false;
     },
     // F02-S05: the desk's received current snapshot name, as text only.

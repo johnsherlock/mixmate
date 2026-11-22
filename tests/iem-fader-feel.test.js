@@ -186,10 +186,8 @@ test('stable strip/header geometry rules (F09-S07): no per-strip state line, Pan
   assert.match(block, /\.mm-ruler\{container:mm-ruler \/ size\}/);
   assert.match(block, /@container mm-ruler \(max-height: 190px\)\{[^}]*span\[data-tick="off"\]\{display:none\}\}/, 'short strips drop −∞ first');
   assert.match(block, /@container mm-ruler \(max-height: 95px\)\{[^}]*span\[data-tick="-70"\]\{display:none\}\}/, 'then −70');
-  assert.match(block, /\.mm-group > \.mm-value\{container:mm-delta \/ inline-size;min-width:0\}/);
-  assert.match(block, /@container mm-delta \(max-width: 104px\)\{[^}]*\.mm-delta-prefix\{display:none\}\}/, 'narrow group readouts drop the prefix at any size (1280×800 finding)');
+  assert.doesNotMatch(block, /mm-delta/, 'F09-S12: the group readout is the loudest member dB level (no Δ prefix/amount spans)');
   assert.match(block, /\.mm-sr-only\{position:absolute;width:1px;height:1px;/);
-  assert.match(block, /\[data-compact="true"\] \.mm-group > \.mm-value \.mm-delta-prefix\{display:none\}/, 'compact group Δ readout drops its prefix instead of truncating');
   assert.match(block, /\.mm-preview \.mm-feedback\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
   assert.match(block, /\.mm-bottom \.mm-dirty\{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/);
 });

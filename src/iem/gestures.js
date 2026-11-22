@@ -31,6 +31,9 @@ export function installFaderGestures(root, { onMasterEQ = () => {}, onBegin, onP
       else {
         const thumb = input.dataset.eqParam ? 24 : 29;
         cap.style.top = thumb / 2 + (1 - ratio) * Math.max(0, size - thumb) + "px";
+        // F09-S12: the live level fader track is filled from the bottom to the cap
+        // (CSS gradient on --mm-fill, set with the cap in the same pass).
+        if (input.dataset.channel !== undefined || input.dataset.group !== undefined || input.dataset.master !== undefined) input.style.setProperty("--mm-fill", String(Math.max(0, Math.min(1, ratio))));
       }
     }
   }

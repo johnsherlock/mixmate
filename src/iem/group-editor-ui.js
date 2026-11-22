@@ -66,7 +66,7 @@ export function createGroupEditorUI(root, connectionUI) {
     listeners.push([target, type, callback]);
   };
   const openButton = $('[data-action="edit-groups"]');
-  // Edit Groups opens the editor directly; it no longer detours into rig setup.
+  // Create Group / Edit Group opens the editor directly; it no longer detours into rig setup.
   listen(openButton, "click", () => {
     if (!openButton.disabled) handlers?.open();
   });

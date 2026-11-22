@@ -33,6 +33,21 @@ const observedName = (state, path, label) => {
   const field = receivedIemField(state, path);
   return field.received ? field.value || `${label} — unnamed` : `${label} — name not received`;
 };
+// Native FX type names (desk mixer.html E_FX: REVERB 0, DELAY 1, CHORUS 2, ROOM 3).
+const FX_TYPE_NAMES = Object.freeze(['Reverb', 'Delay', 'Chorus', 'Room']);
+// A non-empty received name wins. An FX return whose name was received empty is
+// labelled FX<n> <Type> from the received fxtype (FX<n> if the type is unknown);
+// a name that was never received stays "name not received".
+function sourceName(state, id) {
+  if (id.startsWith('f.')) {
+    const field = receivedIemField(state, `${id}.name`);
+    if (field.received && !field.value.trim()) {
+      const type = FX_TYPE_NAMES[state.get(`${id}.fxtype`)];
+      return `FX${Number(id.slice(2)) + 1}${type ? ` ${type}` : ''}`;
+    }
+  }
+  return observedName(state, `${id}.name`, sourceLabel(id));
+}
 export function sourceLabel(id) {
   const names = { a: 'Output', i: 'Input', l: 'Line', p: 'Player', f: 'FX return' };
   return `${names[id[0]]} ${Number(id.slice(2)) + 1}`;
@@ -134,7 +149,7 @@ export function projectLiveState(session, selectedAux = null) {
     return {
       sides, levelPeerIds: stereoRelationship(state, source.sourceId).members || [source.sourceId],
       id: `${source.sourceId}@${selectedAux}`, sourceId: source.sourceId, auxIndex: selectedAux, themeIndex: result.selectedMix.themeIndex,
-      name: observedName(state, `${source.sourceId}.name`, sourceLabel(source.sourceId)),
+      name: sourceName(state, source.sourceId),
       detail: `${sourceLabel(source.sourceId)} · AUX ${selectedAux + 1} SEND · ${relationshipText(state, source.sourceId)}`,
       ...level(state.get(`${prefix}.value`)),
       panText: state.has(`${prefix}.pan`) ? `Pan ${state.get(`${prefix}.pan`).toFixed(3)} · normalized` : 'Pan not received',

@@ -2,7 +2,11 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
-## 0.9.0 — 2026-11-21 — F06-S05 (this PR)
+## 0.10.0 — 2026-11-22 — F09-S12 (this PR)
+
+- UI tweaks: an **All Groups** button next to All Channels returns to the group faders; **Create Group** (opens a new group) becomes **Edit Group** (opens that group) when a group is expanded; the group fader's dB readout shows the loudest member's level instead of an always-0.0 delta; every level fader (groups, sends, AUX masters) has ▲/▼ nudge buttons that raise by 3 dB / lower by 1.5 dB (edit `src/iem/nudge-config.js` to change them; a group nudges every member); unnamed FX returns show their desk type ("FX1 Reverb"); fader tracks are filled from the bottom to the cap (yellow, light blue for FX); the header snapshot name box is about 50% wider (on a phone held upright it has its own row). No new message is sent to the desk.
+
+## 0.9.0 — 2026-11-21 — F06-S05 ([#68](https://github.com/johnsherlock/mixmate/pull/68))
 
 - EQ filters: the AUX EQ screen gains Low cut and High cut toggles (high-pass / low-pass, as in the Demo). When a cut is on, a draggable LC / HC handle with its frequency and a dashed line appears on the graph; drag it with mouse, finger or arrow keys (changes are sent live, throttled). Turning a cut on uses the last value you used (else 35 Hz / 16 kHz); off sends the desk's OFF position. A pair of stereo AUX outputs gets both sides changed equally; unequal sides stay read-only. The ↺ reset now also turns both cuts off. Cut frequencies shown are the desk's own (20 Hz to 20 kHz); the roll-off drawn on the curve is an approximation.
 
