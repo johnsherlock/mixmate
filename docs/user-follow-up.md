@@ -21,7 +21,11 @@ User request: "We're missing the high/low pass filter in the EQ. See the demo ap
 | Accepted P3 (F06-S05) | If one side's echo is dropped, the cuts stay read-only ("L/R cuts unequal") until the next change or a reconnect. | Observe; revisit only if seen live. |
 | Accepted P3 (F06-S05) | Mono-output and filter-slope behaviour remain untested live. | Root, when a mono output and slope observation are available. |
 
-## 2026-11-22 F09-S12 UI tweaks (user request, root decisions, in review)
+## 2026-11-22 F09-S13 button order (user request, in review)
+
+User: move Create/Edit Group to the right of All Groups. Story: [F09-S13](stories/F09-S13.md) (0.10.1). Layout only. Also recorded here: after F09-S12 merged (PR #69, `c8dab46`), root had **not live-tested the group readout nor Edit Group with an expanded group** (no saved group on the test origin); verify on a device with a saved group.
+
+## 2026-11-22 F09-S12 UI tweaks (user request, root decisions, merged, PR #69)
 
 User request after testing on real devices: an **All Groups** button, **Create Group / Edit Group**, a group dB readout that makes sense, **nudge buttons** on every fader, real **FX names**, a **fader fill** like the native app and a **wider snapshot name**. Story: [F09-S12](stories/F09-S12.md) (0.10.0). Evidence (Ui24R 3.0.7865-ui24): `f.<n>.name` is received empty for the four FX returns and `f.<n>.fxtype` is `SETD` 0 Reverb / 1 Delay / 2 Chorus / 3 Room (native `E_FX`).
 

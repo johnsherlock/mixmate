@@ -2,7 +2,11 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
-## 0.10.0 — 2026-11-22 — F09-S12 (this PR)
+## 0.10.1 — 2026-11-22 — F09-S13 (this PR)
+
+- Navigation order: **Create Group / Edit Group** now sits immediately right of **All Groups** (All Mixes, All Groups, Create/Edit Group, All Channels, Mix EQ). Behaviour is unchanged and nothing new is sent to the desk.
+
+## 0.10.0 — 2026-11-22 — F09-S12 ([#69](https://github.com/johnsherlock/mixmate/pull/69))
 
 - UI tweaks: an **All Groups** button next to All Channels returns to the group faders; **Create Group** (opens a new group) becomes **Edit Group** (opens that group) when a group is expanded; the group fader's dB readout shows the loudest member's level instead of an always-0.0 delta; every level fader (groups, sends, AUX masters) has ▲/▼ nudge buttons that raise by 3 dB / lower by 1.5 dB (edit `src/iem/nudge-config.js` to change them; a group nudges every member); unnamed FX returns show their desk type ("FX1 Reverb"); fader tracks are filled from the bottom to the cap (yellow, light blue for FX); the header snapshot name box is about 50% wider (on a phone held upright it has its own row). No new message is sent to the desk.
 
