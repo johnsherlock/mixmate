@@ -8,6 +8,8 @@ import { validateSettings, validateDefinitionOwner, definitionOwner } from '../s
 import { auxLevelPath, encodeAuxLevelCommand, resolveAuxLevelTopology } from './aux-level-protocol.js';
 import { AUX_EQ_DISPLAY_CENTRES, AUX_EQ_FILTERS, auxEqFilterPath, auxEqPath, auxEqPositionToDb, encodeAuxEqCommand, encodeAuxEqFilterCommand, eqArray, eqDataFields, parseAuxEqStateFrame, parseAuxProcessingFrame, resolveAuxEqTopology } from './aux-eq-protocol.js';
 import { mapRequestedAuxEqFilter } from './aux-eq-filter.js';
+import { positionToScale, scaleToPosition } from './fader-scale.js';
+import { nextNudgeScale } from './nudge-config.js';
 import { resolveGroupTopology, groupReferenceDelta, groupReferencePosition } from './relative-groups.js';
 import { mapRequestedAuxEqCurve } from './aux-eq-curve.js';
 import { checkShowName, checkSnapshotName, encodeSnapshotListCommand, encodeSnapshotRecallCommand, encodeSnapshotSaveCommand, isSnapshotInitEntry, parseSnapshotCompanionFrame, parseSnapshotWriterFrame } from './snapshot-protocol.js';
@@ -95,6 +97,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     const kind = kindOf(target);
     if (kind === 'geq' && !auxControl) throw Error('AUX GEQ is unavailable in this session.');
     const group = kind === 'group' ? readGroup(target.groupId) : null;
+    if (group?.members.length === 0) throw Error('Group has no members.');
     return createControlScope({ kind, received: observed, receipts,
       target: kind === 'pan' ? { sourceId: target.sourceId, auxIndex: target.auxIndex } : kind === 'group' || kind === 'geq' ? { auxIndex: target.auxIndex } : target,
       group: group ? { id: group.id, members: [...group.members] } : null });
@@ -462,30 +465,46 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       emit('controls'); return streamed;
     } catch (error) { cancelControl(error.message, 'cancel', true); emit('controls'); return false; }
   }
-  function canEditTarget(target) {
+  // A one-shot nudge steps from this gesture's owned coordinate. Groups use
+  // their new received anchor even if the card just showed a pending readout.
+  function nudgeLevelGesture(token, up) {
+    if (typeof up !== 'boolean' || !canAct() || !gestureOwned() || model.gesture.token !== token || apiKind(selected) !== 'level') return false;
+    const group = selected.kind === 'group';
+    const position = group ? groupReferencePosition({ members: model.chain.anchor }, model.gesture.baseDelta) : model.gesture.origin[0].value;
+    const scale = positionToScale(position), next = nextNudgeScale(scale, up, group);
+    const requested = scale === next ? position : scaleToPosition(next);
+    const result = preview(token, requested, 'level', false);
+    return result !== null && commit(token, result, 'level');
+  }
+  function editTargetReason(target) {
     try {
-      if (!canAct()) return false;
+      if (!canAct()) return 'Both desk connections must be open.';
       const descriptors = Object.getOwnPropertyDescriptors(target ?? {});
-      if (!descriptors.kind || !Object.hasOwn(descriptors.kind, 'value')) return false;
+      const invalid = 'No qualified level target.';
+      if (!descriptors.kind || !Object.hasOwn(descriptors.kind, 'value')) return invalid;
       if (descriptors.kind.value === 'group') {
-        if (Reflect.ownKeys(descriptors).sort().join(',') !== 'auxIndex,groupId,kind' || Object.values(descriptors).some(d => !Object.hasOwn(d, 'value')) || typeof descriptors.groupId.value !== 'string') return false;
+        if (Reflect.ownKeys(descriptors).sort().join(',') !== 'auxIndex,groupId,kind' || Object.values(descriptors).some(d => !Object.hasOwn(d, 'value')) || typeof descriptors.groupId.value !== 'string') return invalid;
         target = { kind: 'group', groupId: descriptors.groupId.value, auxIndex: descriptors.auxIndex.value };
       } else if (descriptors.kind.value === 'geq') {
-        if (!auxControl || Reflect.ownKeys(descriptors).sort().join(',') !== 'auxIndex,kind' || !Object.hasOwn(descriptors.auxIndex, 'value')) return false;
+        if (!auxControl || Reflect.ownKeys(descriptors).sort().join(',') !== 'auxIndex,kind' || !Object.hasOwn(descriptors.auxIndex, 'value')) return invalid;
         auxEqPath({ auxIndex: descriptors.auxIndex.value, bandIndex: 0 });
         target = { kind: 'geq', auxIndex: descriptors.auxIndex.value };
       } else auxLevelPath(target);
+      if (activeOperation()?.status === 'dispatching') return 'Another adjustment is sending.';
       // The active gesture's own target stays editable while its live echoes land.
-      if (gestureOwned() && sameClosure(topology(target), model.scope)) return activeOperation()?.status !== 'dispatching';
+      if (gestureOwned() && sameClosure(topology(target), model.scope)) return '';
       const candidate = scope(target);
-      if (model?.generation !== generation) return true;
-      if (model.barriers.some(b => b.generation === generation && b.closure.some(path => candidate.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor)) return false;
-      if (basisBlocks(target.kind === 'group' ? 'group' : target.kind === 'geq' ? 'geq' : 'level', candidate.members, candidate.identity)) return false;
-      return activeOperation()?.status !== 'dispatching';
-    } catch { return false; }
+      if (model?.generation !== generation) return '';
+      if (model.barriers.some(b => b.generation === generation && b.closure.some(path => candidate.members.some(m => m.path === path)) && (receipts.get(b.path) ?? 0) <= b.floor)) return 'Waiting for complete post-interruption received state.';
+      if (basisBlocks(kindOf(target), candidate.members, candidate.identity)) return 'Waiting for the desk to report the last change.';
+      return '';
+    } catch (error) { return error?.message || 'Level controls unavailable.'; }
   }
+  const canEditTarget = target => editTargetReason(target) === '';
   const controlAPI = {
-    canEditLevelTarget: target => canEditTarget(target),
+    canEditLevelTarget: canEditTarget,
+    levelTargetUnavailableReason: editTargetReason,
+    nudgeLevelGesture,
     bindGroupProfile(profileId) { bindGroupOwner(typeof profileId === 'string' ? { kind: 'profile', id: profileId } : null); },
     bindGroupOwner,
     selectGroupTarget(groupId, auxIndex) {
@@ -504,7 +523,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     invalidateLevelContext() { cancelControl(); selected = null; },
     beginLevelGesture: () => begin('level'),
     previewLevelGesture: (token, value) => preview(token, value, 'level'),
-    cancelLevelGesture() { if (model?.gesture && apiKind(selected) === 'level') { cancelControl('Adjustment cancelled; use a new gesture.'); emit('controls'); } },
+    cancelLevelGesture(token) { if (model?.gesture && (token === undefined || model.gesture.token === token) && apiKind(selected) === 'level') { cancelControl('Adjustment cancelled; use a new gesture.'); emit('controls'); } },
     commitLevelGesture: (token, value) => commit(token, value, 'level'),
   };
   const panAPI = {

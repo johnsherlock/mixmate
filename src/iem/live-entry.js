@@ -30,6 +30,7 @@ const dialogOwner = createDialogOwner();
 const debug = debugFlag(window.location.search);
 if (debug) root.dataset.debug = 'true';
 const view = mountReadOnlyView(root, { debug, onMessage: text => connectionUI.message(text), onGestureStart: () => connectionUI.clearMessage(), onClearMessage: text => { if (connectionUI.diagnostics.currentMessage() === text) connectionUI.clearMessage(); }, onOpenPan: target => panControls.open(target), onOpenEq: auxIndex => eqControls.open(auxIndex), onOpenDetail: model => channelDetail.open(model), onDetailUpdate: models => channelDetail?.update(models), onSelectAux: index => controller.selectAux(index), onOverview: () => controller.overview(), onToggleGroup: id => controller.toggleGroup(id), onAllGroups: () => controller.allGroups(), onAllChannels: () => controller.allChannels(),
+  nudgeUnavailable: target => session.levelTargetUnavailableReason(target), onNudgeLevel: (target, opening, up) => controller.nudgeLevel(target, opening, up),
   canEditLevel: target => session.canEditLevelTarget(target), onSelectGroupLevel: id => controller.selectGroupLevel(id), onSelectLevel: target => controller.selectLevel(target), onToggleLevel: () => controller.toggleLevel(),
   onBeginLevel: () => session.beginLevelGesture(), onPreviewLevel: (token, value) => session.previewLevelGesture(token, value), onCommitLevel: (token, value) => session.commitLevelGesture(token, value), onCancelLevel: () => session.cancelLevelGesture() });
 connectionUI = createLiveConnectionUI(root, { levels: true, pan: true, dialogOwner });

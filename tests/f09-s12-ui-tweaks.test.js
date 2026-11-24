@@ -308,14 +308,15 @@ test('review: keyboard auto-repeat on a nudge button never stacks gestures; a Sp
     for (let n = 0; n < 5; n++) app.root.emit('keydown', { target: button, key: 'Enter', repeat: true, preventDefault() { prevented++; } });
     assert.equal(prevented, 5, 'repeat keydowns are cancelled');
     app.advance(3000); assert.equal(app.writes().length, 2, 'exactly one nudge (both linked sides)');
-    // Space held: repeats cancelled, and the release click after a repeat is swallowed.
+    // Space held: the repeats and the keyup default action are cancelled.
     app.advance(3000); app.receiver.receive('3:::' + app.writes().map(m => m.slice(4)).join('\n'));
     const before = app.writes().length;
     for (let n = 0; n < 3; n++) app.root.emit('keydown', { target: button, key: ' ', repeat: n > 0, preventDefault() {} });
-    app.root.emit('keyup', { target: button, key: ' ', preventDefault() {} });
-    app.click(button); app.advance(3000);
-    assert.equal(app.writes().length, before, 'no extra nudge after a held Space');
-    app.click(button); assert.ok(app.writes().length > before, 'a later deliberate press works');
+    let releaseCanceled = false;
+    app.root.emit('keyup', { target: button, key: ' ', preventDefault() { releaseCanceled = true; } });
+    assert.equal(releaseCanceled, true, 'the native release click is cancelled');
+    assert.equal(app.writes().length, before, 'the held Space does not nudge');
+    app.click(button); assert.ok(app.writes().length > before, 'the first subsequent deliberate press works');
   } finally { app.close(); }
 });
 

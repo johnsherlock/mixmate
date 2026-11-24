@@ -2611,11 +2611,6 @@ body {
   font-size: 1.25rem;
   color: var(--mm-mix-color);
 }
-#mixmate-iem-concept .mm-nudge-preview-note {
-  margin: 0;
-  color: var(--mm-muted);
-  font-size: .78rem;
-}
 #mixmate-iem-concept .mm-nudge-preview-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -2637,7 +2632,7 @@ body {
   --mm-nudge-accent: #b9c6d2;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-areas: "readout readout" "minus plus";
+  grid-template-areas: "readout readout" "minus plus" "reason reason";
   align-items: stretch;
   gap: 4px;
   min-height: 62px;
@@ -2677,6 +2672,18 @@ body {
 #mixmate-iem-concept .mm-nudge-preview-value[data-split="true"] {
   max-width: none;
   font-size: clamp(.6rem, 2.8vw, .75rem);
+}
+#mixmate-iem-concept .mm-nudge-reason {
+  grid-area: reason;
+  min-height: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mm-muted);
+  font-size: .72rem;
+}
+#mixmate-iem-concept button.mm-nudge-preview-step:disabled {
+  opacity: .45;
 }
 #mixmate-iem-concept .mm-nudge-preview-row > .mm-nudge-preview-step:first-child {
   grid-area: minus;

@@ -5,10 +5,10 @@ import { startLocalClock } from './clock.js';
 import { sourceLabel } from './live-provider.js';
 import { outputColour, overviewColour } from './theme.js';
 import { panDisplayText } from './pan-display.js';
-import { NUDGE_UP_DB, NUDGE_DOWN_DB } from './nudge-config.js';
-import { mountNudgePreview } from './nudge-preview.js';
+import { NUDGE_UP_DB, NUDGE_DOWN_DB, nextNudgeScale } from './nudge-config.js';
+import { mountNudgeView } from './nudge-preview.js';
 import { groupDisplayPosition } from './group-navigation.js';
-import { FADER_SCALE_FLOOR_DB, FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
+import { FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
 // survive readout changes, preserving touch/scroll position without any writer.
@@ -17,7 +17,7 @@ export function debugFlag(search = '') {
   const value = new URLSearchParams(search).get('debug');
   return value !== null && !['0', 'false', 'no', 'off'].includes(value.trim().toLowerCase());
 }
-export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllGroups = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false, onMessage = () => {}, onClearMessage = () => {}, onGestureStart = () => {} } = {}) {
+export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllGroups = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, nudgeUnavailable, onNudgeLevel = () => {}, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false, onMessage = () => {}, onClearMessage = () => {}, onGestureStart = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
   const content = $('.mm-content');
   let groupRefusal = false, groupEditing = false, auxSelected = false, attentionText = '', gestureWas = false;
@@ -43,18 +43,18 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   $('.mm-rec-state').textContent = 'Recording status unavailable';
   const shortcuts = $('.mm-group-switches'), localTabs = $('.mm-local-tabs'), editButton = $('[data-action="edit-groups"]');
   const shortcutNodes = new Map(), levelTargets = new WeakMap();
-  const nudgePreview = mountNudgePreview(content);
+  const nudgePreview = mountNudgeView(content, nudgeUnavailable);
   const nudgeButton = element('button', 'mm-open-nudge', 'Nudge');
   nudgeButton.type = 'button';
   nudgeButton.setAttribute('aria-controls', nudgePreview.panel.id);
-  let nudgeModel, nudgeContext, faderScroll;
+  let nudgeModel, nudgeOpening, faderScroll;
   const pageScroller = () => document.fullscreenElement || document.scrollingElement;
 
   function closeNudge(restoreFocus = false) {
     if (nudgePreview.panel.hidden) return;
     nudgePreview.panel.hidden = true;
     delete root.dataset.nudgeOpen;
-    nudgeContext = undefined;
+    nudgeOpening = undefined;
     nudgePreview.reset();
     if (restoreFocus) {
       bankLayout();
@@ -66,7 +66,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     }
     faderScroll = undefined;
   }
-  const nudgeKey = model => JSON.stringify([model.selectedMix.id, model.nudgePreview.profileId, model.nudgePreview.expanded?.id]);
+  const nudgeKey = model => model.nudgeViewKey ?? JSON.stringify([model.selectedMix.id, model.nudgePreview.profileId, model.nudgePreview.expanded?.id]);
+
+  const nudgeOpen = opening => Boolean(opening && opening === nudgeOpening && !nudgePreview.panel.hidden &&
+    nudgeModel && opening.key === nudgeKey(nudgeModel) && root.dataset.eqOpen !== 'true');
 
   let control = null, preview = null, selectedAux = null, bankModels = [];
   // Detail models are keyed by strip article; Details buttons exist only with ?debug.
@@ -210,23 +213,12 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   // press is one deliberate gesture through the same begin/preview/commit path as
   // a cap drag (so every private guard, throttle, own-echo and pair rule applies
   // unchanged): no new message, no repeat on hold, never from a scroll (a click only).
-  const clampScale = value => Math.max(FADER_SCALE_MIN, Math.min(FADER_SCALE_TOP_DB, value));
-  // Channel/master: ±N dB in the display scale; up from the bottom segment lands on
-  // the -70 dB floor, down below the floor goes to -inf, clamped at the +10 dB top.
-  // Group: the common display-scale delta from the loudest member (the cap); the
-  // private owner clamps it at the first member limit.
-  const nudgeTarget = (input, up) => {
-    const current = Number(input.value);
-    if (groupInputs.has(input)) return clampScale(current + (up ? NUDGE_UP_DB : -NUDGE_DOWN_DB));
-    if (up) return current < FADER_SCALE_FLOOR_DB ? FADER_SCALE_FLOOR_DB : clampScale(current + NUDGE_UP_DB);
-    return current - NUDGE_DOWN_DB < FADER_SCALE_FLOOR_DB ? FADER_SCALE_MIN : current - NUDGE_DOWN_DB;
-  };
   function nudge(input, up) {
     const refuse = reason => { const text = `Level not changed: ${reason}`; $('.mm-feedback').textContent = text; $('.mm-feedback').setAttribute('aria-label', text); onMessage(text); };
     groupRefusal = false;
     const token = faderHandlers.onBegin(input);
     if (!token) { if (!groupRefusal) refuse(control?.reason || 'not editable right now; try again in a moment.'); return; }
-    const next = faderHandlers.onPreview(input, token, nudgeTarget(input, up));
+    const next = faderHandlers.onPreview(input, token, nextNudgeScale(Number(input.value), up, groupInputs.has(input)));
     if (next === null) { faderHandlers.onCancel(input, token); refuse(control?.reason || 'the desk guard refused this step.'); return; }
     input.value = String(next); input.dispatchEvent(new Event('input', { bubbles: true }));
     faderHandlers.onCommit(input, token);
@@ -483,7 +475,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if (attention !== attentionText) { const previous = attentionText; attentionText = attention; if (attention) onMessage(attention); else onClearMessage(previous); }
     const selected = model.selectedAux !== undefined && model.selectedAux !== null;
     nudgeModel = selected && model.view === 'groups' && model.selectedMix && model.nudgePreview ? model : null;
-    if (!nudgeModel || nudgeContext !== nudgeKey(nudgeModel)) closeNudge();
+    if (!nudgeModel || nudgeOpening?.key !== nudgeKey(nudgeModel)) closeNudge();
     else nudgePreview.render(nudgeModel);
     root.dataset.auxView = String(selected);
     root.style.setProperty('--mm-mix-color', model.selectedMix ? outputColour(model.selectedMix.themeIndex ?? model.selectedMix.auxIndex) : overviewColour);
@@ -522,10 +514,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   function click(event) {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
-    if (button === nudgeButton && nudgeModel && root.dataset.eqOpen !== 'true') {
+    if (button === nudgeButton && nudgeModel && nudgePreview.panel.hidden && root.dataset.eqOpen !== 'true') {
       gestures.cancel();
       if (!nudgeModel) return;
-      nudgeContext = nudgeKey(nudgeModel);
+      nudgeOpening = Object.freeze({ key: nudgeKey(nudgeModel) });
       const page = pageScroller();
       faderScroll = { bankLeft: bank.scrollLeft, pageTop: page?.scrollTop ?? 0 };
       nudgePreview.render(nudgeModel);
@@ -536,7 +528,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       return;
     }
     if (button === nudgePreview.back) { closeNudge(true); return; }
-    if (swallow.has(button)) { swallow.delete(button); event.preventDefault?.(); return; }
+    const target = nudgePreview.target(button);
+    if (target) {
+      if (nudgeOpen(nudgeOpening)) {
+        onNudgeLevel(target, nudgeOpening, button.dataset.nudge === 'up');
+      }
+      return;
+    }
     if (detailButtons.has(button)) { gestures.cancel(); onOpenDetail(detailModels.get(detailButtons.get(button))); return; }
     if (button.dataset.openPan !== undefined) { gestures.cancel(); onOpenPan({ sourceId: button.dataset.openPan, auxIndex: Number(button.dataset.panAux) }); }
     if (button.dataset.openAux !== undefined) { gestures.cancel(); onSelectAux(Number(button.dataset.openAux)); }
@@ -555,9 +553,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       } catch { $('.mm-feedback').textContent = 'Fullscreen unavailable; use the installed app.'; onMessage('Fullscreen unavailable; use the installed app.'); }
     }
   }
-  // Holding Enter/Space on a nudge button must never stack gestures: ignore keyboard
-  // auto-repeat, and swallow the click a Space release would fire after a held repeat.
-  const repeated = new WeakSet();
+  // Enter activates on the first keydown. Space activates on keyup, so cancel
+  // that release if the press repeated. Later clicks use their normal defaults.
+  const repeatedSpace = new WeakSet();
+  const isSpace = event => event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space';
   function keydown(event) {
     if (event.key === 'Escape' && !nudgePreview.panel.hidden && nudgePreview.panel.contains(event.target)) {
       event.preventDefault();
@@ -566,17 +565,21 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     }
     const button = event.target?.closest?.('button');
     if (!button || button.dataset.nudge === undefined) return;
-    if (event.repeat) { event.preventDefault(); repeated.add(button); }
+    const space = isSpace(event);
+    if (space) {
+      if (event.repeat) repeatedSpace.add(button);
+      else repeatedSpace.delete(button);
+    }
+    if (event.repeat && (space || event.key === 'Enter')) event.preventDefault();
   }
   function keyup(event) {
     const button = event.target?.closest?.('button');
-    if (button && repeated.has(button)) { repeated.delete(button); if (event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space') { event.preventDefault(); swallow.add(button); } }
+    if (button && isSpace(event) && repeatedSpace.delete(button)) event.preventDefault();
   }
-  const swallow = new WeakSet();
   root.addEventListener('keydown', keydown); root.addEventListener('keyup', keyup);
   root.addEventListener('click', click);
   return {
-    render, renderMeters,
+    render, renderMeters, nudgeOpen,
     detailModel(id) {
       for (const strip of [...sourceStrips.values(), ...pinnedStrips.values(), ...overviewStrips.values()]) {
         const model = detailModels.get(strip.article);

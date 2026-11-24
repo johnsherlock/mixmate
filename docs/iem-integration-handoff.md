@@ -2,7 +2,7 @@
 
 This replaces the earlier, untracked 2026-11-08 file that described the pre-integration baseline (PR #6). It is the current product and state handoff for a new human or agent. It links to contracts rather than duplicating them. **For the wire allowlist, the [AGENTS transport table](../AGENTS.md#active-transport-boundary) is authoritative**; for orchestration state see the [orchestrator handoff](orchestrator-handoff.md).
 
-Baseline: `main` at `95b612b` (F09-S13 merge, [PR #70](https://github.com/johnsherlock/mixmate/pull/70)), app **0.10.1**. Verify on remote main before relying on this text.
+Verified main baseline: `00829e9` (F08-S06 merge, [PR #73](https://github.com/johnsherlock/mixmate/pull/73)), app **0.11.0**. The F08-S07 candidate is **0.12.0**, pending final review and CI. Verify on remote main before relying on this text.
 
 ## Product and deployment
 
@@ -20,6 +20,7 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - **All Mixes / All Groups / groups:** device-local group definitions per rig ([groups](iem-groups.md), [settings](settings-repository.md)); relative group faders move members by one common delta ([relative groups](iem-relative-groups.md)); **Create Group / Edit Group** sits immediately right of **All Groups** ([F09-S12](stories/F09-S12.md), [F09-S13](stories/F09-S13.md)); the group dB readout shows the loudest member.
 - **All Channels:** per-source send faders for the selected AUX (inputs, line, player, FX returns), with FX return names derived from `fxtype` (Reverb/Delay/Chorus/Room).
 - **Level faders:** dB-linear display scale, +10...-70 dB with a short segment to -inf ([level safety](iem-aux-level-safety.md), [runtime](iem-aux-level-controls.md)). **Nudge buttons** on every fader are configured in `src/iem/nudge-config.js` (`NUDGE_UP_DB = 3`, `NUDGE_DOWN_DB = 1.5`).
+- **Nudge view:** open Nudge from All Groups or an expanded group. It lists the AUX master and all group masters, then the expanded group’s channels in saved order. In the F08-S07 candidate, each deliberate step uses the existing level owner, configured nudge amounts and current target qualification. **Faders** restores scroll and focus in the originating view. See [F08-S07](stories/F08-S07.md).
 - **Pan:** per-send pan with display-only L / CENTRE / R labels (wire 0 = `L 100`, 0.5 = `CENTRE`, 1 = `R 100`) ([pan safety](iem-aux-pan-safety.md), [controls](iem-pan-controls.md)).
 - **Mix EQ:** AUX graphic EQ with draggable points/draw curve, scoped reset, and high-pass/low-pass filters ("Low cut"/"High cut", [F06-S05](stories/F06-S05.md)) ([EQ contract](iem-aux-eq-contract.md), [ADR-0006](adr/0006-aux-geq-curve-contract.md)).
 - **Snapshots:** header Snapshot (recall) and Save dialogs, names-only, bounded outcomes ([contract](iem-snapshot-contract.md), [ADR-0009](adr/0009-snapshot-operation-contract.md)).
@@ -36,11 +37,11 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - Live UI: `live-entry.js` (entry), `live-controller.js` (wiring, connect, rigs), `live-provider.js` / `live-view.js` / `live-shell.js` / `shell.js` (projection and rendering), `group-navigation.js`, `group-editor*.js`, `eq-controls.js`, `pan-controls.js`, `snapshot-controls.js`, `recording-controls.js`, `diagnostics.js`, `native-ui.js`, `auto-connect.js`, `updates.js`, `install.js`, `entry-offline.js`, `fader-scale.js`, `fader-law.js`, `gestures.js`, `nudge-config.js`. The Demo uses `demo-*.js` and must stay isolated.
 - `src/settings.js` is the v3 device-local settings repository (rigs `{ id, name, groups, navigation }`, known addresses, preferences); `src/offline.js`, `src/sw-template.js` and `scripts/build-sw.js` produce the precache worker.
 - Tests (`tests/`, Node test runner) use **fake mixer transports only**; no automated test writes to a real desk.
-- Build and checks: Node 24 in CI; `npm ci`, `npm test` (604 passing at this baseline), `npm run build` (emits the four entries and generates the precache). `npm run dev` has no offline worker; use `npm run build` then `npm run preview` for production/offline QA. Do not hand-edit `dist/`.
+- Build and checks: Node 24 in CI; `npm ci`, `npm test` (612 passing in the F08-S07 candidate), `npm run build` (emits the four entries and generates the precache). `npm run dev` has no offline worker; use `npm run build` then `npm run preview` for production/offline QA. Do not hand-edit `dist/`.
 
 ## Testing status
 
-- Automated: 604 fake-transport tests pass; the build passes with an 18-asset precache.
+- Automated: 612 tests pass using fake mixer transports; the 0.12.0 build passes with an 18-asset precache.
 - **User-reported device evidence (2026-11-24): the user has done extensive testing on real phones and tablets and reports that it is all working very well.** This is a user report, not a recorded checklist.
 - **[F08-S01](stories/F08-S01.md) (the formal release gate) was signed off by the user on 2026-11-24** on the basis of their own real phone/tablet testing of app 0.10.1 (a user sign-off, not a waiver). The individual matrix rows (devices, versions, both rigs, cold offline launch, sleep/lock, update flow, per-control checks) were not recorded in the repo and were not observed by the orchestrator. iOS/iPadOS coverage is not recorded. Carried exceptions are listed under open items and in the [story](stories/F08-S01.md#sign-off--2026-11-24). Future device claims still need evidence; see the [device checklist](device-checks.md).
 
@@ -49,6 +50,7 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - **Pixel install issue:** Chrome 157 on Android 17 (Pixel) refuses to install the PWA after an uninstall while Brave installs it. The deployed build passes Chrome's CDP installability check; suspected on-device Chrome state or a Chromium bug. Unresolved; F07-S06 only added a menu-instructions fallback.
 - **F07-S03 live recording acceptance parked:** needs a USB drive in the desk (without one the desk refuses with `MSG^$REC_ERRNOSTICK`).
 - **F09-S12 group readout and Edit Group with an expanded group** were not live-tested by the orchestrator (no saved group on the test origin); the user's device testing likely covers it but it is not recorded.
+- **F08-S07 real phone and desk acceptance is parked.** See the [exact pending checks and dependency exception](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance).
 - **F01-S05** (side-loaded Android APK with a native-UI overlay) is drafted, not authorized; open user decisions are listed in [the story](stories/F01-S05.md).
 - **F08-S02** release documentation is unblocked by the F08-S01 sign-off but not authorized.
 - **Carried F08-S01 exceptions:** the Pixel install issue and F07-S03 recording acceptance above; iOS/iPadOS coverage not recorded; the shared-origin StackIt cache-deletion risk.

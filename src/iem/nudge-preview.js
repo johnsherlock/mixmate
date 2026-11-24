@@ -1,3 +1,4 @@
+import { NUDGE_DOWN_DB, NUDGE_UP_DB } from './nudge-config.js';
 import { positionDbText } from './fader-scale.js';
 
 function receivedLevel({ sides, position }) {
@@ -21,7 +22,7 @@ function receivedLevel({ sides, position }) {
   return { text, description: describe(text), split: false };
 }
 
-export function mountNudgePreview(content) {
+export function mountNudgeView(content, unavailable = () => 'Level controls unavailable.') {
   const document = content.ownerDocument;
   function element(tag, className, text = '') {
     const node = document.createElement(tag);
@@ -38,25 +39,24 @@ export function mountNudgePreview(content) {
   back.type = 'button';
   const title = element('h2', '', 'Nudge');
   title.id = 'mm-nudge-preview-title';
-  const note = element('p', 'mm-nudge-preview-note', 'Design preview · taps leave levels unchanged');
-  note.id = 'mm-nudge-preview-note';
-  head.append(back, title, note);
+  head.append(back, title);
   const body = element('div', 'mm-nudge-preview-body');
   const list = element('ul', 'mm-nudge-preview-list');
   list.setAttribute('role', 'list');
   body.append(list);
   panel.append(head, body);
   content.before(panel);
-  const rows = new Map();
+  const rows = new Map(), steps = new WeakMap();
+  let statusId = 0;
 
   function sync(models) {
     const key = ({ kind, model }) => `${kind}:${model.id}`;
     const ids = new Set(models.map(key));
     for (const [id, row] of rows) {
-      if (!ids.has(id)) { row.item.remove(); rows.delete(id); }
+      if (!ids.has(id)) { steps.delete(row.minus); steps.delete(row.plus); row.item.remove(); rows.delete(id); }
     }
     for (const [index, entry] of models.entries()) {
-      const { kind, category, model } = entry;
+      const { kind, model, target } = entry;
       const id = key(entry);
       let row = rows.get(id);
       if (!row) {
@@ -67,26 +67,37 @@ export function mountNudgePreview(content) {
         const value = element('span', 'mm-nudge-preview-value');
         value.setAttribute('aria-hidden', 'true');
         const description = element('span', 'mm-sr-only');
+        const status = element('span', 'mm-nudge-reason');
+        status.id = `mm-nudge-reason-${++statusId}`;
         const minus = element('button', 'mm-nudge-preview-step', '−');
         const plus = element('button', 'mm-nudge-preview-step', '+');
-        for (const button of [minus, plus]) {
+        for (const [button, direction] of [[minus, 'down'], [plus, 'up']]) {
           button.type = 'button';
-          button.setAttribute('aria-describedby', note.id);
+          button.dataset.nudge = direction;
+          button.setAttribute('aria-describedby', status.id);
         }
-        // Preview buttons have only native press feedback. Their identities
-        // are separate from the live fader gesture and nudge handlers.
         readout.append(name, value, description);
-        item.append(minus, readout, plus);
-        row = { item, name, value, description, minus, plus };
+        item.append(minus, readout, status, plus);
+        row = { item, name, value, description, status, minus, plus };
         rows.set(id, row);
       }
       if (list.children[index] !== row.item) list.insertBefore(row.item, list.children[index] || null);
       if (row.name.textContent !== model.name) {
         row.name.textContent = model.name;
         row.name.title = model.name;
-        row.minus.setAttribute('aria-label', `Preview lowering ${category} ${model.name}`);
-        row.plus.setAttribute('aria-label', `Preview raising ${category} ${model.name}`);
+        row.minus.setAttribute('aria-label', `Lower ${model.name} by ${NUDGE_DOWN_DB} dB`);
+        row.plus.setAttribute('aria-label', `Raise ${model.name} by ${NUDGE_UP_DB} dB`);
       }
+      const reason = model.unresolved ? 'No received send state.' : unavailable(target);
+      if (row.status.textContent !== reason) {
+        row.status.textContent = reason;
+        row.status.title = reason;
+        row.minus.title = row.plus.title = reason;
+      }
+      const disabled = Boolean(reason);
+      if (row.minus.disabled !== disabled) row.minus.disabled = row.plus.disabled = disabled;
+      steps.set(row.minus, target);
+      steps.set(row.plus, target);
       const { text, description, split } = receivedLevel(model);
       if (row.value.textContent !== text) row.value.textContent = text;
       if (row.description.textContent !== description) {
@@ -100,12 +111,14 @@ export function mountNudgePreview(content) {
   return {
     panel,
     back,
+    target: button => steps.get(button),
     render(model) {
+      const auxIndex = model.selectedAux;
       const { groups: groupModels, expanded } = model.nudgePreview;
       sync([
-        { kind: 'aux', category: 'AUX master', model: model.selectedMix },
-        ...groupModels.map(group => ({ kind: 'group', category: 'group master', model: group })),
-        ...(expanded?.channels || []).map(channel => ({ kind: 'channel', category: 'channel', model: channel })),
+        { kind: 'aux', model: model.selectedMix, target: { kind: 'master', auxIndex } },
+        ...groupModels.map(group => ({ kind: 'group', model: group, target: { kind: 'group', auxIndex, groupId: group.id } })),
+        ...(expanded?.channels || []).map(channel => ({ kind: 'channel', model: channel, target: { kind: 'send', auxIndex, sourceId: channel.sourceId } })),
       ]);
     },
     reset() {

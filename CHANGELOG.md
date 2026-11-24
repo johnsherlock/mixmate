@@ -2,6 +2,10 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
+## 0.12.0 — 2026-11-24 — F08-S07
+
+- Nudge cards now adjust the current AUX master, group masters and the expanded group's channels. They use the existing level steps, stereo qualification and group limits. Unavailable cards explain why their buttons are disabled, and **Faders** returns to the originating view.
+
 ## 0.11.0 — 2026-11-24 — F08-S06
 
 - Added an in-app Nudge design preview with large level buttons for the AUX master, groups and the expanded group’s channels. Preview taps leave desk levels unchanged.
