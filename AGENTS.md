@@ -4,11 +4,11 @@ Offline-first Soundcraft Ui24R IEM PWA for phones/tablets. Vanilla JavaScript ES
 
 ## Story workflow
 
-- For a new orchestrator, start with [the handoff](docs/orchestrator-handoff.md). For story work, read [the backlog](docs/backlog.md), the assigned `docs/stories/<ID>.md`, its feature document and relevant contracts/ADRs. Historical checkpoint text is not current capability or merge evidence; inspect code and current PR state when needed.
+- For a new orchestrator, start with [the handoff](docs/orchestrator-handoff.md) and the [current product/state handoff](docs/iem-integration-handoff.md). For story work, read [the backlog](docs/backlog.md), the assigned `docs/stories/<ID>.md`, its feature document and relevant contracts/ADRs. Historical checkpoint text is not current capability or merge evidence; inspect code and current PR state when needed.
 - Preserve the master-orchestrator workflow: delegate implementation to one story agent at a time, sequentially. One `codex/` branch and PR per story; do not start the next implementation story while review is outstanding. Do not create sidebar chats unless requested.
 - Run required checks, request `@codex review`, resolve findings and obtain affirmative review of the final changes plus passing checks before merging. Silence or local self-review is not approval. Confirm merge before marking a story merged.
 - Update story, feature and backlog status in the story PR. Record routine decisions, unresolved findings and dependency exceptions in [user-follow-up.md](docs/user-follow-up.md). Park hardware-blocked acceptance honestly before independent work; do not waive the F08 release gate. Respect explicit user deferrals.
-- Preserve existing work, including the untracked `docs/iem-integration-handoff.md`; do not stage unrelated changes. That handoff describes an early baseline, not the current allowlist.
+- Preserve existing work; do not stage unrelated changes. `docs/iem-integration-handoff.md` is the current product/state handoff (replaced 2026-11-24 at user request); the transport table below remains authoritative for the allowlist.
 - Follow the [orchestrator lifecycle](docs/orchestration.md): one fresh-context story agent (`fork_turns: "none"` where supported), GPT-6.1 Sol Medium (historical; the user's 2026-11-21 direction overrides it: Opus orchestrator, Sonnet story and review agents), automatic progression only inside the explicitly authorized batch, and a reviewed repository handoff at the batch boundary. Check context/reliability at each story boundary; finish or safely park exact outstanding work before rotating. A fresh chat does not reset account usage limits.
 
 ## Architecture and state

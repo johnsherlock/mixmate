@@ -1,13 +1,14 @@
-# Orchestrator handoff — authorized batch complete, 2026-11-21
+# Orchestrator handoff — authorized batch complete, 2026-11-24
 
 Before new work, read:
+- the [current product/state handoff](iem-integration-handoff.md) (replaced the stale early-baseline file on 2026-11-24);
 - [AGENTS](../AGENTS.md);
 - the [lifecycle](orchestration.md);
 - the [backlog](backlog.md);
 - the assigned story and its feature;
 - the current contracts.
 
-This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the F06-S05 merge `c1bfe3f` (app 0.9.0).** Verify it on remote main before relying on this text.
+This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the F09-S13 merge `95b612b` (app 0.10.1).** Verify it on remote main before relying on this text.
 
 ## State
 
@@ -21,10 +22,13 @@ The user-authorized batches (**F02-S05 → F07-S01 → F07-S02**, the user-reque
 | [F07-S02](stories/F07-S02.md) snapshot operations (Recall/Save dialogs) | [#61](https://github.com/johnsherlock/mixmate/pull/61) | `2e9e46f` (2026-11-21 10:01 UTC) | `a61e1d1` |
 | [F07-S04](stories/F07-S04.md) native UI access (new tab) | [#66](https://github.com/johnsherlock/mixmate/pull/66) | `5c6fdc8` (2026-11-21) | `bae56a2` |
 | [F06-S05](stories/F06-S05.md) AUX EQ filters (user-requested) | [#68](https://github.com/johnsherlock/mixmate/pull/68) | `c1bfe3f` (2026-11-22) | `de5e387` |
+| [F09-S12](stories/F09-S12.md) UI tweaks (user-requested) | [#69](https://github.com/johnsherlock/mixmate/pull/69) | `c8dab46` (2026-11-22) | `b20877e` |
+| [F09-S13](stories/F09-S13.md) Create/Edit Group button order (user-requested) | [#70](https://github.com/johnsherlock/mixmate/pull/70) | `95b612b` (2026-11-22) | `33daa77` |
 
 - **Merged (user-requested, 2026-11-21): [F06-S05](stories/F06-S05.md) AUX EQ high-pass / low-pass filters (Low cut / High cut), app 0.9.0,** [PR #68](https://github.com/johnsherlock/mixmate/pull/68), merge `c1bfe3f`, final approved head `de5e387`, review and live record https://github.com/johnsherlock/mixmate/pull/68#issuecomment-7065042504. Extends the AUX GEQ allowlist row by exactly `a.<0..9>.eq.hpf` / `.eq.lpf` (typed intent, same guard). Accepted P3s in [follow-ups](user-follow-up.md): a new gesture within the echo window after a filter release may be refused once; a dropped one-side echo keeps the cuts read-only until the next change or a reconnect; mono-output and slope behaviour are untested live.
 - **User-requested, merged (2026-11-22): [F09-S12](stories/F09-S12.md) UI tweaks, app 0.10.0, [PR #69](https://github.com/johnsherlock/mixmate/pull/69), merge `c8dab46`, final approved head `b20877e`.** Root did not live-test the group readout or Edit Group with an expanded group (no saved group on the test origin).
-- **User-requested, in review (2026-11-22): [F09-S13](stories/F09-S13.md) Create/Edit Group moved immediately right of All Groups, app 0.10.1, branch `codex/f09-s13-group-button-order`.** Layout-only; no wire or allowlist change; live layout check is root's. Not part of any batch.
+- **User-requested, merged (2026-11-22): [F09-S13](stories/F09-S13.md) Create/Edit Group moved immediately right of All Groups, app 0.10.1, [PR #70](https://github.com/johnsherlock/mixmate/pull/70), merge `95b612b`, final approved head `33daa77`, review/live record https://github.com/johnsherlock/mixmate/pull/70#issuecomment-7082233250.** Layout-only; no wire or allowlist change. Not part of any batch.
+- **User report (2026-11-24): the user has done extensive testing on real phones and tablets and it is all working very well.** User-reported device evidence toward F08-S01, which remains the formal release gate (not signed off, not waived).
 - **Authorized (user, 2026-11-21; completed): the rest of F07, in this order: F07-S06 → F07-S03 (recording) → F07-S04 (native UI access).** Sequential, one story agent at a time.
 - **Merged:** [F07-S05](stories/F07-S05.md) automatic online updates, install prompt and visible versioning (0.6.0), [PR #63](https://github.com/johnsherlock/mixmate/pull/63), merge `5cd755c` (2026-11-21 11:51 UTC), final head `3715737`, record https://github.com/johnsherlock/mixmate/pull/63#issuecomment-7062173207. It had no dependency on F07-S03/S04; the exception is recorded in [follow-ups](user-follow-up.md). **Merged:** [F07-S06](stories/F07-S06.md) install prompt fallback (0.6.1), [PR #64](https://github.com/johnsherlock/mixmate/pull/64), merge `4c6c574`, final head `3a516a3`. Version policy: [orchestration](orchestration.md#versioning-policy-f07-s05).
 - **Merged:** [F07-S03](stories/F07-S03.md) multitrack recording status and control (0.7.0), [PR #65](https://github.com/johnsherlock/mixmate/pull/65), merge `901a342`, final head `02bf217`; live start/stop acceptance **parked** pending a USB drive in the desk (accepted P3s: stop requires `rec.busy` < 0.5; a stale `rec.time` may flash at start). **Merged:** [F07-S04](stories/F07-S04.md) native UI access (0.8.0), [PR #66](https://github.com/johnsherlock/mixmate/pull/66), merge `5c6fdc8`, final head `bae56a2`, review/live record https://github.com/johnsherlock/mixmate/pull/66#issuecomment-7064454470. The authorized F07 order is complete; the remaining F07 item is F07-S03 live start/stop acceptance, **parked** until a USB drive is in the desk.
@@ -49,7 +53,7 @@ Record the review rounds and live results in a comment on the PR. Return to `@co
 
 - Root may change anything on the desk (Ui24R **192.168.0.60**, firmware **3.0.7865-ui24**) except saving, recalling or deleting snapshots, with one exception: the user created test snapshots **MixMate1** and **MixMate2** and allowed recalling and saving those two (never delete them; never save over or recall any other snapshot).
 - Use SPARE (AUX 9/10) for write tests. If JOHN'S MIX is touched, capture its values first and restore them exactly. A recall changes the whole desk, so capture a full INIT dump before and compare after.
-- Never stage the untracked `docs/iem-integration-handoff.md` (SHA256 `0ac783556d5660ec29e95652c1871628f70c84f45ebb9c4a479e409399dd5bac`).
+- The stale untracked early-baseline `docs/iem-integration-handoff.md` was replaced by the current handoff at the user's request on 2026-11-24; the file is now tracked and is the product/state handoff ([link](iem-integration-handoff.md)). The AGENTS transport table remains the allowlist authority.
 - F08-S01 (real phone and tablet testing) remains the release gate and must not be waived.
 
 ## F02-S05 delivered behavior (user decisions 2026-11-20)
@@ -64,7 +68,7 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 ## Verification and resources
 
-- **Application:** 0.9.0 (baseline `c1bfe3f`); 584 fake tests pass on `c1bfe3f` (main at `c8dab46` is 0.10.0 with 604; the F09-S13 branch is 0.10.1); the offline worker precaches 18 assets (root verified on every build on 2026-11-21). Local Node 26; CI Node 24.
+- **Application:** 0.10.1 (baseline `95b612b`); 604 fake tests pass; the offline worker precaches 18 assets (both re-verified with `npm ci && npm test && npm run build` on 2026-11-24). Local Node 26; CI Node 24.
 - **Desk state:** current snapshot **MixMate1**. During F07-S02 acceptance root recalled MixMate1 and MixMate2 and saved MixMate1 from the live state (2026-11-21), so MixMate1 now holds those contents. Full INIT dumps were identical before and after, and no other snapshot was touched. Live records: [PR #58](https://github.com/johnsherlock/mixmate/pull/58#issuecomment-7052427422), [PR #60](https://github.com/johnsherlock/mixmate/pull/60#issuecomment-7060808085), [PR #61](https://github.com/johnsherlock/mixmate/pull/61#issuecomment-7060957809).
 - **Prototype:** `mockups/iem.html` unchanged, SHA256 `d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`.
 - `.claude/launch.json` is a local, untracked root convenience file; do not commit it.
