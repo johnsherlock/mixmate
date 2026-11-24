@@ -42,7 +42,7 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 
 - Automated: 604 fake-transport tests pass; the build passes with an 18-asset precache.
 - **User-reported device evidence (2026-11-24): the user has done extensive testing on real phones and tablets and reports that it is all working very well.** This is a user report, not a recorded checklist.
-- **[F08-S01](stories/F08-S01.md) remains the formal release gate and is neither passed nor waived.** Its checklist (both rigs tested separately, online install, offline cold start with no internet, sleep/lock and recovery, local-network permission, update flow, Android and iOS install and touch behaviour, per-control checks) has not been formally signed off in the repo. The user's report is strong evidence toward it, pending a recorded sign-off or an explicit user-approved support change. iOS devices were historically unavailable; see the [device checklist](device-checks.md).
+- **[F08-S01](stories/F08-S01.md) (the formal release gate) was signed off by the user on 2026-11-24** on the basis of their own real phone/tablet testing of app 0.10.1 (a user sign-off, not a waiver). The individual matrix rows (devices, versions, both rigs, cold offline launch, sleep/lock, update flow, per-control checks) were not recorded in the repo and were not observed by the orchestrator. iOS/iPadOS coverage is not recorded. Carried exceptions are listed under open items and in the [story](stories/F08-S01.md#sign-off--2026-11-24). Future device claims still need evidence; see the [device checklist](device-checks.md).
 
 ## Open items and known issues
 
@@ -50,7 +50,8 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - **F07-S03 live recording acceptance parked:** needs a USB drive in the desk (without one the desk refuses with `MSG^$REC_ERRNOSTICK`).
 - **F09-S12 group readout and Edit Group with an expanded group** were not live-tested by the orchestrator (no saved group on the test origin); the user's device testing likely covers it but it is not recorded.
 - **F01-S05** (side-loaded Android APK with a native-UI overlay) is drafted, not authorized; open user decisions are listed in [the story](stories/F01-S05.md).
-- **F08-S02** release documentation follows F08-S01.
+- **F08-S02** release documentation is unblocked by the F08-S01 sign-off but not authorized.
+- **Carried F08-S01 exceptions:** the Pixel install issue and F07-S03 recording acceptance above; iOS/iPadOS coverage not recorded; the shared-origin StackIt cache-deletion risk.
 - Accepted P3s and unresolved observations are in [user-follow-up.md](user-follow-up.md).
 - About 50 older merged `codex/` branches remain on the remote; cleanup was offered but not yet answered.
 
