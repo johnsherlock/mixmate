@@ -8,7 +8,7 @@ Current plan: 2026-11-18. Nine features contain **47 stories**. The accepted `mo
 | --- | --- | --- | --- |
 | [F01](features/F01.md) | Offline distribution and compatibility | 8 | Merged implementation checkpoint; S05 (side-loaded Android APK) drafted 2026-11-21, not authorized; F08-S01 signed off by the user 2026-11-24 |
 | [F02](features/F02.md) | Device-local settings | 5 | S01–S05 merged (S05: PR #58); F08-S01 signed off by the user 2026-11-24 |
-| [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
+| [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification: F08-S01 signed off by the user 2026-11-24 |
 | [F04](features/F04.md) | Groups and navigation | 5 | S01–S05 merged |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S04 merged (S04 GEQ: targeted live evidence on one pair; F08-S01 signed off by the user 2026-11-24) |

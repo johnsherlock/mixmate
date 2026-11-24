@@ -1,6 +1,6 @@
 # F01 real-device checks
 
-Status: Partial Android installation reports plus received state on an unconfirmed installed-app platform/context; tablet targeted version/name retest passed; full mobile/offline checks outstanding. [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
+Status: Partial Android installation reports plus received state on an unconfirmed installed-app platform/context; tablet targeted version/name retest passed; full mobile/offline checks outstanding as recorded here (superseded as the release gate by the [2026-11-24 user sign-off of F08-S01](stories/F08-S01.md#sign-off--2026-11-24); result cells unchanged). [Separate desktop transport observations](f01-device-evidence.md) are recorded and do not satisfy this matrix. Owner: user for physical-device operations; master agent for evidence recording and any permitted read-only desktop observations. Follow [F01-S03](stories/F01-S03.md). Record the tested app commit, deployment and worker/cache version; do not apply results from an older build to later behavior changes without a targeted retest.
 
 ## Qualification ownership
 
