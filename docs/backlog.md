@@ -13,12 +13,14 @@ Current plan: 2026-11-18. Nine features contain **47 stories**. The accepted `mo
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
 | [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S04 merged (S04 GEQ: targeted live evidence on one pair; F08-S01 signed off by the user 2026-11-24) |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | all stories merged: S01 (PR #60), S02 (PR #61), S03 (PR #65; live start/stop parked, needs a USB drive), S04 (PR #66, native UI new tab), S05 (PR #63), S06 (PR #64) |
-| [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01 signed off by the user 2026-11-24; S02 unblocked, not authorized |
+| [F08](features/F08.md) | Release validation | 7 | S03 evidence checkpoint merged; unresolved findings assigned below; S01 signed off by the user 2026-11-24; S02 unblocked and excluded from the authorized batch; [S06](stories/F08-S06.md) user-approved preview prepared for review and CI; [S07](stories/F08-S07.md), [S04](stories/F08-S04.md) and [S05](stories/F08-S05.md) queued in that order |
 | [F09](features/F09.md) | Reliable control transport and state | 11 | S01–S11 merged; F08-S01 signed off by the user 2026-11-24 |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
 ## Cross-feature execution priority
+
+The user authorized [F08-S06](stories/F08-S06.md) → [F08-S07](stories/F08-S07.md) → [F08-S04](stories/F08-S04.md) → [F08-S05](stories/F08-S05.md) on 2026-11-24, with each story reviewed and merged before the next starts. The batch ends with the reviewed handoff. [F08-S02](stories/F08-S02.md) is excluded.
 
 | Order | Story / gate | Dependency and purpose |
 | --- | --- | --- |

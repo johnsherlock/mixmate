@@ -27,6 +27,14 @@ export function groupReferencePosition(group, sources, control) {
   const values = group.members.map(id => byId.has(id) ? displayedMemberPosition(byId.get(id), control) : null).filter(unit);
   return values.length ? Math.max(...values) : null;
 }
+function groupSources(group, sources, aux) {
+  const byId = new Map(sources.map(source => [source.sourceId, source]));
+  return group.members.map(id => byId.get(id) || {
+    id: `${id}@${aux}`, sourceId: id, unresolved: true,
+    name: `${sourceLabel(id)} · Unresolved`, detail: 'Not observed for this AUX; retained group member',
+    panText: 'Pan unavailable', stateText: 'No received send state',
+  });
+}
 function master(group, profileId, aux, control, sources) {
   const controls = Boolean(control);
   return { referencePosition: groupReferencePosition(group, sources, control), id: `group:${profileId}:${group.id}@${aux}`, renderKey: `group:${profileId}:${group.id}`, kind: 'group', groupId: group.id, name: group.name,
@@ -39,11 +47,15 @@ export function projectGroupNavigation(base, profile, requested) {
   const result = { ...base, groups: groups.map(group => ({ id: group.id, name: group.name })), ...navigation, showAuxMaster: !navigation.expandedGroupId };
   if (navigation.view === 'channels') return result;
   const group = groups.find(group => group.id === navigation.expandedGroupId);
-  if (!group) return { ...result, sources: groups.map(group => master(group, profile.id, base.selectedAux, base.control, base.sources)) };
-  const byId = new Map(base.sources.map(source => [source.sourceId, source]));
-  return { ...result, sources: [master(group, profile.id, base.selectedAux, base.control, base.sources), ...group.members.map(id => byId.get(id) || {
-    id: `${id}@${base.selectedAux}`, sourceId: id, unresolved: true,
-    name: `${sourceLabel(id)} · Unresolved`, detail: 'Not observed for this AUX; retained group member',
-    panText: 'Pan unavailable', stateText: 'No received send state',
-  })] };
+  const channels = group ? groupSources(group, base.sources, base.selectedAux) : [];
+  const sources = group ? [group] : groups;
+  return {
+    ...result,
+    sources: [...sources.map(item => master(item, profile.id, base.selectedAux, base.control, base.sources)), ...channels],
+    nudgePreview: {
+      profileId: profile?.id,
+      groups: groups.map(item => ({ id: item.id, name: item.name, position: groupReferencePosition(item, base.sources) })),
+      expanded: group ? { id: group.id, name: group.name, channels } : null,
+    },
+  };
 }

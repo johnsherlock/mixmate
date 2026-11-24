@@ -274,15 +274,15 @@ test('shell: Create Group replaces Edit Groups and All Groups is created by the 
     const edit = app.root.querySelector('[data-action="edit-groups"]');
     assert.equal(edit.textContent, 'Create Group'); assert.equal(edit.attributes['aria-label'], 'Create a new group');
     const switches = app.root.querySelector('.mm-group-switches');
-    assert.deepEqual(switches.children.map(node => node.textContent), ['Band', 'All Groups', 'Create Group', 'All Channels']);
-    assert.equal(switches.children[1].attributes['aria-pressed'], 'true', 'active while the group fader view is current');
-    assert.equal(switches.children[3].attributes['aria-pressed'], 'false');
+    assert.deepEqual(switches.children.map(node => node.textContent), ['Nudge', 'Band', 'All Groups', 'Create Group', 'All Channels']);
+    assert.equal(switches.children[2].attributes['aria-pressed'], 'true', 'active while the group fader view is current');
+    assert.equal(switches.children[4].attributes['aria-pressed'], 'false');
     app.setNavigation({ view: 'groups', expandedGroupId: 'band' });
     assert.equal(edit.textContent, 'Edit Group'); assert.equal(edit.attributes['aria-label'], 'Edit group Band');
     // F09-S13: Edit Group stays immediately right of All Groups, before All Channels; same node (keyed).
-    assert.deepEqual(switches.children.map(node => node.textContent), ['Band', 'All Groups', 'Edit Group', 'All Channels']);
-    assert.equal(switches.children[2], edit);
-    assert.equal(switches.children[1].attributes['aria-pressed'], 'false'); assert.equal(switches.children[0].attributes['aria-pressed'], 'true');
+    assert.deepEqual(switches.children.map(node => node.textContent), ['Nudge', 'Band', 'All Groups', 'Edit Group', 'All Channels']);
+    assert.equal(switches.children[3], edit);
+    assert.equal(switches.children[2].attributes['aria-pressed'], 'false'); assert.equal(switches.children[1].attributes['aria-pressed'], 'true');
     app.setNavigation({ view: 'channels' });
     assert.equal(edit.textContent, 'Create Group'); assert.equal(switches.children[3].attributes['aria-pressed'], 'true'); assert.equal(switches.children[1].attributes['aria-pressed'], 'false');
     assert.deepEqual(switches.children.map(node => node.textContent), ['Band', 'All Groups', 'Create Group', 'All Channels']); assert.equal(switches.children[2], edit);
@@ -293,7 +293,7 @@ test('All Groups button calls only the navigation handler; no session write', as
   const calls = [], app = await rig({ nav: { view: 'groups', expandedGroupId: 'band' }, handlers: { onAllGroups: () => calls.push('groups'), onAllChannels: () => calls.push('channels'), onToggleGroup: id => calls.push(`toggle:${id}`) } });
   try {
     const buttons = app.root.querySelector('.mm-group-switches').children;
-    app.click(buttons[1]); app.click(buttons[3]);
+    app.click(buttons[2]); app.click(buttons[4]);
     assert.deepEqual(calls, ['groups', 'channels']); assert.equal(app.writes().length, 0);
   } finally { app.close(); }
 });
