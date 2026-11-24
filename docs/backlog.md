@@ -6,15 +6,15 @@ Current plan: 2026-11-18. Nine features contain **47 stories**. The accepted `mo
 
 | Feature | Outcome | Stories | Current status |
 | --- | --- | --- | --- |
-| [F01](features/F01.md) | Offline distribution and compatibility | 8 | Merged implementation checkpoint; S05 (side-loaded Android APK) drafted 2026-11-21, not authorized; physical F08 qualification open |
-| [F02](features/F02.md) | Device-local settings | 5 | S01–S05 merged (S05: PR #58); physical F08 qualification open |
+| [F01](features/F01.md) | Offline distribution and compatibility | 8 | Merged implementation checkpoint; S05 (side-loaded Android APK) drafted 2026-11-21, not authorized; F08-S01 signed off by the user 2026-11-24 |
+| [F02](features/F02.md) | Device-local settings | 5 | S01–S05 merged (S05: PR #58); F08-S01 signed off by the user 2026-11-24 |
 | [F03](features/F03.md) | Read-only live IEM | 4 | Merged implementation checkpoint; firmware/physical qualification open |
 | [F04](features/F04.md) | Groups and navigation | 5 | S01–S05 merged |
 | [F05](features/F05.md) | Safe AUX level control | 3 | Merged implementation checkpoint; interoperability remediation in F09 |
-| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S04 merged (S04 GEQ: targeted live evidence on one pair; F08 physical qualification open) |
+| [F06](features/F06.md) | Pan and faithful AUX EQ | 4 | S01–S04 merged (S04 GEQ: targeted live evidence on one pair; F08-S01 signed off by the user 2026-11-24) |
 | [F07](features/F07.md) | Snapshots, recording and native UI | 4 | all stories merged: S01 (PR #60), S02 (PR #61), S03 (PR #65; live start/stop parked, needs a USB drive), S04 (PR #66, native UI new tab), S05 (PR #63), S06 (PR #64) |
-| [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01/S02 open |
-| [F09](features/F09.md) | Reliable control transport and state | 11 | S01–S11 merged; physical F08 gate open |
+| [F08](features/F08.md) | Release validation | 3 | S03 evidence checkpoint merged; unresolved findings assigned below; S01 signed off by the user 2026-11-24; S02 unblocked, not authorized |
+| [F09](features/F09.md) | Reliable control transport and state | 11 | S01–S11 merged; F08-S01 signed off by the user 2026-11-24 |
 
 Feature numbers do not determine execution priority. Previously merged implementation remains merged; follow-up stories do not erase that history.
 
@@ -50,8 +50,8 @@ Feature numbers do not determine execution priority. Previously merged implement
 | 8p | [F09-S12](stories/F09-S12.md) | User request 2026-11-22 (outside the order): UI tweaks after device testing — All Groups button, Create Group / Edit Group, group readout = loudest member level, ▲/▼ nudge buttons on every level fader (+3 / −1.5 dB, amounts in `src/iem/nudge-config.js`, user decision 2026-11-22), FX names from `fxtype`, fader track fill (yellow, light blue for FX), 50% wider header snapshot name; no new wire message; 0.10.0 — **Merged** ([PR #69](https://github.com/johnsherlock/mixmate/pull/69), `c8dab46`, approved head `b20877e`) |
 | 8q | [F09-S13](stories/F09-S13.md) | User request 2026-11-22 (outside the order): move Create Group / Edit Group immediately right of All Groups (All Mixes, All Groups, Create/Edit Group, All Channels, Mix EQ); DOM move of the existing node only, no behaviour or wire change; 0.10.1 — **Merged** ([PR #70](https://github.com/johnsherlock/mixmate/pull/70), `95b612b`) |
 | 9 | [F07](features/F07.md) S01 → S02 → S03 → S04 | F06-S04 → exact snapshot contract, operations, recording, native access |
-| 10 | [F08-S01](stories/F08-S01.md) | All release implementation → supported physical devices, both rigs, offline/sleep/control gate |
-| 11 | [F08-S02](stories/F08-S02.md) | F08-S01 → release/recovery documentation |
+| 10 | [F08-S01](stories/F08-S01.md) | **Signed off by the user, 2026-11-24** (user's own real phone/tablet testing; carried exceptions in the story and follow-ups). Was: all release implementation → supported physical devices, both rigs, offline/sleep/control gate |
+| 11 | [F08-S02](stories/F08-S02.md) | F08-S01 (signed off) → release/recovery documentation; unblocked, **not authorized** |
 
 This is the intended sequence, not a hardware waiver: if F09-S04 is blocked, park exact unrun rows; downstream work remains blocked until its applicable gate is met or an explicit reviewed dependency exception establishes that the proposed work is independent. ADR-0002 alone does not waive the F09 readiness gate. A checklist alone does not make F06-S04 eligible. F08-S03 is an evidence checkpoint with successors, not an indefinite catch-all dependency. Logical overview precedes compact detail so detail uses stable mix identity; saved-rig feedback then closes the remaining usability finding before EQ expansion.
 
@@ -94,11 +94,11 @@ Earlier implementation receipts remain in individual stories and Git history (F0
 
 ## Orchestration and release gates
 
-Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context Sol Medium story agent, sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The previous F09-S01/S02 batch is complete. The 2026-11-17 **F09-S03-only** batch is complete, confirmed merged in PR #40 after final review and passing CI. That S03 batch stopped with its reviewed handoff and made no hardware action. S04 subsequently began under separate explicit authorization; its current status is below. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
+Follow [AGENTS](../AGENTS.md) and the canonical [orchestrator lifecycle](orchestration.md): one fresh-context story agent (user direction 2026-11-21: Opus orchestrator, Sonnet story and review agents; the earlier GPT-6.1 Sol Medium wording is historical), sequential reviewed delivery, automatic progression within the recorded authorized batch and a verified repository handoff before stopping. The previous F09-S01/S02 batch is complete. The 2026-11-17 **F09-S03-only** batch is complete, confirmed merged in PR #40 after final review and passing CI. That S03 batch stopped with its reviewed handoff and made no hardware action. S04 subsequently began under separate explicit authorization; its current status is below. Preserve unrelated work, especially untracked `docs/iem-integration-handoff.md`.
 
 [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md) already authorizes the named feature classes; exact forms/types/ranges and deliberate reviewed typed-guard/allowlist changes remain mandatory. Story-scoped live testing now has the user's separate standing permission in ADR-0004. The completed S04 batch performed no snapshot action and starts no F07 work; future implementation/testing must stay within its authorized story.
 
-Library/native source evidence, fake tests, observed device/firmware trials and hypotheses must remain distinct. [F08-S01](stories/F08-S01.md) retains Android/iOS, installation/current-asset offline proof, local-network permissions, sleep/recovery, both rigs and all implemented controls as a physical release gate. Record unresolved findings and dependency exceptions in [follow-ups](user-follow-up.md). Start from the concise [handoff](orchestrator-handoff.md).
+Library/native source evidence, fake tests, observed device/firmware trials and hypotheses must remain distinct. [F08-S01](stories/F08-S01.md) was the physical release gate (Android/iOS, installation/current-asset offline proof, local-network permissions, sleep/recovery, both rigs, all implemented controls); the user signed it off on 2026-11-24 from their own real phone/tablet testing, with per-row results unrecorded and exceptions carried in the story and follow-ups. Record unresolved findings and dependency exceptions in [follow-ups](user-follow-up.md). Start from the concise [handoff](orchestrator-handoff.md).
 
 ## Historical S04-only batch boundary — previously parked, 2026-11-17
 

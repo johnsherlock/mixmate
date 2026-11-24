@@ -1,5 +1,18 @@
 # User follow-ups and parked decisions
 
+## 2026-11-24 F08-S01 signed off by the user
+
+The user reported extensive testing on real phones and tablets ("all working very well") and said "You can sign it off." [F08-S01](stories/F08-S01.md#sign-off--2026-11-24) is **signed off by the user** (app 0.10.1, baseline `02b158c`). This is a user sign-off from the user's own testing, not a waiver; the per-row matrix was not recorded in the repo and was not observed by the orchestrator. F08-S02 is unblocked, **not authorized**.
+
+| Item | Status | Next action and owner |
+| --- | --- | --- |
+| Pixel 6 Pro Chrome install failure | Open: Chrome 157 / Android 17 refuses to install after an uninstall; Brave installs it; F07-S06 added only a menu-instructions fallback | User/root when a diagnosis is available |
+| F07-S03 live recording start/stop | Untested live | Root/user once a USB drive is in the desk |
+| iOS/iPadOS coverage | Not recorded in the repo (neither claimed tested nor untested) | User to say if it should be recorded |
+| Shared-origin StackIt cache-deletion risk | Carried as before | Fix in its own project or choose a distribution approach |
+| F09-S12 group readout / Edit Group with an expanded group | Not observed by the orchestrator | Record if the user confirms |
+| Older "no automatic reconnect" wording in F08-S01 | Superseded by the F02-S05 automatic-connection decision (2026-11-20) | None |
+
 ## 2026-11-21 F06-S05 AUX EQ high-pass / low-pass filters (user request, root decisions, merged)
 
 User request: "We're missing the high/low pass filter in the EQ. See the demo app and native ui." Story: [F06-S05](stories/F06-S05.md) (0.9.0). Evidence and wire forms: [EQ contract](iem-aux-eq-contract.md#f06-s05-aux-eq-filters--2026-11-21), [ADR-0006 amendment](adr/0006-aux-geq-curve-contract.md#f06-s05-amendment--aux-eq-high-pass--low-pass-filters-user-request-2026-11-21).

@@ -4,7 +4,7 @@ Status: Partial Android installation reports plus received state on an unconfirm
 
 ## Qualification ownership
 
-On 2026-11-09 the user approved continuing implementation and deferring unresolved Pixel/mobile qualification to [F08-S01](stories/F08-S01.md), recorded in [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md). F01-S03 may merge as an evidence checkpoint after review; this checklist remains an open release gate. Existing result cells are unchanged and no missing check is treated as a pass. See [the follow-up log](user-follow-up.md).
+On 2026-11-09 the user approved continuing implementation and deferring unresolved Pixel/mobile qualification to [F08-S01](stories/F08-S01.md), recorded in [ADR-0002](adr/0002-deferred-qualification-and-authorized-controls.md). F01-S03 may merge as an evidence checkpoint after review; this checklist was the open release gate until the user signed off F08-S01 on 2026-11-24 from their own device testing (per-row results were not recorded here; the result cells below stay as they were and are not retroactively passed). Existing result cells are unchanged and no missing check is treated as a pass. See [the follow-up log](user-follow-up.md).
 
 ## Historical F01 test target
 
