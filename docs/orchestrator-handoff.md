@@ -8,16 +8,17 @@ Before new work, read:
 - the assigned story and its feature;
 - the current contracts.
 
-This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the PR #73 merge `00829e9` (F08-S06 Nudge preview; app 0.11.0).** Verify it on remote main before relying on this text.
+This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the PR #74 merge `a9165f5` (F08-S07 live Nudge, app 0.12.0).** Verify it on remote main before relying on this text.
 
 ## Current authorized batch
 
 The user authorized [F08-S06](stories/F08-S06.md) → [F08-S07](stories/F08-S07.md) → [F08-S04](stories/F08-S04.md) → [F08-S05](stories/F08-S05.md) on 2026-11-24. Each story requires final-head approval, passing CI and a confirmed merge before the next starts. The batch ends with a reviewed repository handoff. [F08-S02](stories/F08-S02.md) is explicitly excluded.
 
 - **F08-S06:** the user-approved Nudge preview merged as [PR #73](https://github.com/johnsherlock/mixmate/pull/73) at `00829e9` (app 0.11.0). Affirmative review covered final head `04a1f8c`, and [CI passed](https://github.com/johnsherlock/mixmate/actions/runs/45442408882).
-- **F08-S07:** app 0.12.0 wires the Nudge screen to the existing typed level owner. Local install, all 612 tests and production build passed. Final review and CI are pending. Physical phone plus real-desk acceptance is parked for the targets recorded in the [story verification](stories/F08-S07.md#delivery-verification) and [follow-ups](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance).
-- **Delegation:** Opus and Sonnet were unavailable in this environment. The available Codex orchestrator and one Codex story agent handled F08-S06 in an isolated clone. The review and CI gate still applies.
-- **Next eligible story:** F08-S04 after the F08-S07 final review, passing CI and confirmed merge, followed by F08-S05. The [dependency exception](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance) covers the independent fader and meter work while F08-S07 physical acceptance stays parked.
+- **F08-S07:** app 0.12.0 merged in [PR #74](https://github.com/johnsherlock/mixmate/pull/74) at `a9165f5`, final approved head `b344797`, [CI passed](https://github.com/johnsherlock/mixmate/actions/runs/45445199743). It wires the Nudge screen to the existing typed level owner. Physical phone plus real-desk acceptance is parked for the targets recorded in the [story verification](stories/F08-S07.md#delivery-verification) and [follow-ups](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance).
+- **F08-S04:** app 0.12.1 keeps the selected AUX master visible alongside expanded groups. Final review and CI are pending. See the [story verification](stories/F08-S04.md#delivery-verification).
+- **Delegation:** Opus and Sonnet were unavailable in this environment. The available Codex orchestrator and one Codex story agent worked one story at a time in isolated clones. The review and CI gate still applies.
+- **Next eligible story:** F08-S05 after the F08-S04 final review, passing CI and confirmed merge. The [dependency exception](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance) covers the independent fader and meter work while F08-S07 physical acceptance stays parked.
 
 ## Prior state
 
@@ -78,7 +79,7 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 ## Verification and resources
 
-- **Application:** app 0.11.0 on verified main, app 0.12.0 in the F08-S07 candidate. The candidate passed 612 tests and built an 18-asset precache locally on Node 26.13.1 and npm 11.20.0. CI uses Node 24.
+- **Application:** app 0.12.0 on verified main, app 0.12.1 in the F08-S04 candidate. The candidate passed 613 tests and built an 18-asset precache locally on Node 26.13.1 and npm 11.20.0. CI uses Node 24.
 - **Desk state:** current snapshot **MixMate1**. During F07-S02 acceptance root recalled MixMate1 and MixMate2 and saved MixMate1 from the live state (2026-11-21), so MixMate1 now holds those contents. Full INIT dumps were identical before and after, and no other snapshot was touched. Live records: [PR #58](https://github.com/johnsherlock/mixmate/pull/58#issuecomment-7052427422), [PR #60](https://github.com/johnsherlock/mixmate/pull/60#issuecomment-7060808085), [PR #61](https://github.com/johnsherlock/mixmate/pull/61#issuecomment-7060957809).
 - **Prototype:** `mockups/iem.html` unchanged, SHA256 `d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`.
 - `.claude/launch.json` is a local, untracked root convenience file; do not commit it.

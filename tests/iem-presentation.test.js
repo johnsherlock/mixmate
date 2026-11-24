@@ -243,7 +243,7 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     view.render(projectGroupNavigation(base, profile, null));
     const bank = root.querySelector('.mm-strip-scroll'), shortcuts = root.querySelector('.mm-group-switches'), [nudge, button] = shortcuts.children;
     const click = target => root.emit('click', { target: { closest: selector => selector === 'button' ? target : null } });
-    const group = bank.children[0];
+    const group = bank.children[0], pinned = root.querySelector('.mm-pinned'), master = pinned.children[0];
     assert.equal(button.textContent, profile.groups[0].name); assert.equal(button.attributes.title, profile.groups[0].name); assert.equal(button.innerHTML, undefined);
     assert.equal(nudge.textContent, 'Nudge');
     assert.equal(shortcuts.children.length, 5); assert.equal(shortcuts.children[3].textContent, 'All Groups', 'F09-S12: All Groups sits immediately left of All Channels'); assert.equal(shortcuts.children[4].textContent, 'All Channels');
@@ -253,8 +253,8 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     const expanded = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: '7_group-Z' });
     view.render(expanded);
     assert.equal(bank.children[0], group); assert.equal(shortcuts.children[1], button); assert.equal(button.attributes['aria-pressed'], 'true');
-    assert.equal(root.querySelector('.mm-pinned').hidden, true); assert.equal(root.querySelector('.mm-pinned').children.length, 0);
-    assert.equal(root.querySelector('.mm-sends-layout').classList.contains('mm-no-master'), true);
+    assert.ok(!pinned.hidden); assert.deepEqual(pinned.children, [master]);
+    assert.equal(root.querySelector('.mm-sends-layout').classList.contains('mm-expanded-group'), true);
     assert.deepEqual(bank.children.slice(1).map(node => node.dataset.id), ['f.1@0', 'i.20@0', 'i.0@0']);
     const unresolved = bank.children[2], input = unresolved.querySelector('input'), cap = unresolved.querySelector('.mm-fader-hit');
     assert.equal(unresolved.dataset.unresolved, 'true'); assert.equal(unresolved.dataset.unknown, 'true'); assert.equal(input.disabled, true);
@@ -301,7 +301,7 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     view.render(projectGroupNavigation(base, profile, { view: 'channels' }));
     assert.deepEqual(bank.children.map(node => node.dataset.id), ['i.0@0', 'f.1@0']); assert.equal(root.querySelector('.mm-pinned').children.length, 1);
     view.render(projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'empty' }));
-    assert.equal(bank.children.length, 1); assert.equal(bank.children[0].querySelector('input'), undefined); assert.equal(root.querySelector('.mm-pinned').children.length, 0);
+    assert.equal(bank.children.length, 1); assert.equal(bank.children[0].querySelector('input'), undefined); assert.deepEqual(pinned.children, [master]);
   } finally {
     view?.destroy();
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
@@ -454,7 +454,7 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     assert.deepEqual(article.querySelector('.mm-ruler').children.map(node => node.textContent), ['+10', '0', '−12', '−24', '−40', '−60', '−70', '−∞'], 'dB ticks replace the POSITION label (−70 floor since F09-S07)');
     assert.equal(article.querySelector('.mm-ruler').children.at(-1).dataset.tick, 'off', 'the −∞ label is tagged so compact CSS can drop it');
     assert.equal(article.querySelector('.mm-group-master-label').textContent, 'GROUP MASTER'); assert.equal(article.querySelector('.mm-delta-prefix'), undefined); assert.equal(article.querySelector('.mm-value').textContent, positionDbText(0.4), 'F09-S12: group readout = loudest member received level (not a Δ)');
-    assert.equal(root.querySelector('.mm-pinned').children.length, 0); assert.equal(root.querySelector('.mm-level-enable'), undefined);
+    assert.equal(root.querySelector('.mm-pinned').children.length, 1); assert.equal(root.querySelector('.mm-level-enable'), undefined);
     const name = article.querySelector('.mm-strip-name'), select = article.querySelector('.mm-group-level-select');
     root.emit('click', { target: { closest: selector => selector === 'button' ? name : null } }); root.emit('click', { target: { closest: selector => selector === 'button' ? select : null } }); assert.deepEqual(actions, ['nav:band', 'level:band']);
     const wrap = input.parentElement, event = y => ({ target: { closest: selector => selector === '.mm-fader-control' ? wrap : selector === '.mm-fader-hit' ? cap : null }, pointerId: 1, button: 0, clientX: 20, clientY: y, preventDefault() {} });

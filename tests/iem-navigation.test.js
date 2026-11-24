@@ -59,14 +59,14 @@ test('group projection preserves exact ordered IDs with unresolved placeholders,
   const profile = definitions().profiles[0], sources = ['i.0', 'l.0', 'p.1', 'f.1'].map(sourceId => ({ id: `${sourceId}@0`, sourceId, name: sourceId, position: 0.4 }));
   const base = { selectedAux: 0, selectedMix: { id: 'a.0' }, sources, mixes: [] };
   const groups = projectGroupNavigation(base, profile, null);
-  assert.equal(groups.view, 'groups'); assert.equal(groups.showAuxMaster, true); assert.equal(groups.sources.length, 2);
+  assert.equal(groups.view, 'groups'); assert.equal(groups.sources.length, 2);
   assert.ok(groups.sources.every(item => item.kind === 'group' && item.position === undefined && item.meter === undefined));
   const expanded = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: '7_group-Z' });
-  assert.equal(expanded.showAuxMaster, false); assert.deepEqual(expanded.sources.slice(1).map(source => source.sourceId), profile.groups[0].members);
+  assert.equal(expanded.selectedMix, base.selectedMix); assert.deepEqual(expanded.sources.slice(1).map(source => source.sourceId), profile.groups[0].members);
   assert.equal(expanded.sources[2].unresolved, true); assert.equal(expanded.sources[2].position, undefined); assert.equal(expanded.sources[2].meter, undefined);
   assert.equal(expanded.sources[0].kind, 'group'); assert.match(expanded.sources[0].stateText, /unavailable/);
   const all = projectGroupNavigation(base, profile, { view: 'channels' }); assert.equal(all.sources, sources);
-  const empty = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'empty' }); assert.equal(empty.sources.length, 1); assert.equal(empty.showAuxMaster, false);
+  const empty = projectGroupNavigation(base, profile, { view: 'groups', expandedGroupId: 'empty' }); assert.equal(empty.sources.length, 1); assert.equal(empty.selectedMix, base.selectedMix);
   assert.equal(projectGroupNavigation({ ...base, selectedAux: null }, profile, null).view, 'overview');
 });
 
@@ -165,7 +165,7 @@ test('explicit group toggle/All Channels/overview persist only canonical profile
   const app = await fixture(); app.connect(); app.controller.selectAux(0); await app.controller.whenNavigationIdle();
   assert.equal(app.view.last.view, 'groups'); assert.equal(app.controller.context().sources.length, 5);
   app.controller.toggleGroup('7_group-Z'); await app.controller.whenNavigationIdle();
-  assert.equal(app.view.last.expandedGroupId, '7_group-Z'); assert.equal(app.view.last.showAuxMaster, false);
+  assert.equal(app.view.last.expandedGroupId, '7_group-Z'); assert.equal(app.view.last.selectedMix.id, 'a.0');
   assert.equal(app.controller.context().sources.length, 5); // Editor catalog stays full while visible bank is filtered.
   assert.deepEqual(app.repository.snapshot().settings.profiles[0].navigation, { mixId: 'a.0', view: 'groups', expandedGroupId: '7_group-Z' });
   app.controller.toggleGroup('7_group-Z'); await app.controller.whenNavigationIdle(); assert.equal(app.view.last.expandedGroupId, null); assert.equal(app.view.last.view, 'groups');
@@ -257,7 +257,7 @@ test('a reopened repository restores an expanded group only after explicit Conne
     socket.receive('3:::SETS^model^ui24');
     assert.equal(reopened.view.last.selectedAux, 0); assert.equal(reopened.view.last.expandedGroupId, '7_group-Z');
     assert.equal(reopened.view.last.sources[0].kind, 'group'); assert.ok(reopened.view.last.sources.slice(1).every(source => source.unresolved));
-    assert.equal(reopened.view.last.showAuxMaster, false); assert.equal(reopened.sockets.length, 1);
+    assert.equal(reopened.view.last.selectedMix.id, 'a.0'); assert.equal(reopened.sockets.length, 1);
     socket.receive(state);
     assert.deepEqual(reopened.view.last.sources.slice(1).map(source => source.sourceId), ['f.1', 'i.20', 'l.0', 'i.0']);
     assert.equal(reopened.view.last.sources[2].unresolved, true);
