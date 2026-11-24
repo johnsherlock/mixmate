@@ -27,6 +27,11 @@ export function groupReferencePosition(group, sources, control) {
   const values = group.members.map(id => byId.has(id) ? displayedMemberPosition(byId.get(id), control) : null).filter(unit);
   return values.length ? Math.max(...values) : null;
 }
+export function groupDisplayPosition(groupId, auxIndex, referencePosition, control) {
+  const selected = control?.selected;
+  return selected?.kind === 'group' && selected.groupId === groupId && selected.auxIndex === auxIndex && unit(control.groupReference)
+    ? control.groupReference : referencePosition;
+}
 function groupSources(group, sources, aux) {
   const byId = new Map(sources.map(source => [source.sourceId, source]));
   return group.members.map(id => byId.get(id) || {
@@ -48,13 +53,16 @@ export function projectGroupNavigation(base, profile, requested) {
   if (navigation.view === 'channels') return result;
   const group = groups.find(group => group.id === navigation.expandedGroupId);
   const channels = group ? groupSources(group, base.sources, base.selectedAux) : [];
-  const sources = group ? [group] : groups;
+  const masters = groups.map(item => master(item, profile.id, base.selectedAux, base.control, base.sources));
   return {
     ...result,
-    sources: [...sources.map(item => master(item, profile.id, base.selectedAux, base.control, base.sources)), ...channels],
+    sources: group ? [...masters.filter(item => item.groupId === group.id), ...channels] : masters,
     nudgePreview: {
       profileId: profile?.id,
-      groups: groups.map(item => ({ id: item.id, name: item.name, position: groupReferencePosition(item, base.sources) })),
+      groups: masters.map(({ groupId, name, referencePosition }) => ({
+        id: groupId, name,
+        position: referencePosition === null ? null : groupDisplayPosition(groupId, base.selectedAux, referencePosition, base.control),
+      })),
       expanded: group ? { id: group.id, name: group.name, channels } : null,
     },
   };

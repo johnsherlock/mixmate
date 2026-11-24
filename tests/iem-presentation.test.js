@@ -4,6 +4,7 @@ import { createDemoProvider } from '../src/iem/demo-provider.js';
 import { createEmptyLiveProvider } from '../src/iem/live-provider.js';
 import { installFaderGestures } from '../src/iem/gestures.js';
 import { mountReadOnlyView, debugFlag } from '../src/iem/live-view.js';
+import { mountNudgePreview } from '../src/iem/nudge-preview.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
@@ -258,7 +259,12 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     const unresolved = bank.children[2], input = unresolved.querySelector('input'), cap = unresolved.querySelector('.mm-fader-hit');
     assert.equal(unresolved.dataset.unresolved, 'true'); assert.equal(unresolved.dataset.unknown, 'true'); assert.equal(input.disabled, true);
     assert.match(unresolved.querySelector('.mm-strip-name').textContent, /Unresolved/);
+    bank.scrollLeft = 83;
+    document.scrollingElement = { scrollTop: 213 };
+    const focus = [];
+    nudge.focus = options => focus.push(options);
     click(nudge);
+    assert.equal(document.scrollingElement.scrollTop, 0);
     const screen = root.querySelector('.mm-nudge-preview');
     assert.equal(screen.hidden, false);
     assert.equal(screen.querySelectorAll('.mm-nudge-preview-list').length, 1);
@@ -274,7 +280,6 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     for (const step of screen.querySelectorAll('.mm-nudge-preview-step')) click(step);
     assert.deepEqual(levels(), values);
     assert.deepEqual(actions, ['7_group-Z']);
-    bank.scrollLeft = 83;
     for (let n = 0; n < 30; n++) view.renderMeters(expanded);
     assert.equal(bank.children[0], group); assert.equal(shortcuts.children[1], button); assert.equal(bank.scrollLeft, 83);
     assert.equal(group.querySelector('.mm-meter-pair'), undefined);
@@ -283,9 +288,13 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     assert.equal(screen.hidden, false);
     assert.equal(names()[4], '<img>i.20');
     assert.match(levels()[4], /dB$/);
+    bank.scrollLeft = 0;
+    document.scrollingElement.scrollTop = 45;
     click(screen.querySelector('button'));
     assert.equal(screen.hidden, true);
     assert.equal(bank.scrollLeft, 83);
+    assert.equal(document.scrollingElement.scrollTop, 213);
+    assert.deepEqual(focus, [{ preventScroll: true }]);
     assert.equal(bank.children[2], unresolved); assert.equal(unresolved.querySelector('input'), input); assert.equal(unresolved.querySelector('.mm-fader-hit'), cap);
     assert.equal(unresolved.dataset.unresolved, 'false'); assert.equal(unresolved.querySelector('.mm-strip-name').textContent, '<img>i.20');
     click(shortcuts.children[4]); assert.deepEqual(actions, ['7_group-Z', 'all']);
@@ -297,6 +306,44 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
     view?.destroy();
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
   }
+});
+
+test('Nudge preview shows each unequal or missing stereo level with labelled accessible readbacks', () => {
+  const document = documentFixture(), root = document.createElement('div'), content = document.createElement('main');
+  root.append(content);
+  const preview = mountNudgePreview(content);
+  const pair = (left, right) => [{ auxIndex: 8, position: left }, { auxIndex: 9, position: right }];
+  const master = { id: 'a.8', name: 'Spare', sides: pair(0, 1) };
+  const channel = { id: 'i.0@8', name: 'Vocals', sides: pair(undefined, 1) };
+  const render = () => preview.render({
+    selectedMix: master,
+    nudgePreview: { groups: [], expanded: { channels: [channel] } },
+  });
+  render();
+  const [masterValue, channelValue] = preview.panel.querySelectorAll('.mm-nudge-preview-value');
+  const [masterDescription, channelDescription] = preview.panel.querySelectorAll('.mm-sr-only');
+  assert.equal(masterValue.textContent, '−∞/+10.0 dB');
+  assert.equal(masterValue.dataset.split, 'true');
+  assert.equal(masterValue.attributes['aria-hidden'], 'true');
+  assert.equal(masterValue.title, 'AUX 9: −∞ dB / AUX 10: +10.0 dB');
+  assert.equal(masterDescription.textContent, masterValue.title);
+  assert.equal(channelValue.textContent, '—/+10.0 dB');
+  assert.equal(channelValue.title, 'AUX 9: Level unavailable / AUX 10: +10.0 dB');
+  assert.equal(channelDescription.textContent, channelValue.title);
+
+  master.sides = pair(0, 0);
+  channel.sides = pair(1, undefined);
+  render();
+  assert.equal(masterValue.textContent, '−∞ dB');
+  assert.equal(masterValue.dataset.split, 'false');
+  assert.equal(masterDescription.textContent, '−∞ dB');
+  assert.equal(channelValue.textContent, '+10.0/— dB');
+  assert.equal(channelDescription.textContent, 'AUX 9: +10.0 dB / AUX 10: Level unavailable');
+
+  channel.sides = pair(undefined, undefined);
+  render();
+  assert.equal(channelValue.textContent, '—/—');
+  assert.equal(channelDescription.textContent, 'AUX 9: Level unavailable / AUX 10: Level unavailable');
 });
 
 test('level gesture hooks commit once on cap release/double track tap or keyboard keyup, never single/swipe/input changes', () => {
@@ -434,6 +481,27 @@ test('group controls keep navigation separate, show a full-range loudest-member 
     assert.equal(bank.children[1].querySelector('input').disabled, false);
     assert.equal(bank.children[1].querySelector('.mm-value').textContent, positionDbText(0.4));
     assert.equal(bank.children[1].querySelector('.mm-pan-button'), undefined, 'F09-S07: no bottom group note text');
+
+    const renderGroups = () => view.render(projectGroupNavigation(base, profile, { view: 'groups' }));
+    const nudge = root.querySelector('.mm-open-nudge');
+    const readouts = () => root.querySelectorAll('.mm-nudge-preview-value').slice(1).map(node => node.textContent);
+    const faderReadouts = () => bank.children.map(strip => strip.querySelector('.mm-value').textContent);
+    control.pending = true;
+    control.groupReference = 0.55;
+    renderGroups();
+    root.emit('click', { target: { closest: selector => selector === 'button' ? nudge : null } });
+    assert.deepEqual(readouts(), [positionDbText(0.55), positionDbText(0.4)]);
+    assert.deepEqual(readouts(), faderReadouts());
+
+    control.selected = { kind: 'send', sourceId: 'i.0', auxIndex: 0 };
+    control.requestedValue = 0.65;
+    renderGroups();
+    assert.deepEqual(readouts(), [positionDbText(0.65), positionDbText(0.65)]);
+    assert.deepEqual(readouts(), faderReadouts());
+    control.pending = false;
+    renderGroups();
+    assert.deepEqual(readouts(), [positionDbText(0.4), positionDbText(0.4)]);
+    assert.deepEqual(readouts(), faderReadouts());
   } finally { view?.destroy(); for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } }
 });
 

@@ -2674,13 +2674,17 @@ body {
   color: var(--mm-nudge-accent);
   font-variant-numeric: tabular-nums;
 }
+#mixmate-iem-concept .mm-nudge-preview-value[data-split="true"] {
+  max-width: none;
+  font-size: clamp(.6rem, 2.8vw, .75rem);
+}
 #mixmate-iem-concept .mm-nudge-preview-row > .mm-nudge-preview-step:first-child {
   grid-area: minus;
 }
 #mixmate-iem-concept .mm-nudge-preview-row > .mm-nudge-preview-step:last-child {
   grid-area: plus;
 }
-@media (min-width: 700px) and (min-height: 600px) {
+@media (min-width: 700px) and (min-height: 600px), (min-width: 1000px) and (min-height: 500px) {
   #mixmate-iem-concept .mm-nudge-preview-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

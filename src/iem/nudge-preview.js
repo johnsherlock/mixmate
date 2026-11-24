@@ -1,10 +1,24 @@
 import { positionDbText } from './fader-scale.js';
 
 function receivedLevel({ sides, position }) {
-  if (sides?.length > 1 && (sides[0].position === undefined || sides.some(side => side.position !== sides[0].position))) {
-    return sides.map(side => `AUX ${side.auxIndex + 1} · ${positionDbText(side.position)}`).join(' / ');
+  const describe = level => level === '—' ? 'Level unavailable' : level;
+  if (sides?.length === 2) {
+    const [left, right] = sides;
+    const leftLevel = positionDbText(left.position);
+    const rightLevel = positionDbText(right.position);
+    if (leftLevel !== '—' && left.position === right.position) {
+      return { text: leftLevel, description: leftLevel, split: false };
+    }
+    const amounts = [leftLevel, rightLevel].map(level => level.replace(/ dB$/, ''));
+    const unit = leftLevel === '—' && rightLevel === '—' ? '' : ' dB';
+    return {
+      text: amounts.join('/') + unit,
+      description: `AUX ${left.auxIndex + 1}: ${describe(leftLevel)} / AUX ${right.auxIndex + 1}: ${describe(rightLevel)}`,
+      split: true,
+    };
   }
-  return positionDbText(position);
+  const text = positionDbText(position);
+  return { text, description: describe(text), split: false };
 }
 
 export function mountNudgePreview(content) {
@@ -51,6 +65,8 @@ export function mountNudgePreview(content) {
         const readout = element('div', 'mm-nudge-preview-readout');
         const name = element('strong', 'mm-nudge-preview-name');
         const value = element('span', 'mm-nudge-preview-value');
+        value.setAttribute('aria-hidden', 'true');
+        const description = element('span', 'mm-sr-only');
         const minus = element('button', 'mm-nudge-preview-step', '−');
         const plus = element('button', 'mm-nudge-preview-step', '+');
         for (const button of [minus, plus]) {
@@ -59,9 +75,9 @@ export function mountNudgePreview(content) {
         }
         // Preview buttons have only native press feedback. Their identities
         // are separate from the live fader gesture and nudge handlers.
-        readout.append(name, value);
+        readout.append(name, value, description);
         item.append(minus, readout, plus);
-        row = { item, name, value, minus, plus };
+        row = { item, name, value, description, minus, plus };
         rows.set(id, row);
       }
       if (list.children[index] !== row.item) list.insertBefore(row.item, list.children[index] || null);
@@ -71,12 +87,14 @@ export function mountNudgePreview(content) {
         row.minus.setAttribute('aria-label', `Preview lowering ${category} ${model.name}`);
         row.plus.setAttribute('aria-label', `Preview raising ${category} ${model.name}`);
       }
-      const level = receivedLevel(model);
-      if (row.value.textContent !== level) {
-        row.value.textContent = level;
-        row.value.title = level;
-        row.value.setAttribute('aria-label', level === '—' ? 'Level unavailable' : level);
+      const { text, description, split } = receivedLevel(model);
+      if (row.value.textContent !== text) row.value.textContent = text;
+      if (row.description.textContent !== description) {
+        row.value.title = description;
+        row.description.textContent = description;
       }
+      const splitState = String(split);
+      if (row.value.dataset.split !== splitState) row.value.dataset.split = splitState;
     }
   }
   return {

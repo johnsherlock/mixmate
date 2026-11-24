@@ -7,6 +7,7 @@ import { outputColour, overviewColour } from './theme.js';
 import { panDisplayText } from './pan-display.js';
 import { NUDGE_UP_DB, NUDGE_DOWN_DB } from './nudge-config.js';
 import { mountNudgePreview } from './nudge-preview.js';
+import { groupDisplayPosition } from './group-navigation.js';
 import { FADER_SCALE_FLOOR_DB, FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
@@ -46,7 +47,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const nudgeButton = element('button', 'mm-open-nudge', 'Nudge');
   nudgeButton.type = 'button';
   nudgeButton.setAttribute('aria-controls', nudgePreview.panel.id);
-  let nudgeModel, nudgeContext;
+  let nudgeModel, nudgeContext, faderScroll;
+  const pageScroller = () => document.fullscreenElement || document.scrollingElement;
 
   function closeNudge(restoreFocus = false) {
     if (nudgePreview.panel.hidden) return;
@@ -57,8 +59,12 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if (restoreFocus) {
       bankLayout();
       gestures.sync();
-      nudgeButton.focus?.();
+      nudgeButton.focus?.({ preventScroll: true });
+      bank.scrollLeft = faderScroll.bankLeft;
+      const page = pageScroller();
+      if (page) page.scrollTop = faderScroll.pageTop;
     }
+    faderScroll = undefined;
   }
   const nudgeKey = model => JSON.stringify([model.selectedMix.id, model.nudgePreview.profileId, model.nudgePreview.expanded?.id]);
 
@@ -362,6 +368,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         // non-editable. The session still refuses a group gesture it cannot
         // anchor (begin returns no token), so presentation grants no authority.
         const available = Boolean(control) && unitPosition(model.referencePosition);
+        const shown = groupDisplayPosition(model.groupId, selectedAux, model.referencePosition, control);
         if (strip.input) levelTargets.set(strip.input, target);
         strip.article.dataset.levelSelected = String(chosen);
         strip.article.dataset.unknown = String(!available);
@@ -372,15 +379,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           strip.input.dataset.group = model.groupId;
           strip.input.disabled = !(available && !(chosen && control.dispatching));
           strip.input.setAttribute('aria-label', `${model.name} group fader at the loudest member; one common Δ to every member; cap drag or arrow keys; changes are sent live while you drag`);
-          const reference = chosen && unitPosition(control?.groupReference) ? control.groupReference : unitPosition(model.referencePosition) ? model.referencePosition : 0;
-          if (preview?.input !== strip.input) strip.input.value = scaleText(reference);
+          if (preview?.input !== strip.input) strip.input.value = scaleText(unitPosition(shown) ? shown : 0);
           strip.unavailable.hidden = available;
         }
         // F09-S12 (user decision 2026-11-22): the readout is the loudest member's
         // displayed level (where the cap sits): received, or this owner's requested
         // common-delta preview while its gesture/echoes are live. It is not a
         // received group level or a hardware balance claim; "—" when unknown.
-        const shown = chosen && unitPosition(control?.groupReference) ? control.groupReference : model.referencePosition;
         const amount = available ? positionDbText(shown) : '—';
         if (strip.output.textContent !== amount) strip.output.textContent = amount;
         strip.output.setAttribute('title', available ? `Loudest member of ${model.name} (cap position); one common Δ moves every member` : 'Group level unavailable');
@@ -521,10 +526,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       gestures.cancel();
       if (!nudgeModel) return;
       nudgeContext = nudgeKey(nudgeModel);
+      const page = pageScroller();
+      faderScroll = { bankLeft: bank.scrollLeft, pageTop: page?.scrollTop ?? 0 };
       nudgePreview.render(nudgeModel);
       root.dataset.nudgeOpen = 'true';
       nudgePreview.panel.hidden = false;
-      nudgePreview.back.focus?.();
+      nudgePreview.back.focus?.({ preventScroll: true });
+      if (page) page.scrollTop = 0;
       return;
     }
     if (button === nudgePreview.back) { closeNudge(true); return; }
