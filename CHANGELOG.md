@@ -2,6 +2,10 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
+## 0.11.0 — 2026-11-24 — F08-S06
+
+- Added an in-app Nudge design preview with large level buttons for the AUX master, groups and the expanded group’s channels. Preview taps leave desk levels unchanged.
+
 ## 0.10.1 — 2026-11-22 — F09-S13 (this PR)
 
 - Navigation order: **Create Group / Edit Group** now sits immediately right of **All Groups** (All Mixes, All Groups, Create/Edit Group, All Channels, Mix EQ). Behaviour is unchanged and nothing new is sent to the desk.

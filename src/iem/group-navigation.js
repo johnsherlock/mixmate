@@ -27,6 +27,19 @@ export function groupReferencePosition(group, sources, control) {
   const values = group.members.map(id => byId.has(id) ? displayedMemberPosition(byId.get(id), control) : null).filter(unit);
   return values.length ? Math.max(...values) : null;
 }
+export function groupDisplayPosition(groupId, auxIndex, referencePosition, control) {
+  const selected = control?.selected;
+  return selected?.kind === 'group' && selected.groupId === groupId && selected.auxIndex === auxIndex && unit(control.groupReference)
+    ? control.groupReference : referencePosition;
+}
+function groupSources(group, sources, aux) {
+  const byId = new Map(sources.map(source => [source.sourceId, source]));
+  return group.members.map(id => byId.get(id) || {
+    id: `${id}@${aux}`, sourceId: id, unresolved: true,
+    name: `${sourceLabel(id)} · Unresolved`, detail: 'Not observed for this AUX; retained group member',
+    panText: 'Pan unavailable', stateText: 'No received send state',
+  });
+}
 function master(group, profileId, aux, control, sources) {
   const controls = Boolean(control);
   return { referencePosition: groupReferencePosition(group, sources, control), id: `group:${profileId}:${group.id}@${aux}`, renderKey: `group:${profileId}:${group.id}`, kind: 'group', groupId: group.id, name: group.name,
@@ -39,11 +52,18 @@ export function projectGroupNavigation(base, profile, requested) {
   const result = { ...base, groups: groups.map(group => ({ id: group.id, name: group.name })), ...navigation, showAuxMaster: !navigation.expandedGroupId };
   if (navigation.view === 'channels') return result;
   const group = groups.find(group => group.id === navigation.expandedGroupId);
-  if (!group) return { ...result, sources: groups.map(group => master(group, profile.id, base.selectedAux, base.control, base.sources)) };
-  const byId = new Map(base.sources.map(source => [source.sourceId, source]));
-  return { ...result, sources: [master(group, profile.id, base.selectedAux, base.control, base.sources), ...group.members.map(id => byId.get(id) || {
-    id: `${id}@${base.selectedAux}`, sourceId: id, unresolved: true,
-    name: `${sourceLabel(id)} · Unresolved`, detail: 'Not observed for this AUX; retained group member',
-    panText: 'Pan unavailable', stateText: 'No received send state',
-  })] };
+  const channels = group ? groupSources(group, base.sources, base.selectedAux) : [];
+  const masters = groups.map(item => master(item, profile.id, base.selectedAux, base.control, base.sources));
+  return {
+    ...result,
+    sources: group ? [...masters.filter(item => item.groupId === group.id), ...channels] : masters,
+    nudgePreview: {
+      profileId: profile?.id,
+      groups: masters.map(({ groupId, name, referencePosition }) => ({
+        id: groupId, name,
+        position: referencePosition === null ? null : groupDisplayPosition(groupId, base.selectedAux, referencePosition, base.control),
+      })),
+      expanded: group ? { id: group.id, name: group.name, channels } : null,
+    },
+  };
 }

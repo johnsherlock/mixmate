@@ -1,4 +1,4 @@
-# Orchestrator handoff — authorized batch complete, 2026-11-24
+# Orchestrator handoff — F08 batch in progress, 2026-11-24
 
 Before new work, read:
 - the [current product/state handoff](iem-integration-handoff.md) (replaced the stale early-baseline file on 2026-11-24);
@@ -8,11 +8,20 @@ Before new work, read:
 - the assigned story and its feature;
 - the current contracts.
 
-This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the PR #71 merge `02b158c` (docs-only current-state handoff on top of F09-S13 `95b612b`; app 0.10.1).** Verify it on remote main before relying on this text.
+This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the PR #72 merge `0a6e801` (F08-S01 user sign-off documentation; app 0.10.1).** Verify it on remote main before relying on this text.
 
-## State
+## Current authorized batch
 
-The user-authorized batches (**F02-S05 → F07-S01 → F07-S02**, the user-requested F09-S11, and the remaining F07 order **F07-S06 → F07-S03 → F07-S04**) are **complete**. All of F07 (S01–S06) is merged. **Nothing further is authorized.**
+The user authorized [F08-S06](stories/F08-S06.md) → [F08-S07](stories/F08-S07.md) → [F08-S04](stories/F08-S04.md) → [F08-S05](stories/F08-S05.md) on 2026-11-24. Each story requires final-head approval, passing CI and a confirmed merge before the next starts. The batch ends with a reviewed repository handoff. [F08-S02](stories/F08-S02.md) is explicitly excluded.
+
+- **F08-S06:** the user-approved visual Nudge preview is in [PR #73](https://github.com/johnsherlock/mixmate/pull/73) on `codex/f08-s06-nudge-preview` from `0a6e801` (app 0.11.0). Review fixes cover the compact stereo readout, portrait scroll restoration, short tablet landscape and group readout parity. Final-head review, CI and merge confirmation are pending. The delivery contains the preview and the linked planning documents for the three queued stories.
+- **Verification:** local install, 605 tests and production build passed. Chromium viewport emulation with a synthetic mixer model verified portrait and landscape on phone and tablet viewports, split stereo readouts, button behavior and Faders scroll restoration. See the [story verification](stories/F08-S06.md#delivery-verification) for sizes and limits. This preview check used no physical device or desk.
+- **Delegation:** Opus and Sonnet were unavailable in this environment. The available Codex orchestrator and one Codex story agent handled F08-S06 in an isolated clone. The review and CI gate still applies.
+- **Next eligible story:** F08-S07 once the F08-S06 merge is confirmed. F08-S04 and F08-S05 are queued behind it.
+
+## Prior state
+
+The user-authorized batches (**F02-S05 → F07-S01 → F07-S02**, the user-requested F09-S11, and the remaining F07 order **F07-S06 → F07-S03 → F07-S04**) are **complete**. All of F07 (S01–S06) is merged.
 
 | Story | PR | Merge commit | Final approved head |
 | --- | --- | --- | --- |
@@ -34,7 +43,7 @@ The user-authorized batches (**F02-S05 → F07-S01 → F07-S02**, the user-reque
 - **Merged:** [F07-S05](stories/F07-S05.md) automatic online updates, install prompt and visible versioning (0.6.0), [PR #63](https://github.com/johnsherlock/mixmate/pull/63), merge `5cd755c` (2026-11-21 11:51 UTC), final head `3715737`, record https://github.com/johnsherlock/mixmate/pull/63#issuecomment-7062173207. It had no dependency on F07-S03/S04; the exception is recorded in [follow-ups](user-follow-up.md). **Merged:** [F07-S06](stories/F07-S06.md) install prompt fallback (0.6.1), [PR #64](https://github.com/johnsherlock/mixmate/pull/64), merge `4c6c574`, final head `3a516a3`. Version policy: [orchestration](orchestration.md#versioning-policy-f07-s05).
 - **Merged:** [F07-S03](stories/F07-S03.md) multitrack recording status and control (0.7.0), [PR #65](https://github.com/johnsherlock/mixmate/pull/65), merge `901a342`, final head `02bf217`; live start/stop acceptance **parked** pending a USB drive in the desk (accepted P3s: stop requires `rec.busy` < 0.5; a stale `rec.time` may flash at start). **Merged:** [F07-S04](stories/F07-S04.md) native UI access (0.8.0), [PR #66](https://github.com/johnsherlock/mixmate/pull/66), merge `5c6fdc8`, final head `bae56a2`, review/live record https://github.com/johnsherlock/mixmate/pull/66#issuecomment-7064454470. The authorized F07 order is complete; the remaining F07 item is F07-S03 live start/stop acceptance, **parked** until a USB drive is in the desk.
 - **Drafted, not authorized:** [F01-S05](stories/F01-S05.md) (side-loaded Android APK, now also including an APK-only full-screen overlay of the desk's native UI behind the Native button, user decision 2026-11-21; open decisions for the user: application ID, APK contents, minimum Android version, overlay implementation (iframe vs plugin) and connection behaviour, signing key and first Release; planned ADR-0010).
-- **No implementation is authorized until the user says so.** Backlog priority alone does not authorize execution.
+- The current authorized scope is recorded above. Backlog priority alone does not authorize execution.
 
 ## Delegation (user rule, 2026-11-21)
 

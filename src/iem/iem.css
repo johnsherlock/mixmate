@@ -2473,6 +2473,10 @@ body {
    right-aligned (justify-content, not an auto margin, so every row aligns). */
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches{display:flex;flex:1 1 auto;min-width:0;flex-wrap:wrap;gap:4px;overflow:visible;justify-content:flex-end;align-items:center}
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches>button:first-child{margin-inline-start:0}
+#mixmate-iem-concept[data-mode="live"] .mm-group-switches > .mm-open-nudge {
+  border-color: var(--mm-mix-color);
+  color: var(--mm-mix-color);
+}
 #mixmate-iem-concept[data-mode="live"] .mm-group-switches>button{flex:0 0 auto;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 /* A zero flex basis prevents long labels forcing another compact nav row. */
 #mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-navigation{flex-wrap:nowrap}
@@ -2581,6 +2585,122 @@ body {
 #mixmate-iem-concept[data-mode="live"] .mm-group > .mm-group-control-note {display:none}
 #mixmate-iem-concept[data-mode="live"][data-ultra-compact="true"] .mm-channel .mm-pan-button[data-open-pan] {inset:auto 3px 2px 3px;width:auto;height:22px;min-height:22px;max-height:22px;line-height:18px;padding:1px 3px;font-size:10px}
 #mixmate-iem-concept .mm-danger{border-color:#b86a62;background:#4a2622;color:#f4c4bc}#mixmate-iem-concept .mm-group-delete-confirm{flex-wrap:wrap;margin-top:0}#mixmate-iem-concept .mm-group-delete-confirm>p{flex:1 1 100%;margin:0;overflow-wrap:anywhere}#mixmate-iem-concept .mm-group-delete-confirm[hidden],#mixmate-iem-concept .mm-group-editor-bar>button[hidden]{display:none}
+#mixmate-iem-concept[data-nudge-open="true"] :is(.mm-content, .mm-navigation, .mm-live-meter-legend) {
+  display: none;
+}
+#mixmate-iem-concept .mm-nudge-preview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+#mixmate-iem-concept .mm-nudge-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 6px clamp(8px, 2vw, 24px);
+  background: #252a30;
+  border-bottom: 1px solid var(--mm-edge);
+}
+#mixmate-iem-concept .mm-nudge-preview-head button {
+  min-height: 44px;
+}
+#mixmate-iem-concept .mm-nudge-preview h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--mm-mix-color);
+}
+#mixmate-iem-concept .mm-nudge-preview-note {
+  margin: 0;
+  color: var(--mm-muted);
+  font-size: .78rem;
+}
+#mixmate-iem-concept .mm-nudge-preview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px clamp(8px, 2vw, 24px) 16px;
+}
+#mixmate-iem-concept .mm-nudge-preview-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  list-style: none;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0;
+}
+#mixmate-iem-concept .mm-nudge-preview-row {
+  --mm-nudge-accent: #b9c6d2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas: "readout readout" "minus plus";
+  align-items: stretch;
+  gap: 4px;
+  min-height: 62px;
+  border: 1px solid var(--mm-edge);
+  border-top: 2px solid var(--mm-nudge-accent);
+  border-radius: 5px;
+  background: var(--mm-panel);
+  padding: 4px;
+}
+#mixmate-iem-concept .mm-nudge-preview-row[data-kind="aux"] {
+  --mm-nudge-accent: #e5c97a;
+}
+#mixmate-iem-concept .mm-nudge-preview-row[data-kind="group"] {
+  --mm-nudge-accent: #7ec8ba;
+}
+#mixmate-iem-concept .mm-nudge-preview-readout {
+  grid-area: readout;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 2px;
+  white-space: nowrap;
+}
+#mixmate-iem-concept .mm-nudge-preview-readout :is(.mm-nudge-preview-name, .mm-nudge-preview-value) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: .75rem;
+}
+#mixmate-iem-concept .mm-nudge-preview-value {
+  flex: 0 0 auto;
+  max-width: 68%;
+  color: var(--mm-nudge-accent);
+  font-variant-numeric: tabular-nums;
+}
+#mixmate-iem-concept .mm-nudge-preview-value[data-split="true"] {
+  max-width: none;
+  font-size: clamp(.6rem, 2.8vw, .75rem);
+}
+#mixmate-iem-concept .mm-nudge-preview-row > .mm-nudge-preview-step:first-child {
+  grid-area: minus;
+}
+#mixmate-iem-concept .mm-nudge-preview-row > .mm-nudge-preview-step:last-child {
+  grid-area: plus;
+}
+@media (min-width: 700px) and (min-height: 600px), (min-width: 1000px) and (min-height: 500px) {
+  #mixmate-iem-concept .mm-nudge-preview-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+#mixmate-iem-concept button.mm-nudge-preview-step {
+  padding: 0;
+  min-height: 52px;
+  touch-action: manipulation;
+  font-size: 1.85rem;
+  line-height: 1;
+}
+#mixmate-iem-concept button.mm-nudge-preview-step:active {
+  border-color: var(--mm-nudge-accent);
+  background: #20262b;
+  color: var(--mm-nudge-accent);
+}
 /* F06-S04 live AUX GEQ view: a sibling of .mm-content so level gestures never own its controls. */
 #mixmate-iem-concept[data-mode="live"] .mm-live-eq{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;padding:7px 10px 8px;overflow:auto}
 #mixmate-iem-concept[data-mode="live"][data-eq-open="true"] .mm-content,#mixmate-iem-concept[data-mode="live"][data-eq-open="true"] .mm-live-meter-legend{display:none}

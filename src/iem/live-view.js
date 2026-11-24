@@ -6,6 +6,8 @@ import { sourceLabel } from './live-provider.js';
 import { outputColour, overviewColour } from './theme.js';
 import { panDisplayText } from './pan-display.js';
 import { NUDGE_UP_DB, NUDGE_DOWN_DB } from './nudge-config.js';
+import { mountNudgePreview } from './nudge-preview.js';
+import { groupDisplayPosition } from './group-navigation.js';
 import { FADER_SCALE_FLOOR_DB, FADER_SCALE_KEY_STEP_DB, FADER_SCALE_MIN, FADER_SCALE_POINTER_STEP_DB, FADER_SCALE_TICKS, FADER_SCALE_TOP_DB, positionDbText, positionToScale, scaleTickPercent, scaleToPosition } from './fader-scale.js';
 
 // Provider/mixer strings are always text. Keyed inputs/caps and bank containers
@@ -41,6 +43,30 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   $('.mm-rec-state').textContent = 'Recording status unavailable';
   const shortcuts = $('.mm-group-switches'), localTabs = $('.mm-local-tabs'), editButton = $('[data-action="edit-groups"]');
   const shortcutNodes = new Map(), levelTargets = new WeakMap();
+  const nudgePreview = mountNudgePreview(content);
+  const nudgeButton = element('button', 'mm-open-nudge', 'Nudge');
+  nudgeButton.type = 'button';
+  nudgeButton.setAttribute('aria-controls', nudgePreview.panel.id);
+  let nudgeModel, nudgeContext, faderScroll;
+  const pageScroller = () => document.fullscreenElement || document.scrollingElement;
+
+  function closeNudge(restoreFocus = false) {
+    if (nudgePreview.panel.hidden) return;
+    nudgePreview.panel.hidden = true;
+    delete root.dataset.nudgeOpen;
+    nudgeContext = undefined;
+    nudgePreview.reset();
+    if (restoreFocus) {
+      bankLayout();
+      gestures.sync();
+      nudgeButton.focus?.({ preventScroll: true });
+      bank.scrollLeft = faderScroll.bankLeft;
+      const page = pageScroller();
+      if (page) page.scrollTop = faderScroll.pageTop;
+    }
+    faderScroll = undefined;
+  }
+  const nudgeKey = model => JSON.stringify([model.selectedMix.id, model.nudgePreview.profileId, model.nudgePreview.expanded?.id]);
 
   let control = null, preview = null, selectedAux = null, bankModels = [];
   // Detail models are keyed by strip article; Details buttons exist only with ?debug.
@@ -109,7 +135,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     // F09-S12: All Groups sits immediately left of All Channels; it is the
     // same navigation as collapsing the expanded group and writes nothing.
     // F09-S13: the existing Create/Edit Group node (never recreated) sits immediately right of All Groups.
-    const choices = [...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })), { key: 'all-groups', name: 'All Groups', mode: 'groups' }, ...(editButton && selected ? [{ key: 'edit-groups', node: editButton }] : []), { key: 'channels', name: 'All Channels', mode: 'channels' }];
+    const choices = [
+      ...(nudgeModel ? [{ key: 'nudge', node: nudgeButton }] : []),
+      ...(model.groups || []).map(group => ({ key: `group:${group.id}`, name: group.name, id: group.id })),
+      { key: 'all-groups', name: 'All Groups', mode: 'groups' },
+      ...(editButton && selected ? [{ key: 'edit-groups', node: editButton }] : []),
+      { key: 'channels', name: 'All Channels', mode: 'channels' },
+    ];
+    if (!nudgeModel && nudgeButton.parentElement) nudgeButton.remove();
     const keys = new Set(choices.map(choice => choice.key));
     for (const [key, button] of shortcutNodes) if (!keys.has(key)) { button.remove(); shortcutNodes.delete(key); }
     for (const [index, choice] of choices.entries()) {
@@ -335,6 +368,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
         // non-editable. The session still refuses a group gesture it cannot
         // anchor (begin returns no token), so presentation grants no authority.
         const available = Boolean(control) && unitPosition(model.referencePosition);
+        const shown = groupDisplayPosition(model.groupId, selectedAux, model.referencePosition, control);
         if (strip.input) levelTargets.set(strip.input, target);
         strip.article.dataset.levelSelected = String(chosen);
         strip.article.dataset.unknown = String(!available);
@@ -345,15 +379,13 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
           strip.input.dataset.group = model.groupId;
           strip.input.disabled = !(available && !(chosen && control.dispatching));
           strip.input.setAttribute('aria-label', `${model.name} group fader at the loudest member; one common Δ to every member; cap drag or arrow keys; changes are sent live while you drag`);
-          const reference = chosen && unitPosition(control?.groupReference) ? control.groupReference : unitPosition(model.referencePosition) ? model.referencePosition : 0;
-          if (preview?.input !== strip.input) strip.input.value = scaleText(reference);
+          if (preview?.input !== strip.input) strip.input.value = scaleText(unitPosition(shown) ? shown : 0);
           strip.unavailable.hidden = available;
         }
         // F09-S12 (user decision 2026-11-22): the readout is the loudest member's
         // displayed level (where the cap sits): received, or this owner's requested
         // common-delta preview while its gesture/echoes are live. It is not a
         // received group level or a hardware balance claim; "—" when unknown.
-        const shown = chosen && unitPosition(control?.groupReference) ? control.groupReference : model.referencePosition;
         const amount = available ? positionDbText(shown) : '—';
         if (strip.output.textContent !== amount) strip.output.textContent = amount;
         strip.output.setAttribute('title', available ? `Loudest member of ${model.name} (cap position); one common Δ moves every member` : 'Group level unavailable');
@@ -450,6 +482,9 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     gestureWas = Boolean(control?.gestureActive);
     if (attention !== attentionText) { const previous = attentionText; attentionText = attention; if (attention) onMessage(attention); else onClearMessage(previous); }
     const selected = model.selectedAux !== undefined && model.selectedAux !== null;
+    nudgeModel = selected && model.view === 'groups' && model.selectedMix && model.nudgePreview ? model : null;
+    if (!nudgeModel || nudgeContext !== nudgeKey(nudgeModel)) closeNudge();
+    else nudgePreview.render(nudgeModel);
     root.dataset.auxView = String(selected);
     root.style.setProperty('--mm-mix-color', model.selectedMix ? outputColour(model.selectedMix.themeIndex ?? model.selectedMix.auxIndex) : overviewColour);
     auxSelected = selected;
@@ -487,6 +522,20 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   function click(event) {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
+    if (button === nudgeButton && nudgeModel && root.dataset.eqOpen !== 'true') {
+      gestures.cancel();
+      if (!nudgeModel) return;
+      nudgeContext = nudgeKey(nudgeModel);
+      const page = pageScroller();
+      faderScroll = { bankLeft: bank.scrollLeft, pageTop: page?.scrollTop ?? 0 };
+      nudgePreview.render(nudgeModel);
+      root.dataset.nudgeOpen = 'true';
+      nudgePreview.panel.hidden = false;
+      nudgePreview.back.focus?.({ preventScroll: true });
+      if (page) page.scrollTop = 0;
+      return;
+    }
+    if (button === nudgePreview.back) { closeNudge(true); return; }
     if (swallow.has(button)) { swallow.delete(button); event.preventDefault?.(); return; }
     if (detailButtons.has(button)) { gestures.cancel(); onOpenDetail(detailModels.get(detailButtons.get(button))); return; }
     if (button.dataset.openPan !== undefined) { gestures.cancel(); onOpenPan({ sourceId: button.dataset.openPan, auxIndex: Number(button.dataset.panAux) }); }
@@ -510,6 +559,11 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   // auto-repeat, and swallow the click a Space release would fire after a held repeat.
   const repeated = new WeakSet();
   function keydown(event) {
+    if (event.key === 'Escape' && !nudgePreview.panel.hidden && nudgePreview.panel.contains(event.target)) {
+      event.preventDefault();
+      closeNudge(true);
+      return;
+    }
     const button = event.target?.closest?.('button');
     if (!button || button.dataset.nudge === undefined) return;
     if (event.repeat) { event.preventDefault(); repeated.add(button); }
@@ -543,6 +597,6 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     },
     preferences(preferences) { root.dataset.preferredOrientation = preferences.orientation; root.dataset.showMeters = String(preferences.showMeters); layout.apply(); },
     clear() { gestures.cancel(); render({ status: 'Not connected — no received mixer state', mixes: [] }); },
-    destroy() { meterLegend.remove(); root.removeEventListener('click', click); root.removeEventListener('keydown', keydown); root.removeEventListener('keyup', keyup); gestures.destroy(); layout.destroy(); stopClock(); },
+    destroy() { closeNudge(); nudgePreview.panel.remove(); nudgeButton.remove(); meterLegend.remove(); root.removeEventListener('click', click); root.removeEventListener('keydown', keydown); root.removeEventListener('keyup', keyup); gestures.destroy(); layout.destroy(); stopClock(); },
   };
 }
