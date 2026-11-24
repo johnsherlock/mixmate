@@ -47,14 +47,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const nudgeButton = element('button', 'mm-open-nudge', 'Nudge');
   nudgeButton.type = 'button';
   nudgeButton.setAttribute('aria-controls', nudgePreview.panel.id);
-  let nudgeModel, nudgeContext, faderScroll;
+  let nudgeModel, nudgeOpening, faderScroll;
   const pageScroller = () => document.fullscreenElement || document.scrollingElement;
 
   function closeNudge(restoreFocus = false) {
     if (nudgePreview.panel.hidden) return;
     nudgePreview.panel.hidden = true;
     delete root.dataset.nudgeOpen;
-    nudgeContext = undefined;
+    nudgeOpening = undefined;
     nudgePreview.reset();
     if (restoreFocus) {
       bankLayout();
@@ -68,7 +68,8 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   }
   const nudgeKey = model => model.nudgeViewKey ?? JSON.stringify([model.selectedMix.id, model.nudgePreview.profileId, model.nudgePreview.expanded?.id]);
 
-  const nudgeOpen = key => !nudgePreview.panel.hidden && nudgeModel && nudgeContext === key && root.dataset.eqOpen !== 'true';
+  const nudgeOpen = opening => Boolean(opening && opening === nudgeOpening && !nudgePreview.panel.hidden &&
+    nudgeModel && opening.key === nudgeKey(nudgeModel) && root.dataset.eqOpen !== 'true');
 
   let control = null, preview = null, selectedAux = null, bankModels = [];
   // Detail models are keyed by strip article; Details buttons exist only with ?debug.
@@ -474,7 +475,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if (attention !== attentionText) { const previous = attentionText; attentionText = attention; if (attention) onMessage(attention); else onClearMessage(previous); }
     const selected = model.selectedAux !== undefined && model.selectedAux !== null;
     nudgeModel = selected && model.view === 'groups' && model.selectedMix && model.nudgePreview ? model : null;
-    if (!nudgeModel || nudgeContext !== nudgeKey(nudgeModel)) closeNudge();
+    if (!nudgeModel || nudgeOpening?.key !== nudgeKey(nudgeModel)) closeNudge();
     else nudgePreview.render(nudgeModel);
     root.dataset.auxView = String(selected);
     root.style.setProperty('--mm-mix-color', model.selectedMix ? outputColour(model.selectedMix.themeIndex ?? model.selectedMix.auxIndex) : overviewColour);
@@ -516,7 +517,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     if (button === nudgeButton && nudgeModel && nudgePreview.panel.hidden && root.dataset.eqOpen !== 'true') {
       gestures.cancel();
       if (!nudgeModel) return;
-      nudgeContext = nudgeKey(nudgeModel);
+      nudgeOpening = Object.freeze({ key: nudgeKey(nudgeModel) });
       const page = pageScroller();
       faderScroll = { bankLeft: bank.scrollLeft, pageTop: page?.scrollTop ?? 0 };
       nudgePreview.render(nudgeModel);
@@ -527,11 +528,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       return;
     }
     if (button === nudgePreview.back) { closeNudge(true); return; }
-    if (swallow.has(button)) { swallow.delete(button); event.preventDefault?.(); return; }
     const target = nudgePreview.target(button);
     if (target) {
-      if (nudgeOpen(nudgeContext)) {
-        onNudgeLevel(target, nudgeContext, button.dataset.nudge === 'up');
+      if (nudgeOpen(nudgeOpening)) {
+        onNudgeLevel(target, nudgeOpening, button.dataset.nudge === 'up');
       }
       return;
     }
@@ -553,9 +553,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
       } catch { $('.mm-feedback').textContent = 'Fullscreen unavailable; use the installed app.'; onMessage('Fullscreen unavailable; use the installed app.'); }
     }
   }
-  // Holding Enter/Space on a nudge button must never stack gestures: ignore keyboard
-  // auto-repeat, and swallow the click a Space release would fire after a held repeat.
-  const repeated = new WeakSet();
+  // Enter activates on the first keydown. Space activates on keyup, so cancel
+  // that release if the press repeated. Later clicks use their normal defaults.
+  const repeatedSpace = new WeakSet();
+  const isSpace = event => event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space';
   function keydown(event) {
     if (event.key === 'Escape' && !nudgePreview.panel.hidden && nudgePreview.panel.contains(event.target)) {
       event.preventDefault();
@@ -564,13 +565,17 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     }
     const button = event.target?.closest?.('button');
     if (!button || button.dataset.nudge === undefined) return;
-    if (event.repeat) { event.preventDefault(); repeated.add(button); }
+    const space = isSpace(event);
+    if (space) {
+      if (event.repeat) repeatedSpace.add(button);
+      else repeatedSpace.delete(button);
+    }
+    if (event.repeat && (space || event.key === 'Enter')) event.preventDefault();
   }
   function keyup(event) {
     const button = event.target?.closest?.('button');
-    if (button && repeated.has(button)) { repeated.delete(button); if (event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space') { event.preventDefault(); swallow.add(button); } }
+    if (button && isSpace(event) && repeatedSpace.delete(button)) event.preventDefault();
   }
-  const swallow = new WeakSet();
   root.addEventListener('keydown', keydown); root.addEventListener('keyup', keyup);
   root.addEventListener('click', click);
   return {

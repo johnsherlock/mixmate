@@ -68,7 +68,7 @@ async function fixture() {
   const view = mountReadOnlyView(root, {
     onToggleGroup: id => controller.toggleGroup(id), onAllGroups: () => controller.allGroups(),
     nudgeUnavailable: target => session.levelTargetUnavailableReason(target),
-    onNudgeLevel: (target, key, up) => controller.nudgeLevel(target, key, up),
+    onNudgeLevel: (target, opening, up) => controller.nudgeLevel(target, opening, up),
   });
   ui = createLiveConnectionUI(root, { levels: true, dialogOwner });
   controller = mountLiveController({ session, repository, ui, view, window, document });
@@ -259,17 +259,39 @@ test('Nudge rejects modal and EQ overlays and handles a modal opened during gest
   } finally { await app.close(); }
 });
 
-test('Nudge keyboard auto-repeat and Space release do not add a second typed step', async () => {
+test('Nudge cancels the old gesture if its screen closes and reopens in the same context during begin', async () => {
+  const app = await fixture();
+  try {
+    app.open();
+    let reopened = false;
+    const stop = app.session.subscribe(snapshot => {
+      if (!snapshot.control.gestureActive || reopened) return;
+      reopened = true;
+      app.back();
+      app.open();
+    });
+    app.click(app.button('SPARE', 'up'));
+    stop();
+    assert.equal(reopened, true);
+    assert.deepEqual(app.writes(), []);
+    assert.equal(app.session.snapshot().control.gestureActive, false);
+    app.click(app.button('SPARE', 'up'));
+    assert.equal(app.writes().length, 2, 'a deliberate tap from the new opening works');
+  } finally { await app.close(); }
+});
+
+test('Nudge cancels a held Space, then accepts the next deliberate press', async () => {
   const app = await fixture();
   try {
     app.open();
     const button = app.button('SPARE', 'up');
-    app.click(button);
     let prevented = 0;
+    button.emit('keydown', { key: ' ', repeat: false, preventDefault() { prevented++; } });
     button.emit('keydown', { key: ' ', repeat: true, preventDefault() { prevented++; } });
     button.emit('keyup', { key: ' ', preventDefault() { prevented++; } });
-    app.click(button);
     assert.equal(prevented, 2);
-    assert.equal(app.writes().length, 2);
+    assert.deepEqual(app.writes(), [], 'preventing keyup cancels the native release click');
+    app.click(button);
+    assert.equal(app.writes().length, 2, 'the next deliberate tap writes once');
   } finally { await app.close(); }
 });

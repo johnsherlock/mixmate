@@ -37,11 +37,11 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - Live UI: `live-entry.js` (entry), `live-controller.js` (wiring, connect, rigs), `live-provider.js` / `live-view.js` / `live-shell.js` / `shell.js` (projection and rendering), `group-navigation.js`, `group-editor*.js`, `eq-controls.js`, `pan-controls.js`, `snapshot-controls.js`, `recording-controls.js`, `diagnostics.js`, `native-ui.js`, `auto-connect.js`, `updates.js`, `install.js`, `entry-offline.js`, `fader-scale.js`, `fader-law.js`, `gestures.js`, `nudge-config.js`. The Demo uses `demo-*.js` and must stay isolated.
 - `src/settings.js` is the v3 device-local settings repository (rigs `{ id, name, groups, navigation }`, known addresses, preferences); `src/offline.js`, `src/sw-template.js` and `scripts/build-sw.js` produce the precache worker.
 - Tests (`tests/`, Node test runner) use **fake mixer transports only**; no automated test writes to a real desk.
-- Build and checks: Node 24 in CI; `npm ci`, `npm test` (611 passing in the F08-S07 candidate), `npm run build` (emits the four entries and generates the precache). `npm run dev` has no offline worker; use `npm run build` then `npm run preview` for production/offline QA. Do not hand-edit `dist/`.
+- Build and checks: Node 24 in CI; `npm ci`, `npm test` (612 passing in the F08-S07 candidate), `npm run build` (emits the four entries and generates the precache). `npm run dev` has no offline worker; use `npm run build` then `npm run preview` for production/offline QA. Do not hand-edit `dist/`.
 
 ## Testing status
 
-- Automated: 611 tests pass using fake mixer transports; the 0.12.0 build passes with an 18-asset precache.
+- Automated: 612 tests pass using fake mixer transports; the 0.12.0 build passes with an 18-asset precache.
 - **User-reported device evidence (2026-11-24): the user has done extensive testing on real phones and tablets and reports that it is all working very well.** This is a user report, not a recorded checklist.
 - **[F08-S01](stories/F08-S01.md) (the formal release gate) was signed off by the user on 2026-11-24** on the basis of their own real phone/tablet testing of app 0.10.1 (a user sign-off, not a waiver). The individual matrix rows (devices, versions, both rigs, cold offline launch, sleep/lock, update flow, per-control checks) were not recorded in the repo and were not observed by the orchestrator. iOS/iPadOS coverage is not recorded. Carried exceptions are listed under open items and in the [story](stories/F08-S01.md#sign-off--2026-11-24). Future device claims still need evidence; see the [device checklist](device-checks.md).
 

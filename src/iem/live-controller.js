@@ -139,11 +139,11 @@ export function mountLiveController({ session, repository, view, ui, document = 
     return JSON.stringify([contextRevision, selectedAux, view, expandedGroupId, received, name, boundProfileId, definition()?.groups]);
   }
 
-  function nudgeLevel(target, viewKey, up) {
+  function nudgeLevel(target, opening, up) {
     const current = () => {
       const snapshot = session.snapshot();
-      return !destroyed && !document.hidden && !ui.visible?.() && !ui.dialogOwner?.active() && view.nudgeOpen(viewKey) &&
-        fullyReady(snapshot) && target.auxIndex === selectedAux && nudgeViewKey(snapshot) === viewKey;
+      return !destroyed && !document.hidden && !ui.visible?.() && !ui.dialogOwner?.active() && view.nudgeOpen(opening) &&
+        fullyReady(snapshot) && target.auxIndex === selectedAux && nudgeViewKey(snapshot) === opening.key;
     };
     const navigation = localNavigation(), groups = definition()?.groups || [];
     if (navigation.view !== 'groups' || !current()) return;
