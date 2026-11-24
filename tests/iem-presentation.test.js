@@ -4,7 +4,7 @@ import { createDemoProvider } from '../src/iem/demo-provider.js';
 import { createEmptyLiveProvider } from '../src/iem/live-provider.js';
 import { installFaderGestures } from '../src/iem/gestures.js';
 import { mountReadOnlyView, debugFlag } from '../src/iem/live-view.js';
-import { mountNudgePreview } from '../src/iem/nudge-preview.js';
+import { mountNudgeView } from '../src/iem/nudge-preview.js';
 import { createReadOnlySession } from '../src/iem/live-session.js';
 import { projectLiveState } from '../src/iem/live-provider.js';
 import { projectGroupNavigation } from '../src/iem/group-navigation.js';
@@ -311,7 +311,7 @@ test('group navigation keeps ordered unresolved strips, literal shortcuts and st
 test('Nudge preview shows each unequal or missing stereo level with labelled accessible readbacks', () => {
   const document = documentFixture(), root = document.createElement('div'), content = document.createElement('main');
   root.append(content);
-  const preview = mountNudgePreview(content);
+  const preview = mountNudgeView(content);
   const pair = (left, right) => [{ auxIndex: 8, position: left }, { auxIndex: 9, position: right }];
   const master = { id: 'a.8', name: 'Spare', sides: pair(0, 1) };
   const channel = { id: 'i.0@8', name: 'Vocals', sides: pair(undefined, 1) };

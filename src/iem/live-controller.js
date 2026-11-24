@@ -133,6 +133,42 @@ export function mountLiveController({ session, repository, view, ui, document = 
   };
   const contextListeners = new Set();
   const names = rows => rows.map(source => ({ sourceId: source.sourceId, name: source.name }));
+  function nudgeViewKey(snapshot) {
+    const { received, name } = receivedSnapshot(snapshot);
+    const { view, expandedGroupId } = localNavigation();
+    return JSON.stringify([contextRevision, selectedAux, view, expandedGroupId, received, name, boundProfileId, definition()?.groups]);
+  }
+
+  function nudgeLevel(target, viewKey, up) {
+    const current = () => {
+      const snapshot = session.snapshot();
+      return !destroyed && !document.hidden && !ui.visible?.() && !ui.dialogOwner?.active() && view.nudgeOpen(viewKey) &&
+        fullyReady(snapshot) && target.auxIndex === selectedAux && nudgeViewKey(snapshot) === viewKey;
+    };
+    const navigation = localNavigation(), groups = definition()?.groups || [];
+    if (navigation.view !== 'groups' || !current()) return;
+    if (target.kind === 'group' ? !groups.some(group => group.id === target.groupId)
+      : target.kind === 'send' ? !groups.find(group => group.id === navigation.expandedGroupId)?.members.includes(target.sourceId)
+        : target.kind !== 'master') return;
+
+    const unavailable = session.levelTargetUnavailableReason(target);
+    if (unavailable) { ui.message?.(unavailable); render(); return; }
+    if (!current()) return;
+    const isSelected = () => {
+      const selected = session.snapshot().control?.selected;
+      return selected?.kind === target.kind && selected.auxIndex === target.auxIndex &&
+        selected.groupId === target.groupId && selected.sourceId === target.sourceId;
+    };
+    if (!isSelected()) {
+      const accepted = target.kind === 'group' ? session.selectGroupTarget(target.groupId, target.auxIndex) : session.selectLevelTarget(target);
+      if (!accepted || !isSelected() || !current()) return;
+    }
+    const token = session.beginLevelGesture();
+    if (!token) return;
+    if (current()) session.nudgeLevelGesture(token, up);
+    else session.cancelLevelGesture(token);
+  }
+
   const isActive = phase => ['connecting', 'connected', 'partial', 'live'].includes(phase);
   // The received snapshot name of the current connection only; cleared state
   // (disconnect, hide, failure) has no observations, so no name survives.
@@ -308,6 +344,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     const model = projectGroupNavigation(base, definition(), requestedNavigation);
     if (previousExpanded !== model.expandedGroupId) contextRevision++;
     previousExpanded = model.expandedGroupId;
+    if (model.nudgePreview) model.nudgeViewKey = nudgeViewKey(snapshot);
     const suffix = statusSuffix();
     if (model.notice || suffix) model.status += ` · ${[model.notice, suffix].filter(Boolean).join(' · ')}`;
     previousPhase = snapshot.phase;
@@ -528,6 +565,7 @@ export function mountLiveController({ session, repository, view, ui, document = 
     ready,
     whenRigIdle: () => rigPending,
     context,
+    nudgeLevel,
     autoConnecting: () => Boolean(autoConnect?.running()),
     // F07-S05: an explicit Disconnect's suppression, carried across one automatic update reload.
     autoSuppressed: () => suppressed,

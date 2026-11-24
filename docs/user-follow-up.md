@@ -1,5 +1,12 @@
 # User follow-ups and parked decisions
 
+## 2026-11-24 F08-S07 physical Nudge acceptance
+
+| Item | Status | Next action and owner |
+| --- | --- | --- |
+| Real phone and Ui24R acceptance for Nudge | Parked. Root's read-only checks of `192.168.0.60` timed out after four seconds and then returned host unreachable. Android Debug Bridge listed no device. Apple enumeration was unavailable because the local Xcode license had not been accepted. | Root, when a physical phone and the Ui24R are reachable. On qualified SPARE AUX 9/10, test both origins, minus and plus on the AUX and group masters and the expanded group's channel, actual companion readbacks and intentional Faders return with scroll and focus. Record exact build, device and firmware, then restore the original values. See [F08-S07](stories/F08-S07.md#physical-acceptance-parked). |
+| Dependency exception for F08-S04 and F08-S05 | These stories change the existing fader and meter views. They can proceed in the authorized order after their predecessor's reviewed merge while the S07 hardware check is parked. Their implementations do not depend on Nudge dispatch or its physical acceptance. | Root records the exception with the S07 review. Each story keeps its own review and CI gate. F08-S05 still requires native desk evidence for peak behavior and available data. |
+
 ## 2026-11-24 F08-S01 signed off by the user
 
 The user reported extensive testing on real phones and tablets ("all working very well") and said "You can sign it off." [F08-S01](stories/F08-S01.md#sign-off--2026-11-24) is **signed off by the user** (app 0.10.1, baseline `02b158c`). This is a user sign-off from the user's own testing, not a waiver; the per-row matrix was not recorded in the repo and was not observed by the orchestrator. F08-S02 is unblocked, **not authorized**.

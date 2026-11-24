@@ -2,6 +2,12 @@
 
 Date: 2026-11-09. Story: [F03-S02](stories/F03-S02.md). Baseline: reviewed `main` at `c721b9f` (F03-S01 / PR #16). No mixer connection, writer, meter decoder or active wire-permission change is part of this story.
 
+## F08-S07 live Nudge view — 2026-11-24
+
+The live group shortcuts start with **Nudge**. Its equal-size cards show the selected AUX master, all group masters and, when a group is expanded, that group's channels in saved order. The card name and dB share one line. Unequal or partial stereo values display both sides, with the AUX numbers in the accessible description. Group cards use the same loudest-member display as group faders. Unavailable cards have disabled step buttons and a reason.
+
+A deliberate click steps through the private level gesture owner with the same amounts and scale as the strip buttons. Group nudges start from a fresh received anchor. The originating context is checked again before dispatch, including the current connection, rig, mix, group and overlay. **Faders** restores the originating group view, scroll and focus while that context remains current. See [F08-S07](stories/F08-S07.md).
+
 ## Current F09-S13 button order — 2026-11-22
 
 User request; live entry only. Story: [F09-S13](stories/F09-S13.md). With an AUX selected the shortcut row reads All Mixes, group shortcuts, **All Groups, Create Group / Edit Group, All Channels**, then Mix EQ. `renderShortcuts` moves the existing `[data-action="edit-groups"]` node (listeners and keyed identity preserved, never recreated) into `.mm-group-switches` directly after All Groups. In the overview (no AUX selected) the shortcut row is hidden, so the node returns to `.mm-local-tabs` after Mix EQ. Behaviour is unchanged (Create Group opens a new group; Edit Group opens the expanded one).
