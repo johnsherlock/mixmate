@@ -3,12 +3,15 @@ import { restoreDialogFocus } from './dialog-owner.js';
 // Text-only presentation; opening cancels obsolete control intent via its owner.
 export function channelDetail(model) {
   if (model.kind === 'group') return [model.detail, model.requestedDetail || model.stateText, 'Relative requested gesture delta; no aggregate actual level, group VU or proof of hardware balance.'].filter(Boolean).join('\n\n');
-  const sides = model.sides || [model];
+  const sides = model.sides || [model], meter = model.meter;
+  const meterValues = values => (values || []).map(value => value.floor ? '−80 dB floor' : `${value.db.toFixed(1)} dB`).join(' / ');
+  const sourceVu = meter?.preValues?.length ? `Pre-fader ${meterValues(meter.preValues)} · post-fader ${meterValues(meter.values)}` : meterValues(meter?.values);
+  const samplePeak = meter?.peaks?.some(Boolean) ? ' A displayed tap reached the meter ceiling.' : '';
   return [model.detail, model.requestedDetail, ...sides.map(side => [side.auxIndex === undefined ? '' : `Output ${side.auxIndex + 1}`,
     `Received level: ${side.levelText ?? 'not received'}${typeof side.position === 'number' ? ` (raw ${side.position})` : ''}`,
     `Received pan: ${typeof side.panPosition === 'number' ? side.panPosition : side.panText ?? 'not received'}`,
-    side.stateText].filter(Boolean).join(' · ')), model.meter ? `${model.meter.label}: ${model.meter.status} ${(model.meter.values || []).map(value => value.floor ? '−80 dB floor' : `${value.db.toFixed(1)} dB`).join(' / ')}. ${model.meter.provenance || 'Meter scale provenance unavailable'}. Encoded zero is the meter floor, not proof of physical silence.` : '',
-    model.sourceId ? 'Source VU is post-fader, not AUX-send contribution. Unknown mute and processing fields remain unknown.' : 'Output VU is post-fader. Unknown mute fields remain unknown.'].filter(Boolean).join('\n\n');
+    side.stateText].filter(Boolean).join(' · ')), meter ? `${meter.label}: ${[meter.status, sourceVu].filter(Boolean).join(' · ')}. ${meter.provenance || 'Meter scale provenance unavailable'}. Encoded zero is the meter floor.${samplePeak}` : '',
+    model.sourceId ? 'Source VU is independent of the selected AUX send. Unknown mute and processing fields remain unknown.' : 'Output VU is post-fader. Unknown mute fields remain unknown.'].filter(Boolean).join('\n\n');
 }
 export function mountChannelDetail({ root, dialogOwner, onOpen = () => {} }) {
   const $ = s => root.querySelector(s), doc = root.ownerDocument;

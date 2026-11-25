@@ -160,7 +160,7 @@ test('read-only keyed strips render strings as text and preserve nodes through u
 });
 
 
-test('mixed state/VU bursts throttle actual meter fill/text writes and preserve caps, scroll and zero/stale/unknown distinctions', () => {
+test('mixed state/VU bursts retain a one-packet peak and throttle meter fills without replacing caps or the bank', () => {
   const previous = Object.fromEntries(['document', 'window', 'matchMedia', 'innerHeight', 'ResizeObserver'].map(key => [key, globalThis[key]]));
   const document = documentFixture(), root = new Node(document);
   for (const name of ['mm-content', 'mm-clock', 'mm-navigation', 'mm-local-tabs', 'mm-snapshot-name', 'mm-desk', 'mm-feedback', 'mm-dirty', 'mm-rec-state', 'mm-mode-label', 'mm-app']) {
@@ -194,10 +194,10 @@ test('mixed state/VU bursts throttle actual meter fill/text writes and preserve 
     session.connect('192.168.0.60'); socket.readyState = 1; socket.onopen();
     socket.onmessage({ data: '3:::SETS^model^ui24\nSETD^a.0.matrix^0\nSETD^a.0.mix^0.5\nSETD^i.0.aux.0.value^0.25' });
     const bank = root.querySelector('.mm-strip-scroll'), article = bank.children[0], input = article.querySelector('input'), cap = article.querySelector('.mm-fader-hit');
-    const pair = article.querySelector('.mm-meter-pair'), fill = article.querySelector('.mm-meter').children[0], caption = article.querySelector('.mm-live-meter-status');
+    const pair = article.querySelector('.mm-meter-pair'), track = article.querySelector('.mm-meter'), fill = track.children[0], pre = track.children[1], caption = article.querySelector('.mm-live-meter-status');
     bank.scrollLeft = 73; const initialWrites = fill.style.calls.length;
     for (let n = 0; n < 100; n++) {
-      const packet = new Uint8Array(14); packet[0] = 1; packet[10] = n;
+      const packet = new Uint8Array(14); packet[0] = 1; packet[9] = n === 1 ? 240 : 40; packet[10] = n;
       socket.onmessage({ data: `3:::SETD^i.0.aux.0.value^${n / 100}\nVU2^${Buffer.from(packet).toString('base64')}` });
     }
     assert.equal(fill.style.calls.length, initialWrites);
@@ -205,12 +205,19 @@ test('mixed state/VU bursts throttle actual meter fill/text writes and preserve 
     tick(100);
     assert.equal(fill.style.calls.length, initialWrites + 1); assert.equal(pair.dataset.state, 'fresh');
     assert.equal(fill.style.values['--level'], `${99 * 0.004167508166392142 * 100}%`);
-    assert.match(root.querySelector('.mm-live-meter-legend').textContent, /source VU is NOT AUX-send contribution.*firmware unverified/);
+    assert.equal(pre.style.values['--level'], `${40 * 0.004167508166392142 * 100}%`);
+    assert.equal(track.dataset.peak, 'true');
+    assert.match(caption.textContent, /pre-fader .*post-fader .*sample peak held/);
+    const legend = root.querySelector('.mm-live-meter-legend');
+    assert.equal(legend.hidden, false);
+    assert.deepEqual(Array.from(legend.children, child => child.textContent), ['Source VU (independent of AUX send)', 'Pre-fader', 'Post-fader', 'Sample peak']);
     const zero = new Uint8Array(14); zero[0] = 1;
     socket.onmessage({ data: '3:::VU2^' + Buffer.from(zero).toString('base64') }); tick(100);
-    assert.match(caption.textContent, /−80 dB floor/); assert.equal(pair.dataset.state, 'fresh');
+    assert.match(caption.textContent, /pre-fader −80 dB floor, post-fader −80 dB floor/); assert.equal(pair.dataset.state, 'fresh');
+    assert.equal(pre.dataset.floor, 'true'); assert.equal(fill.dataset.floor, 'true');
     tick(1900); assert.equal(pair.dataset.state, 'stale'); assert.match(caption.textContent, /Stale/);
     assert.equal(fill.style.values['--level'], '0%');
+    assert.equal(track.dataset.peak, 'false'); assert.equal(pre.dataset.floor, 'false');
     socket.onmessage({ data: '3:::VU2^' + Buffer.from(new Uint8Array(8)).toString('base64') }); tick(100);
     assert.equal(pair.dataset.state, 'missing'); assert.match(caption.textContent, /Unavailable/);
     assert.equal(root.querySelector('.mm-strip-scroll'), bank); assert.equal(bank.scrollLeft, 73);

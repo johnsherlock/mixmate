@@ -2,6 +2,10 @@
 
 Date: 2026-11-09. Story: [F03-S02](stories/F03-S02.md). Baseline: reviewed `main` at `c721b9f` (F03-S01 / PR #16). No mixer connection, writer, meter decoder or active wire-permission change is part of this story.
 
+## F08-S05 source VU — 2026-11-25
+
+All Channels and expanded groups show the blue pre-main-fader source tap and segmented post-main-fader source tap beside each individual fader. Each FX side has its own two fills and sample peak marker. The legend identifies the source taps and amber peak. It sits in the existing footer in compact landscape, preserving fader travel. The meter is independent of the channel's send to the selected AUX. See the [meter contract](iem-meter-contract.md#f08-s05-current-source-display--2026-11-25).
+
 ## F08-S04 AUX master in expanded groups — 2026-11-24
 
 The live expanded group keeps the current logical AUX master beside the saved-order bank. In portrait it sits in a sticky right-hand column while the page scrolls, with three bank columns on phones. At narrow phone widths the compact fader spaces omit ruler labels to keep the caps and meters within their strips. In landscape the existing horizontal bank scrolls between its sticky group master and the separate AUX master. Compact landscape places the strip nudges vertically beside the tracks to leave more drag travel. Group navigation retains the keyed AUX master, input, cap, readout and meter for the current mix. The existing level gesture owner and strip nudge buttons handle deliberate adjustments. See [F08-S04](stories/F08-S04.md).

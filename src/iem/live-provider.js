@@ -1,6 +1,7 @@
 import { faderValueToDB, vuValueToDB } from 'soundcraft-ui-connection';
 import { parseIemStateFrame, receivedAuxMode, receivedIemField, stereoRelationship, observedAuxSources } from './protocol.js';
 import { commonPanWire } from './pan-display.js';
+import { sourceMeterTaps } from './meters.js';
 
 // Definitions/profile bounds never manufacture received availability.
 export function createEmptyLiveProvider() {
@@ -75,17 +76,20 @@ function commonProcessing(sides) {
   return same ? sides[0].stateText : sides.map(side => `Output ${side.auxIndex + 1}: ${side.stateText}`).join(' · ');
 }
 function projectMeter(session, id, source = false, allowed = true) {
-  const label = source ? 'Source post-fader VU · NOT AUX send' : 'Output post-fader VU';
-  const channelCount = id.startsWith('f.') ? 2 : 1;
+  const label = source ? 'Source VU · pre/post main fader' : 'Output post-fader VU';
+  const taps = source ? sourceMeterTaps(id) : [{ post: 'vuPostFader' }];
+  const channelCount = taps.length;
   const observed = allowed ? session.meters?.get(id) : undefined;
   const status = observed ? session.meterState || 'missing' : 'missing';
-  const fields = channelCount === 2 ? ['vuPostFaderL', 'vuPostFaderR'] : ['vuPostFader'];
-  const values = status === 'fresh' ? fields.map(field => observed[field]) : [];
-  const valid = values.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  const read = tap => status === 'fresh' ? taps.map(fields => observed[fields[tap]]) : [];
+  const values = read('post'), preValues = source ? read('pre') : [];
+  const valid = [...values, ...preValues].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  const display = samples => valid ? samples.map(value => ({ position: Math.min(value, 1), db: vuValueToDB(value), floor: value === 0 })) : [];
   return {
     status: valid ? status : 'missing', label, channelCount, revision: session.meterRevision ?? 0,
-    provenance: '7.1.0 library scale; firmware unverified',
-    values: valid ? values.map(value => ({ position: Math.min(value, 1), db: vuValueToDB(value), floor: value === 0 })) : [],
+    provenance: '7.1.0 library display scale',
+    values: display(values),
+    ...(source ? { preValues: display(preValues), peaks: valid && status === 'fresh' ? session.meterPeaks?.get(id) ?? [] : [] } : {}),
   };
 }
 const sideLevels = sides => sides.map(side => `Output ${side.auxIndex + 1}: ${side.levelText ?? 'not received'}`).join(' · ');

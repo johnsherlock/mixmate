@@ -19,13 +19,19 @@ export function debugFlag(search = '') {
 }
 export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = () => {}, onToggleGroup = () => {}, onAllGroups = () => {}, onAllChannels = () => {}, onOpenPan = () => {}, onOpenDetail = () => {}, onDetailUpdate = () => {}, onSelectGroupLevel = () => {}, onSelectLevel = () => {}, canEditLevel = null, nudgeUnavailable, onNudgeLevel = () => {}, onToggleLevel = () => {}, onBeginLevel = () => null, onPreviewLevel = (token, value) => value, onCommitLevel = () => {}, onCancelLevel = () => {}, onOpenEq = null, debug = false, onMessage = () => {}, onClearMessage = () => {}, onGestureStart = () => {} } = {}) {
   const $ = selector => root.querySelector(selector), document = root.ownerDocument;
-  const content = $('.mm-content');
+  const content = $('.mm-content'), footer = $('.mm-bottom');
   let groupRefusal = false, groupEditing = false, auxSelected = false, attentionText = '', gestureWas = false;
   const meterLegend = document.createElement('p');
   meterLegend.className = 'mm-live-meter-legend';
-  meterLegend.textContent = 'VU: post-fader · source VU is NOT AUX-send contribution · library scale; firmware unverified';
+  meterLegend.hidden = true;
   content.before(meterLegend);
   const element = (tag, className, text) => { const node = document.createElement(tag); node.className = className; if (text) node.textContent = text; return node; };
+  meterLegend.append(
+    element('span', '', 'Source VU (independent of AUX send)'),
+    element('span', 'mm-vu-key mm-vu-key-pre', 'Pre-fader'),
+    element('span', 'mm-vu-key mm-vu-key-post', 'Post-fader'),
+    element('span', 'mm-vu-key mm-vu-key-peak', 'Sample peak'),
+  );
   const empty = element('div', 'mm-empty');
   empty.append(element('h2', '', 'Waiting for received AUX state'), element('p', '', 'Connect explicitly to your desk. Unknown or unsupported state stays unavailable; Demo is a separate simulation.'));
   const grid = element('div', 'mm-strip-grid'), sends = element('div', 'mm-sends-layout');
@@ -209,7 +215,16 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     },
     onCancel(input, token) { preview = null; onCancelLevel(token); },
   };
-  const gestures = installFaderGestures(content, faderHandlers), layout = observeIemLayout(root, () => { bankLayout(); gestures.sync(); }), stopClock = startLocalClock($('.mm-clock'));
+  const gestures = installFaderGestures(content, faderHandlers);
+  const layout = observeIemLayout(root, () => {
+    // Compact landscape has an existing status row. Keep its fader travel.
+    if (root.dataset.compact === 'true' && footer) {
+      if (meterLegend.parentElement !== footer) footer.append(meterLegend);
+    } else if (meterLegend.parentElement === footer) content.before(meterLegend);
+    bankLayout();
+    gestures.sync();
+  });
+  const stopClock = startLocalClock($('.mm-clock'));
   // F09-S12 nudge (user decision 2026-11-22; amounts in nudge-config.js). One
   // press is one deliberate gesture through the same begin/preview/commit path as
   // a cap drag (so every private guard, throttle, own-echo and pair rule applies
@@ -281,9 +296,14 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     const input = element('input', 'mm-vertical');
     input.type = 'range'; levelInput(input); input.disabled = true;
     if (kind === 'source') input.dataset.channel = ''; else input.dataset.master = '';
-    const meter = element('span', 'mm-meter-pair'); meter.setAttribute('role', 'img');
+    const meter = element('span', kind === 'source' ? 'mm-meter-pair mm-source-meter' : 'mm-meter-pair');
+    meter.setAttribute('role', 'img');
     const tracks = [0, 1].map(() => {
-      const track = element('span', 'mm-meter'), fill = element('i'); track.append(fill); meter.append(track); return { track, fill };
+      const track = element('span', 'mm-meter'), fill = element('i'); track.append(fill);
+      const pre = kind === 'source' ? element('i', 'mm-meter-pre') : null;
+      if (pre) track.append(pre);
+      meter.append(track);
+      return { track, fill, pre };
     });
     const meterCaption = element('span', 'mm-live-meter-caption'), meterLabel = element('span', 'mm-live-meter-label'), meterStatus = element('span', 'mm-live-meter-status');
     meterCaption.append(meterLabel, meterStatus);
@@ -311,14 +331,31 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     strip.meterRevision = meter.revision; strip.meterState = meter.status;
     strip.meter.dataset.state = meter.status;
     strip.meterLabel.textContent = model.sourceId ? `Source VU${meter.channelCount === 2 ? ' L/R' : ''}` : model.sides?.length === 2 ? `Output VU ${model.sides.map(side => side.auxIndex + 1).join('/')}` : 'Output VU';
-    const numbers = meter.values.map(value => value.floor ? '−80 dB floor' : `${value.db.toFixed(1)} dB`);
-    const numericText = meter.values.length === 2 ? meter.values.map(value => value.floor ? '−80 floor' : value.db.toFixed(1)).join('/') + ' dB' : numbers[0];
-    strip.meterStatus.textContent = meter.status === 'fresh' ? numericText : meter.status === 'stale' ? 'Stale' : 'Unavailable';
-    strip.meter.setAttribute('aria-label', `${meter.label}${meter.channelCount === 2 ? ' (L/R)' : ''}: ${strip.meterStatus.textContent}. ${meter.provenance}`);
-    strip.meterCaption.setAttribute('title', `${meter.label}: ${strip.meterStatus.textContent}; ${meter.provenance}. Encoded zero is the meter floor, not proof of physical silence.`);
-    strip.tracks.forEach(({ track, fill }, index) => {
+    const valueText = value => value.floor ? '−80 dB floor' : `${value.db.toFixed(1)} dB`;
+    const postReadings = meter.values.map(valueText).join(' / ');
+    let reading = meter.status === 'fresh' ? postReadings : meter.status === 'stale' ? 'Stale' : 'Unavailable';
+    if (meter.status === 'fresh' && meter.preValues?.length) {
+      reading = meter.preValues.map((value, index) => {
+        const side = meter.channelCount === 2 ? (index === 0 ? 'Left: ' : 'Right: ') : '';
+        return `${side}pre-fader ${valueText(value)}, post-fader ${valueText(meter.values[index])}${meter.peaks[index] ? ', sample peak held' : ''}`;
+      }).join('. ');
+    }
+    strip.meterStatus.textContent = reading;
+    const description = `${meter.label}${meter.channelCount === 2 ? ' (L/R)' : ''}: ${reading}. ${meter.provenance}.`;
+    const semantics = model.sourceId ? ' Source taps are independent of AUX send. The sample peak marks a meter ceiling reading.' : '';
+    strip.meter.setAttribute('aria-label', description + semantics);
+    strip.meter.setAttribute('title', description + semantics + ' Encoded zero is the meter floor.');
+    strip.tracks.forEach(({ track, fill, pre }, index) => {
       track.hidden = index >= meter.channelCount;
-      fill.style.setProperty('--level', `${meter.status === 'fresh' ? (meter.values[index]?.position || 0) * 100 : 0}%`);
+      const postValue = meter.values[index];
+      fill.style.setProperty('--level', `${(postValue?.position ?? 0) * 100}%`);
+      if (pre) {
+        const preValue = meter.preValues?.[index];
+        pre.style.setProperty('--level', `${(preValue?.position ?? 0) * 100}%`);
+        fill.dataset.floor = String(Boolean(postValue?.floor));
+        pre.dataset.floor = String(Boolean(preValue?.floor));
+        track.dataset.peak = String(Boolean(meter.peaks?.[index]));
+      }
     });
   }
   function publishDetails() {
@@ -487,6 +524,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     grid.style.setProperty('--mm-overview-count', String(Math.max(1, model.mixes.length)));
     reconcile(grid, overviewStrips, model.mixes, 'master');
     bankModels = model.sources || [];
+    meterLegend.hidden = !selected || !bankModels.some(source => source.sourceId && !source.unresolved);
     reconcile(bank, sourceStrips, bankModels, 'source');
     reconcile(pinned, pinnedStrips, selected && model.selectedMix ? [model.selectedMix] : [], 'master');
     grid.hidden = selected; sends.hidden = !selected;

@@ -2,6 +2,10 @@
 
 Newest first. Every story PR that changes shipped app files bumps the version and adds an entry (see [orchestration](docs/orchestration.md#versioning-policy-f07-s05)).
 
+## 0.13.0 — 2026-11-25 — F08-S05
+
+- Channel faders show pre- and post-fader source signal side by side, including separate left and right FX readings. An amber marker holds a source sample peak briefly.
+
 ## 0.12.1 — 2026-11-24 — F08-S04
 
 - The selected AUX master stays beside an expanded group while you scroll its member faders.

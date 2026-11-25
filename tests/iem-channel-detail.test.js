@@ -19,10 +19,10 @@ test('even landscape capacities retain canonical order and adjacent received pai
   const unverified = [{sourceId:'i.0'}, {sourceId:'i.1'}];
   assert.deepEqual(channelSlots([{}, {}, {}, {}, {}, ...unverified],6),[1,2,3,4,5,6,7]);
 });
-const model = { id:'i.0@0', sourceId:'i.0', name:'<unsafe>', detail:'Linked with Input 2', requestedDetail:'Requested .8; application unverified', sides:[{auxIndex:0,position:.25049,levelText:'−12 dB',panPosition:.50049,stateText:'Send mute: Unknown · Pre-fader'}, {auxIndex:1,position:.3,panPosition:.5004,stateText:'Muted · Post-processing'}], meter:{label:'Source post-fader VU · NOT AUX send',status:'missing',values:[],provenance:'library scale; firmware unverified'} };
+const model = { id:'i.0@0', sourceId:'i.0', name:'<unsafe>', detail:'Linked with Input 2', requestedDetail:'Requested .8; application unverified', sides:[{auxIndex:0,position:.25049,levelText:'−12 dB',panPosition:.50049,stateText:'Send mute: Unknown · Pre-fader'}, {auxIndex:1,position:.3,panPosition:.5004,stateText:'Muted · Post-processing'}], meter:{label:'Source VU · pre/post main fader',status:'missing',values:[],provenance:'7.1.0 library display scale'} };
 test('touch and keyboard reachable detail retains exact per-side actuals, unknowns and requested distinction', () => {
   const detail = channelDetail(model);
-  for (const expected of ['.25049','.50049','.5004','Unknown','Pre-fader','Muted','Post-processing','Requested .8','NOT AUX send','firmware unverified']) assert.ok(detail.includes(expected), expected);
+  for (const expected of ['.25049','.50049','.5004','Unknown','Pre-fader','Muted','Post-processing','Requested .8','independent of the selected AUX send','7.1.0 library display scale']) assert.ok(detail.includes(expected), expected);
   const app=domFixture(), owner=createDialogOwner(); let cancels=0;
   const ui=mountChannelDetail({root:app.root,dialogOwner:owner,onOpen:()=>{ cancels++; }});
   app.root.querySelector('.mm-brand').focus(); const before=app.document.activeElement;

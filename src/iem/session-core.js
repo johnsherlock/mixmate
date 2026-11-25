@@ -1,6 +1,6 @@
 import { mixerURL } from '../mixer-address.js';
 import { createLiveProvider } from './live-provider.js';
-import { decodeVu2Frame } from './meters.js';
+import { decodeVu2Frame, sourceMeterTaps, SOURCE_METER_PEAK_HOLD_MS } from './meters.js';
 import { IEM_RECEIVE_LIMITS, parseIemStateFrame } from './protocol.js';
 import { createControlScope, createPeerControlState, transitionControl, OBSERVATION_WINDOW_MS, LIVE_STREAM_INTERVAL_MS, LIVE_SETD_BUDGET_PER_S, LIVE_BACKPRESSURE_BYTES } from './control-state-model.js';
 import { auxPanPath, encodeAuxPanCommand, resolveAuxPanTopology } from './aux-pan-protocol.js';
@@ -28,15 +28,28 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
   // F02-S05: true only once the current writer socket has opened; with a
   // qualified companion this is full readiness (`qualified` in snapshots).
   let writerReady = false;
-  let socket = null, receiver = null, generation = 0, deadline, keepalive, idle, receiverDeadline, receiverIdle, meterExpiry, meterFlush;
-  let meters = new Map(), meterStamp = null, meterRevision = 0, inspectCurrent = () => {};
+  let socket = null, receiver = null, generation = 0, deadline, keepalive, idle, receiverDeadline, receiverIdle, meterExpiry, meterFlush, meterPeakExpiry;
+  let meters = new Map(), meterPeakStamps = new Map(), meterStamp = null, meterRevision = 0, inspectCurrent = () => {};
   const stamp = () => ({ mono: now(), wall: wallNow() });
   const elapsed = (before, after = stamp()) => ({ mono: after.mono - before.mono, wall: after.wall - before.wall });
   const invalidClock = age => !Number.isFinite(age.mono) || !Number.isFinite(age.wall) || age.mono < 0 || age.wall < -clockGraceMs;
-  function meterState() {
+  function meterState(currentTime) {
     if (!meterStamp) return 'missing';
-    const age = elapsed(meterStamp);
+    const age = elapsed(meterStamp, currentTime);
     return invalidClock(age) || Math.max(age.mono, age.wall) >= meterTtlMs ? 'stale' : 'fresh';
+  }
+  function meterPeakRemaining(peakStamp, currentTime) {
+    if (!peakStamp) return 0;
+    const age = elapsed(peakStamp, currentTime);
+    return invalidClock(age) ? 0 : Math.max(0, SOURCE_METER_PEAK_HOLD_MS - Math.max(age.mono, age.wall));
+  }
+  function meterPeakSnapshot(currentTime, state) {
+    const peaks = new Map();
+    if (state === 'fresh') for (const [id, times] of meterPeakStamps) {
+      const held = times.map(time => meterPeakRemaining(time, currentTime) > 0);
+      if (held.some(Boolean)) peaks.set(id, Object.freeze(held));
+    }
+    return peaks;
   }
   let phase = 'idle', detail = 'Not connected — no received mixer state';
   const observed = new Map(), receipts = new Map(), eqObserved = new Map(), processingRaw = new Map();
@@ -800,10 +813,11 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     if (socket) inspectCurrent(); // A read after sleep cannot resurrect old state before timers run.
     // Full readiness: received Ui24 AUX state and, for control sessions, an open writer.
     const qualified = phase === 'live' && (!controlEnabled || writerReady);
-    return { phase, qualified, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: meterState(), meters: new Map(meters), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}), ...(auxControl ? { snapshots: snapshotsSnapshot(), recording: recordingSnapshot() } : {}) };
+    const currentTime = stamp(), currentMeterState = meterState(currentTime);
+    return { phase, qualified, detail, observations: provider.snapshot(), ...(auxControl ? { eq: new Map(eqObserved) } : {}), meterState: currentMeterState, meters: new Map(meters), meterPeaks: meterPeakSnapshot(currentTime, currentMeterState), meterRevision, ...(controlEnabled ? { control: controlSnapshot() } : {}), ...(auxControl ? { snapshots: snapshotsSnapshot(), recording: recordingSnapshot() } : {}) };
   };
   const emit = (kind = 'state') => { for (const listener of listeners) listener(snapshot(), kind); };
-  const clearTimers = () => { timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = null; timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
+  const clearTimers = () => { timers.clearTimeout(basisTimer); basisTimer = undefined; basisTimerAt = null; timers.clearTimeout(deadline); timers.clearTimeout(idle); timers.clearTimeout(receiverDeadline); timers.clearTimeout(receiverIdle); timers.clearInterval(keepalive); timers.clearTimeout(meterExpiry); timers.clearTimeout(meterPeakExpiry); timers.clearTimeout(meterFlush); meterFlush = undefined; };
   function stop(next = 'disconnected', message = 'Disconnected — received state cleared') {
     ++generation;
     resetSnapshots(); resetRecording();
@@ -811,7 +825,7 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
     clearTimers();
     const old = socket, oldReceiver = receiver;
     socket = receiver = null;
-    provider.clear(); meters = new Map(); meterStamp = null; meterRevision = 0;
+    provider.clear(); meters = new Map(); meterPeakStamps = new Map(); meterStamp = null; meterRevision = 0;
     writerReady = false;
     phase = next; detail = message;
     for (const connection of [old, oldReceiver]) if (connection) {
@@ -849,13 +863,47 @@ function createSession(controlEnabled, { WebSocketClass = globalThis.WebSocket, 
       return true;
     }
     inspectCurrent = responsive;
-    function receiveMeters(values) {
-      meters = values; meterStamp = stamp(); // Whole packet replacement, including omitted families.
-      if (meterFlush === undefined) meterFlush = timers.setTimeout(() => {
+    function queueMeterPublication() {
+      if (meterFlush !== undefined) return;
+      meterFlush = timers.setTimeout(() => {
         if (!active()) return; // An already-queued old generation cannot lose the new handle.
         meterFlush = undefined;
         if (responsive()) { meterRevision++; emit('meters'); }
       }, meterCadenceMs);
+    }
+    function scheduleMeterPeakExpiry(currentTime) {
+      timers.clearTimeout(meterPeakExpiry);
+      let next = Infinity;
+      for (const times of meterPeakStamps.values()) for (const time of times) {
+        const remaining = meterPeakRemaining(time, currentTime);
+        if (remaining > 0) next = Math.min(next, remaining);
+      }
+      if (Number.isFinite(next)) meterPeakExpiry = timers.setTimeout(() => {
+        if (!responsive()) return;
+        const currentTime = stamp();
+        if (meterState(currentTime) !== 'fresh') return;
+        queueMeterPublication();
+        scheduleMeterPeakExpiry(currentTime);
+      }, next);
+    }
+    function receiveMeters(values) {
+      const receivedAt = stamp();
+      const previousPeaks = meterState(receivedAt) === 'fresh' ? meterPeakStamps : new Map();
+      meterPeakStamps = new Map();
+      // Sample at receipt cadence. A later packet in the same UI flush must
+      // not hide a ceiling sample, but omission or a stale gap clears it.
+      for (const [id, sample] of values) {
+        const previous = previousPeaks.get(id);
+        const times = sourceMeterTaps(id).map(({ pre, post }, index) => {
+          if (sample[pre] >= 1 || sample[post] >= 1) return receivedAt;
+          const time = previous?.[index];
+          return meterPeakRemaining(time, receivedAt) > 0 ? time : null;
+        });
+        if (times.some(Boolean)) meterPeakStamps.set(id, times);
+      }
+      meters = values; meterStamp = receivedAt; // Whole packet replacement, including omitted families.
+      scheduleMeterPeakExpiry(receivedAt);
+      queueMeterPublication();
       timers.clearTimeout(meterExpiry);
       const expectedStamp = meterStamp;
       meterExpiry = timers.setTimeout(() => {
