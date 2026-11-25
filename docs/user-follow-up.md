@@ -1,5 +1,11 @@
 # User follow-ups and parked decisions
 
+## 2026-11-24 F08-S04 expanded-group device follow-up
+
+| Item | Status | Next action and owner |
+| --- | --- | --- |
+| Expanded group master on a connected phone | Chromium viewport and touch emulation uses fake mixer sockets. The orchestrator's read-only desk check for F08-S07 received no HTTP response, and no physical phone was available for this story. | Root, when available. In portrait and compact landscape, expand a long group and scroll from a member track. Check that the selected AUX master stays in reach and that a deliberate cap drag and nudge update only that AUX. Record exact build, device and firmware. See [F08-S04](stories/F08-S04.md#delivery-verification). |
+
 ## 2026-11-24 F08-S07 physical Nudge acceptance
 
 | Item | Status | Next action and owner |

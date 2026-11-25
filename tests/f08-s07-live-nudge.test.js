@@ -4,7 +4,7 @@ import { createAuxControlSession } from '../src/iem/aux-control-session.js';
 import { createLiveConnectionUI, mountLiveController } from '../src/iem/live-controller.js';
 import { createDialogOwner } from '../src/iem/dialog-owner.js';
 import { mountReadOnlyView } from '../src/iem/live-view.js';
-import { positionDbText, positionToScale } from '../src/iem/fader-scale.js';
+import { positionDbText, positionToScale, scaleToPosition } from '../src/iem/fader-scale.js';
 import { NUDGE_DOWN_DB, NUDGE_UP_DB } from '../src/iem/nudge-config.js';
 import { emptySettings, SettingsRepository } from '../src/settings.js';
 import { domFixture, Node } from './helpers/fake-dom.js';
@@ -67,6 +67,12 @@ async function fixture() {
   let ui, controller;
   const view = mountReadOnlyView(root, {
     onToggleGroup: id => controller.toggleGroup(id), onAllGroups: () => controller.allGroups(),
+    canEditLevel: target => session.canEditLevelTarget(target),
+    onSelectLevel: target => controller.selectLevel(target),
+    onBeginLevel: () => session.beginLevelGesture(),
+    onPreviewLevel: (token, value) => session.previewLevelGesture(token, value),
+    onCommitLevel: (token, value) => session.commitLevelGesture(token, value),
+    onCancelLevel: () => session.cancelLevelGesture(),
     nudgeUnavailable: target => session.levelTargetUnavailableReason(target),
     onNudgeLevel: (target, opening, up) => controller.nudgeLevel(target, opening, up),
   });
@@ -293,5 +299,60 @@ test('Nudge cancels a held Space, then accepts the next deliberate press', async
     assert.deepEqual(app.writes(), [], 'preventing keyup cancels the native release click');
     app.click(button);
     assert.equal(app.writes().length, 2, 'the next deliberate tap writes once');
+  } finally { await app.close(); }
+});
+
+
+test('F08-S04 expanded groups retain the keyed AUX master and write only deliberate master gestures for the selected logical mix', async () => {
+  const app = await fixture();
+  try {
+    const bank = app.root.querySelector('.mm-strip-scroll'), pinned = app.root.querySelector('.mm-pinned');
+    const band = app.root.querySelector('.mm-group-shortcut[data-toggle-group="band"]');
+    const voice = app.root.querySelector('.mm-group-shortcut[data-toggle-group="voice"]');
+    const strip = pinned.children[0], input = strip.querySelector('input');
+    const cap = strip.querySelector('.mm-fader-hit'), meter = strip.querySelector('.mm-meter-pair');
+    assert.equal(strip.dataset.id, 'a.8');
+    assert.equal(strip.querySelector('.mm-value').textContent, positionDbText(0.4));
+
+    app.click(band);
+    assert.deepEqual(bank.children.slice(1).map(node => node.dataset.id), ['i.2@8', 'i.0@8']);
+    const memberTrack = bank.children[1].querySelector('.mm-fader-control');
+    const touch = clientY => ({ pointerId: 1, pointerType: 'touch', button: 0, clientX: 20, clientY });
+    memberTrack.emit('pointerdown', touch(70));
+    memberTrack.emit('pointermove', touch(140));
+    memberTrack.emit('pointerup', touch(140));
+    app.click(voice);
+    assert.deepEqual(bank.children.slice(1).map(node => node.dataset.id), ['i.0@8']);
+    app.click(voice);
+    assert.equal(app.controller.context().expandedGroupId, null);
+    app.click(band);
+    assert.deepEqual(app.writes(), []);
+    assert.deepEqual(pinned.children, [strip]);
+    assert.equal(strip.querySelector('input'), input);
+    assert.equal(strip.querySelector('.mm-fader-hit'), cap);
+    assert.equal(strip.querySelector('.mm-meter-pair'), meter);
+
+    assert.equal(input.disabled, false);
+    cap.emit('pointerdown', touch(100));
+    cap.emit('pointermove', touch(80));
+    cap.emit('pointerup', touch(80));
+    const afterDrag = app.writes();
+    assert.deepEqual(afterDrag.map(([path]) => path), master);
+    assert.equal(afterDrag[0][1], afterDrag[1][1]);
+    assert.ok(afterDrag[0][1] > 0.4);
+    app.receiver.receive(levelFrame(afterDrag));
+    assert.equal(strip.querySelector('.mm-value').textContent, positionDbText(afterDrag[0][1]));
+    assert.equal(strip.querySelector('.mm-fader-hit'), cap);
+
+    assert.ok(app.controller.selectAux(0));
+    app.click(band);
+    const mono = pinned.children[0], raise = mono.querySelector('.mm-nudge-up');
+    assert.equal(mono.dataset.id, 'a.0');
+    assert.equal(mono.querySelector('.mm-value').textContent, positionDbText(0.5));
+    assert.equal(raise.disabled, false);
+    assert.deepEqual(app.writes(), afterDrag);
+    app.click(raise);
+    assert.deepEqual(app.writes().slice(afterDrag.length), [['a.0.mix', scaleToPosition(positionToScale(0.5) + NUDGE_UP_DB)]]);
+    assert.ok(app.receiver.sent.every(message => ['3:::INIT', '3:::ALIVE', '2::'].includes(message)));
   } finally { await app.close(); }
 });

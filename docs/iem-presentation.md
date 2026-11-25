@@ -2,6 +2,10 @@
 
 Date: 2026-11-09. Story: [F03-S02](stories/F03-S02.md). Baseline: reviewed `main` at `c721b9f` (F03-S01 / PR #16). No mixer connection, writer, meter decoder or active wire-permission change is part of this story.
 
+## F08-S04 AUX master in expanded groups — 2026-11-24
+
+The live expanded group keeps the current logical AUX master beside the saved-order bank. In portrait it sits in a sticky right-hand column while the page scrolls, with three bank columns on phones. At narrow phone widths the compact fader spaces omit ruler labels to keep the caps and meters within their strips. In landscape the existing horizontal bank scrolls between its sticky group master and the separate AUX master. Compact landscape places the strip nudges vertically beside the tracks to leave more drag travel. Group navigation retains the keyed AUX master, input, cap, readout and meter for the current mix. The existing level gesture owner and strip nudge buttons handle deliberate adjustments. See [F08-S04](stories/F08-S04.md).
+
 ## F08-S07 live Nudge view — 2026-11-24
 
 The live group shortcuts start with **Nudge**. Its equal-size cards show the selected AUX master, all group masters and, when a group is expanded, that group's channels in saved order. The card name and dB share one line. Unequal or partial stereo values display both sides, with the AUX numbers in the accessible description. Group cards use the same loudest-member display as group faders. Unavailable cards have disabled step buttons and a reason.

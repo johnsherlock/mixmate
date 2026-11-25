@@ -48,8 +48,8 @@ function master(group, profileId, aux, control, sources) {
 }
 export function projectGroupNavigation(base, profile, requested) {
   const groups = profile?.groups || [], navigation = resolveGroupNavigation(groups, requested);
-  if (base.selectedAux === null || base.selectedAux === undefined) return { ...base, groups: [], view: 'overview', expandedGroupId: null, showAuxMaster: false };
-  const result = { ...base, groups: groups.map(group => ({ id: group.id, name: group.name })), ...navigation, showAuxMaster: !navigation.expandedGroupId };
+  if (base.selectedAux === null || base.selectedAux === undefined) return { ...base, groups: [], view: 'overview', expandedGroupId: null };
+  const result = { ...base, groups: groups.map(group => ({ id: group.id, name: group.name })), ...navigation };
   if (navigation.view === 'channels') return result;
   const group = groups.find(group => group.id === navigation.expandedGroupId);
   const channels = group ? groupSources(group, base.sources, base.selectedAux) : [];

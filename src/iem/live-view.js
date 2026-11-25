@@ -31,6 +31,7 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
   const grid = element('div', 'mm-strip-grid'), sends = element('div', 'mm-sends-layout');
   const sourceEmpty = element('p', 'mm-source-empty', 'No source sends received for this AUX yet.');
   const main = element('div', 'mm-sends-main'), bank = element('div', 'mm-strip-scroll'), pinned = element('aside', 'mm-pinned');
+  pinned.setAttribute('aria-label', 'Current AUX master');
   main.append(sourceEmpty, bank); sends.append(main, pinned); content.replaceChildren(empty, grid, sends);
   const overviewStrips = new Map(), sourceStrips = new Map(), pinnedStrips = new Map();
   for (const button of root.querySelectorAll('button')) {
@@ -487,11 +488,10 @@ export function mountReadOnlyView(root, { onSelectAux = () => {}, onOverview = (
     reconcile(grid, overviewStrips, model.mixes, 'master');
     bankModels = model.sources || [];
     reconcile(bank, sourceStrips, bankModels, 'source');
-    reconcile(pinned, pinnedStrips, model.selectedMix && model.showAuxMaster !== false ? [model.selectedMix] : [], 'master');
+    reconcile(pinned, pinnedStrips, selected && model.selectedMix ? [model.selectedMix] : [], 'master');
     grid.hidden = selected; sends.hidden = !selected;
-    sends.className = `mm-sends-layout${model.expandedGroupId ? ' mm-no-master' : ''}`;
+    sends.className = `mm-sends-layout${model.expandedGroupId ? ' mm-expanded-group' : ''}`;
     bank.className = `mm-strip-scroll${model.expandedGroupId ? ' mm-expanded' : ''}`;
-    pinned.hidden = Boolean(model.expandedGroupId);
     empty.hidden = selected || model.mixes.length > 0;
     sourceEmpty.hidden = !selected || (model.sources || []).length > 0;
     sourceEmpty.textContent = model.view === 'groups' ? 'No local groups yet. Create Group to add one.' : 'No source sends received for this AUX yet.';

@@ -2931,3 +2931,78 @@ body {
   #mixmate-iem-concept[data-orientation="portrait"] .mm-snapshot{grid-column:1 / -1;grid-row:2}
   #mixmate-iem-concept[data-orientation="portrait"] .mm-utilities{grid-column:1 / -1;grid-row:3;justify-content:flex-end}
 }
+
+/* Let the portrait master stick to the page scroller instead of the non-scrolling body. */
+body:has(#mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group:not([hidden])) {
+  overflow: visible;
+}
+#mixmate-iem-concept[data-mode="live"][data-orientation="portrait"] .mm-expanded-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(82px, 24vw, 132px);
+  gap: 5px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group .mm-pinned {
+  position: sticky;
+  top: 6px;
+  align-self: start;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group .mm-pinned > .mm-strip {
+  min-height: 290px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group .mm-pinned .mm-fader-space {
+  grid-template-columns: 18px minmax(42px, 1fr) 12px;
+  gap: 2px;
+  height: 190px;
+  padding: 10px 4px;
+}
+#mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group .mm-pinned .mm-value {
+  font-size: 14px;
+  margin: 0 4px;
+}
+@media (max-width: 384px) {
+  #mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group :is(.mm-strip-scroll, .mm-pinned) .mm-fader-space {
+    grid-template-columns: minmax(42px, 1fr) 12px;
+  }
+  #mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group .mm-ruler {
+    display: none;
+  }
+  #mixmate-iem-concept[data-orientation="portrait"] .mm-expanded-group .mm-group .mm-fader-control {
+    grid-column: 1 / -1;
+  }
+}
+
+/* In compact expanded banks, put the nudge buttons beside the track to keep
+   the strip's full width for its name and dB readout and free fader travel. */
+#mixmate-iem-concept[data-compact="true"] .mm-expanded-group .mm-strip {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+#mixmate-iem-concept[data-compact="true"]:not([data-debug="true"]) .mm-expanded-group :is(.mm-group, .mm-master) {
+  padding-bottom: 0;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-expanded-group :is(.mm-strip-head, .mm-value) {
+  grid-column: 1 / -1;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-expanded-group .mm-value {
+  min-height: 24px;
+  padding-block: 1px;
+}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-expanded-group .mm-nudge {
+  grid-column: 1;
+  grid-row: 3;
+  align-self: center;
+  flex-direction: column;
+  margin: 0 0 0 3px;
+}
+#mixmate-iem-concept[data-mode="live"][data-compact="true"] .mm-expanded-group .mm-fader-space {
+  grid-column: 2;
+  grid-row: 3;
+  padding-inline: 3px;
+}
+#mixmate-iem-concept[data-compact="true"] .mm-expanded-group .mm-group .mm-fader-control {
+  grid-column: 1 / -1;
+}
