@@ -256,13 +256,15 @@ test('projection labels source taps, encoded floor and separate FX/output values
   assert.equal(model.mixes[0].meter.channelCount, 2); // Individual linked output readbacks, never averaged.
   assert.equal(model.mixes[1].meter.status, 'missing'); // Matrix array slot is not proof of normal AUX meter semantics.
   assert.equal(model.mixes[2].meter.status, 'missing');
-  assert.match(model.sources[0].meter.label, /Source post-fader.*NOT AUX send/);
+  assert.match(model.sources[0].meter.label, /Source VU.*pre\/post main fader/);
+  assert.equal(model.sources[0].meter.preValues[0].position, 17 * 0.004167508166392142);
   assert.equal(model.sources[0].meter.values[0].position, 120 * 0.004167508166392142);
   assert.match(model.sources[0].stateText, /Muted.*Pre-fader/); // Does not alter the independent source meter.
   assert.equal(model.sources[1].meter.values[0].db, -80); assert.equal(model.sources[1].meter.values[0].floor, true);
   assert.equal(model.sources[2].meter.channelCount, 2);
   assert.notEqual(model.sources[2].meter.values[0].position, model.sources[2].meter.values[1].position);
-  assert.match(model.sources[2].meter.provenance, /firmware unverified/);
+  assert.notEqual(model.sources[2].meter.preValues[0].position, model.sources[2].meter.preValues[1].position);
+  assert.match(model.sources[2].meter.provenance, /library display scale/);
   session.disconnect();
 });
 
@@ -281,6 +283,61 @@ test('malformed meters cannot refresh freshness, omitted families replace prior 
   assert.equal(session.snapshot().meters.get('i.0').vuPostFader, 0);
   socket.receive(packetFrame(new Uint8Array(8))); assert.equal(session.snapshot().meters.size, 0);
   session.disconnect();
+});
+
+test('source sample peaks survive coalescing, are side-specific and clear on expiry, omission, stale gaps and disconnect', () => {
+  const { session, sockets, timers } = setup();
+  session.connect('192.168.0.60');
+  const [socket] = sockets;
+  socket.open();
+  socket.receive(LIVE + '\nSETD^i.0.aux.0.value^0.4\nSETD^f.0.aux.0.value^0.6');
+  const sample = (pre, post, fx = [0, 0, 0, 0]) => packetFrame(Uint8Array.of(1, 0, 0, 1, 0, 0, 0, 0, 0, pre, post, 0, 0, 0, ...fx, 0, 0, 0));
+  const meter = sourceId => projectLiveState(session.snapshot(), 0).sources.find(source => source.sourceId === sourceId).meter;
+  const publications = [];
+  session.subscribe((snapshot, kind) => { if (kind === 'meters') publications.push(snapshot); });
+
+  socket.receive(sample(239, 0, [239, 0, 0, 239]));
+  assert.equal(session.snapshot().meterPeaks.size, 0);
+  socket.receive(sample(240, 0, [45, 0, 0, 240]));
+  socket.receive(sample(12, 0, [12, 24, 36, 48]));
+  assert.equal(publications.length, 0);
+  timers.tick(100);
+  assert.deepEqual(publications.at(-1).meterPeaks.get('i.0'), [true]);
+  assert.deepEqual(meter('f.0').peaks, [false, true]);
+  assert.deepEqual(meter('f.0').preValues.map(value => value.position), [12, 24].map(byte => byte * 0.004167508166392142));
+  assert.equal(meter('i.0').values[0].floor, true);
+  assert.equal(meter('i.0').preValues[0].floor, false);
+  const copy = session.snapshot().meterPeaks;
+  assert.throws(() => { copy.get('f.0')[0] = true; }, TypeError);
+  copy.clear();
+  assert.equal(session.snapshot().meterPeaks.size, 2);
+
+  timers.tick(1400);
+  socket.receive(sample(0, 0));
+  timers.tick(1499);
+  assert.deepEqual(meter('i.0').peaks, [true]);
+  timers.tick(1);
+  assert.equal(meter('i.0').status, 'fresh');
+  assert.deepEqual(meter('i.0').peaks, []);
+  timers.tick(100);
+  assert.equal(publications.at(-1).meterPeaks.size, 0);
+
+  socket.receive(sample(240, 0, [240, 0, 0, 0]));
+  socket.receive(packetFrame(new Uint8Array(8)));
+  assert.equal(meter('i.0').status, 'missing');
+  assert.equal(session.snapshot().meterPeaks.size, 0);
+  socket.receive(sample(0, 240));
+  assert.deepEqual(meter('i.0').peaks, [true]);
+  timers.tick(2000);
+  assert.equal(meter('i.0').status, 'stale');
+  assert.equal(session.snapshot().meterPeaks.size, 0);
+  socket.receive(sample(0, 0));
+  assert.deepEqual(meter('i.0').peaks, []);
+  socket.receive(sample(240, 0));
+  session.disconnect();
+  assert.equal(session.snapshot().meterPeaks.size, 0);
+  assert.equal(timers.jobs.size, 0);
+  assert.ok(socket.sent.every(message => ALLOWED.has(message)));
 });
 
 test('wrapped base64 and logical state/VU batches work without accepting malformed payload fragments', () => {

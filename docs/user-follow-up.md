@@ -1,5 +1,13 @@
 # User follow-ups and parked decisions
 
+## 2026-11-25 F08-S05 meter follow-up
+
+| Item | Evidence and remaining check |
+| --- | --- |
+| Physical phones | The orchestrator observed source and AUX motion on a desktop browser and the Ui24R. Check All Channels and an expanded group on a connected phone in portrait and compact landscape for tap legibility, stereo separation and track scroll. Record build, device and firmware. |
+| Ceiling marker | The native source and fake packets establish the threshold/hold behavior. The passive desktop sample stayed below the ceiling. Verify the marker with suitable naturally near-ceiling signal if available. Physical clipping was never induced. |
+| Marker choice | A side's amber sample peak indicates either displayed source tap reached the measured ceiling. It follows the native 3 s timing while fresh. See the [contract](iem-meter-contract.md#f08-s05-current-source-display--2026-11-25) for the difference between that flag, native AUX send scaling and hardware clipping. |
+
 ## 2026-11-24 F08-S04 expanded-group device follow-up
 
 | Item | Status | Next action and owner |

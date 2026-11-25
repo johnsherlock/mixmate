@@ -1,4 +1,22 @@
-# Read-only VU2 meters and freshness — F03-S04
+# Read-only VU2 meters and freshness
+
+## F08-S05 current source display — 2026-11-25
+
+Input, player and line source strips show two received taps: solid blue `vuPost` (pre-main-fader source stage) and segmented `vuPostFader` (post-main-fader). Intrinsic stereo FX retains the same two taps per side, in L/R order. These source-global values are independent of the selected AUX send. The app computes no send contribution from the send's level, mute or pre/post settings. The AUX master still displays each observed output's own post-fader tap. Groups have no aggregate meter. An encoded zero shows a floor tick and is described as a floor in the accessible label. Missing or stale readings clear both fills and floor ticks.
+
+### Native UI and passive packet evidence
+
+On 2026-11-25, the orchestrator fetched `/mixer.html` from the Ui24R at `192.168.0.60` (firmware `3.0.7865-ui24`). The served file was 1,309,686 bytes with SHA-256 `50c5dfd6908b8b29a32317e7b7d51b67e5f2177291c69eff9ca76a19db9fab84`. The vendor asset is kept outside the repo.
+
+- Native `parseVUdata` (lines 1025 onward) passes the library's `vuPost` and `vuPostFader` as the first two VU arguments, with the separate corresponding FX right-side values. `Strip.setVU` (around 1213) forwards those two arguments to each native AUX send. `AUXStrip.setVU` (around 1296) uses the first for PRE and the second for POST, applies its send-level and mute display logic, and hands the pre-main-fader tap to the blue ghost in `VUMeter` (paint around 1415). This explains how native AUX Sends can show motion while a source's post-fader tap is at the floor.
+- Native `VUMeter` holds a peak line and `ClipBulb` indicates a separate clip condition. Both native hold constants are 3,000 ms (line 1059). Native strip/sample clip comparisons use normalized values at or above 1, with send indicators applied to the native send-scaled value. MixMate uses the library display normalization and threshold against its own two received source taps. In that scale the first encoded byte at the threshold is 240. The sample marker conveys a source meter-ceiling observation. Hardware clipping and native AUX clip indications are separate measurements.
+- A 6.5-second probe through the literal read-only factory counted 144 VU2 records with 306 bytes and counts `[24, 2, 6, 4, 10, 2, 2]`. Median spacing was 35 ms. It sent one INIT, six ALIVE and 94 heartbeat replies and closed the session. Maxima sampled from fresh published snapshots (52 meter revisions plus ordinary state emits) were pre/post 70/0, 45/0, 54/0 and 66/0 for Carl Vox, Dara Vox, John Vox and Kick. AUX 7/8 post-fader maxima were 59/61. Both selected outputs in Carl's Mix reported PRE for all sampled channels. These are sampled maxima from the existing signal on this desk. See the [story](stories/F08-S05.md#delivery-verification) for separate browser observations and the remaining phone and ceiling checks.
+
+### Sample peak and publication
+
+The receive owner evaluates both accepted source taps per side on every packet, including packets superseded within a 100 ms UI window. A normalized reading at or above 1 holds the amber **Sample peak** flag on that side for 3,000 ms from the last such reading while that source remains fresh. A later ceiling sample restarts the hold. Omission, a 2,000 ms sample-stale gap or session clear drops the flag. The owner caps the state at one timestamp per represented source side and schedules expiry through the existing coalesced meter publication. Snapshot reads enforce the hold/TTL immediately. The visible marker updates on the next publication, normally within 100 ms of expiry. All state is in the current receive generation and is cleared on disconnect. Meter rendering uses the existing keyed faders, caps and bank. The hidden-meter preference hides the legend and fills together.
+
+## Historical F03-S04 implementation
 
 Date: 2026-11-09. Baseline: F03-S03 PR #18 merged at `8c887a0` after green CI and affirmative Codex review of final head `25c880`. This is a source-backed read-only implementation checkpoint. No current-firmware meter packet was captured, no mixer retry/probe occurred in this story, and no write scope changes.
 

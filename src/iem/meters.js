@@ -1,7 +1,22 @@
 // Source: pinned soundcraft-ui-connection 7.1.0, vu/vu.utils.ts.
-// Profile evidence, not a native capture/calibration. No sender or live defaults.
+// Decoder profile and display scale are pinned to the library. See the meter contract for native tap evidence.
 import { UI24_SOURCE_FAMILIES, UI24_AUX_COUNT } from './protocol.js';
 export const VU_BYTE_SCALE = 0.004167508166392142;
+export const SOURCE_METER_PEAK_HOLD_MS = 3000;
+const MONO_SOURCE_TAPS = Object.freeze([Object.freeze({ pre: 'vuPost', post: 'vuPostFader' })]);
+const STEREO_SOURCE_TAPS = Object.freeze([
+  Object.freeze({ pre: 'vuPostL', post: 'vuPostFaderL' }),
+  Object.freeze({ pre: 'vuPostR', post: 'vuPostFaderR' }),
+]);
+const NO_SOURCE_TAPS = Object.freeze([]);
+export function sourceMeterTaps(id) {
+  switch (id.split('.')[0]) {
+    case 'f': return STEREO_SOURCE_TAPS;
+    case 'i': case 'l': case 'p': return MONO_SOURCE_TAPS;
+    default: return NO_SOURCE_TAPS;
+  }
+}
+
 export const UI24_VU_LAYOUT = Object.freeze([
   Object.freeze({ family: 'i', count: UI24_SOURCE_FAMILIES.i.count, stride: 6, fields: Object.freeze(['vuPre', 'vuPost', 'vuPostFader']) }),
   Object.freeze({ family: 'p', count: UI24_SOURCE_FAMILIES.p.count, stride: 6, fields: Object.freeze(['vuPre', 'vuPost', 'vuPostFader']) }),

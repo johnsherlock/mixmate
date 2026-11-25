@@ -84,7 +84,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.match(rootHTML, /connect-src ws:/);
     const metadata = JSON.parse(await readFile('package.json', 'utf8'));
     const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
-    assert.equal(metadata.version, '0.12.1'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
+    assert.equal(metadata.version, '0.13.0'); assert.equal(lock.version, metadata.version); assert.equal(lock.packages[''].version, metadata.version);
     assert.ok(live.includes(metadata.version) && connection.includes(metadata.version));
     assert.equal(manifest.name, 'MixMate — IEM mixer'); assert.equal(manifest.id, 'mixmate/'); assert.equal(manifest.start_url, './'); assert.equal(manifest.scope, './');
     const shell = await readFile('src/iem/shell.html', 'utf8');
@@ -92,7 +92,7 @@ test('production build precaches the exact emitted inventory and resolves instal
     assert.ok(demo.includes('KICK') && demo.includes('SNARE'));
     assert.ok(!live.includes('KICK') && !live.includes('SNARE'));
     assert.ok(live.includes('3:::INIT') && live.includes('3:::ALIVE') && live.includes('2::'));
-    assert.ok(live.includes('VU2^') && live.includes('NOT AUX send') && live.includes('vuPostFaderL'));
+    assert.ok(live.includes('VU2^') && live.includes('Source VU (independent of AUX send)') && live.includes('vuPostFaderL'));
     assert.ok(!demo.includes('VU2^')); // Meter decoding cannot enter the isolated simulation graph.
     assert.ok(!demo.includes('3:::INIT') && !demo.includes('3:::ALIVE'));
     assert.ok(!live.includes('setInputFader') && live.includes('3:::SETD') && !live.includes('3:::SETS'));
