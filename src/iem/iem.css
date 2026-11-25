@@ -2457,6 +2457,10 @@ body {
   padding:0;
   background:transparent;
 }
+/* The compact footer's actionable message takes precedence over its idle key. */
+#mixmate-iem-concept[data-mode="live"] .mm-bottom .mm-message:not(:empty) ~ .mm-live-meter-legend {
+  display:none;
+}
 #mixmate-iem-concept[data-mode="live"] .mm-vu-key {display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
 #mixmate-iem-concept[data-mode="live"] .mm-vu-key::before {content:"";width:6px;height:8px;background:#7acdf0}
 #mixmate-iem-concept[data-mode="live"] .mm-vu-key-post::before {background:linear-gradient(to top,#4b97a8,#9cba65,#d5bf59)}
