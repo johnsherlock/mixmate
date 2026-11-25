@@ -5,6 +5,7 @@
 | Item | Evidence and remaining check |
 | --- | --- |
 | Physical phones | The orchestrator observed source and AUX motion on a desktop browser and the Ui24R. Check All Channels and an expanded group on a connected phone in portrait and compact landscape for tap legibility, stereo separation and track scroll. Record build, device and firmware. |
+| Exact-head passive desk repeat | The earlier production preview passed a passive Chromium/Ui24R check on firmware `3.0.7865-ui24`. During the later compact-layout check, the desk was unreachable. Repeat on the 0.13.0 final head `83d17fe` when the desk is reachable. See [F08-S05 delivery verification](stories/F08-S05.md#delivery-verification). |
 | Ceiling marker | The native source and fake packets establish the threshold/hold behavior. The passive desktop sample stayed below the ceiling. Verify the marker with suitable naturally near-ceiling signal if available. Physical clipping was never induced. |
 | Marker choice | A side's amber sample peak indicates either displayed source tap reached the measured ceiling. It follows the native 3 s timing while fresh. See the [contract](iem-meter-contract.md#f08-s05-current-source-display--2026-11-25) for the difference between that flag, native AUX send scaling and hardware clipping. |
 

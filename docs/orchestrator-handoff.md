@@ -1,4 +1,4 @@
-# Orchestrator handoff — F08 final story for review, 2026-11-25
+# Orchestrator handoff — F08 batch complete, 2026-11-25
 
 Before new work, read:
 - the [current product/state handoff](iem-integration-handoff.md) (replaced the stale early-baseline file on 2026-11-24);
@@ -8,18 +8,22 @@ Before new work, read:
 - the assigned story and its feature;
 - the current contracts.
 
-This handoff is identified by its containing PR and history, not by its own commit hash. **The last verified baseline on main is the PR #75 merge `93ed34f` (F08-S04 expanded-group AUX master, app 0.12.1).** Verify it on remote main before relying on this text.
+This handoff is identified by its containing PR and history. **The last verified implementation baseline on main is `ae59c4b07bc0b6cc8599d02da6559c64046cc8b7`** (F08-S05, app **0.13.0**). Verify remote main before starting new work.
 
-## Current authorized batch
+## Completed F08 batch
 
-The user authorized [F08-S06](stories/F08-S06.md) → [F08-S07](stories/F08-S07.md) → [F08-S04](stories/F08-S04.md) → [F08-S05](stories/F08-S05.md) on 2026-11-24. Each story requires final-head approval, passing CI and a confirmed merge before the next starts. The batch ends with a reviewed repository handoff. [F08-S02](stories/F08-S02.md) is explicitly excluded.
+The user authorized [F08-S06](stories/F08-S06.md) → [F08-S07](stories/F08-S07.md) → [F08-S04](stories/F08-S04.md) → [F08-S05](stories/F08-S05.md) on 2026-11-24. For each story, GitHub Codex approved the exact final head and both required CI jobs passed before merge.
 
-- **F08-S06:** the user-approved Nudge preview merged as [PR #73](https://github.com/johnsherlock/mixmate/pull/73) at `00829e9` (app 0.11.0). Affirmative review covered final head `04a1f8c`, and [CI passed](https://github.com/johnsherlock/mixmate/actions/runs/45442408882).
-- **F08-S07:** app 0.12.0 merged in [PR #74](https://github.com/johnsherlock/mixmate/pull/74) at `a9165f5`, final approved head `b344797`, [CI passed](https://github.com/johnsherlock/mixmate/actions/runs/45445199743). It wires the Nudge screen to the existing typed level owner. Physical phone plus real-desk acceptance is parked for the targets recorded in the [story verification](stories/F08-S07.md#delivery-verification) and [follow-ups](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance).
-- **F08-S04:** app 0.12.1 keeps the selected AUX master visible alongside expanded groups. [PR #75](https://github.com/johnsherlock/mixmate/pull/75) merged at `93ed34f` after affirmative review of `d8f36ce` and [passing CI](https://github.com/johnsherlock/mixmate/actions/runs/45447930334). Physical phone and desk acceptance remains parked. See the [story verification](stories/F08-S04.md#delivery-verification).
-- **F08-S05:** app 0.13.0 shows both received source taps and a sample peak marker in All Channels and expanded groups. The source-tap fix was passively observed on the Ui24R and the peak behavior was exercised with fake transport. Final review and CI are pending. See the [story](stories/F08-S05.md#delivery-verification) and [meter contract](iem-meter-contract.md#f08-s05-current-source-display--2026-11-25).
-- **Delegation:** Opus and Sonnet were unavailable in this environment. The available Codex orchestrator and one Codex story agent worked one story at a time in isolated clones. The review and CI gate still applies.
-- **Batch boundary:** F08-S05 is the final authorized implementation. After affirmative final-head review, passing CI and verified merge, confirm that this handoff is on remote main and stop. Further implementation requires authorization. The [dependency exception](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance) covers the independent fader and meter work while F08-S07 physical acceptance stays parked.
+| Story | App | PR | Merge | Final approved head | CI |
+| --- | --- | --- | --- | --- | --- |
+| F08-S06 Nudge preview | 0.11.0 | [#73](https://github.com/johnsherlock/mixmate/pull/73) | `00829e9` | `04a1f8c` | [Passed](https://github.com/johnsherlock/mixmate/actions/runs/45442408882) |
+| F08-S07 live Nudge | 0.12.0 | [#74](https://github.com/johnsherlock/mixmate/pull/74) | `a9165f5` | `b344797` | [Passed](https://github.com/johnsherlock/mixmate/actions/runs/45445199743) |
+| F08-S04 expanded-group AUX master | 0.12.1 | [#75](https://github.com/johnsherlock/mixmate/pull/75) | `93ed34f` | `d8f36ce` | [Passed](https://github.com/johnsherlock/mixmate/actions/runs/45447930334) |
+| F08-S05 source meters | 0.13.0 | [#76](https://github.com/johnsherlock/mixmate/pull/76) | `ae59c4b` | `83d17fe` | [Passed](https://github.com/johnsherlock/mixmate/actions/runs/45518024646) |
+
+Opus and Sonnet were unavailable. The Codex orchestrator delegated one story at a time to a fresh Codex agent in an isolated clone. Separate in-session reviewers also approved S06, S07 and S05. The S04 in-session reviewer hit a usage limit. GitHub Codex supplied the affirmative final-head S04 review.
+
+The batch stops with this closing handoff. [F08-S02](stories/F08-S02.md) remains outside the authorized batch. Further implementation requires explicit authorization. The [dependency exception](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance) records why the fader and meter work could proceed while S07 device checks were parked.
 
 ## Prior state
 
@@ -51,15 +55,9 @@ The user-authorized batches (**F02-S05 → F07-S01 → F07-S02**, the user-reque
 
 Root orchestrates and delegates all development and docs work to fresh-context Sonnet subagents, each in its own worktree, with a separate fresh-context reviewer. Root does not implement. This overrides the older "GPT-6.1 Sol Medium" wording in AGENTS and the lifecycle document: Opus orchestrator, Sonnet story and review agents. Still one story, one `codex/` branch and one PR at a time, sequentially. Reproduce on the desk anything the user reports before writing a brief.
 
-## Review gate substitution (user direction, still in force)
+## Review gate
 
-Codex is out of usage. Use an **independent fresh-context agent review** instead of `@codex review`. Merge only when all of these hold:
-- the reviewer approved the exact final head;
-- CI passed on that head;
-- every P1 and P2 is resolved;
-- root completed live desk acceptance.
-
-Record the review rounds and live results in a comment on the PR. Return to `@codex review` once it is available, unless the user directs otherwise.
+[AGENTS](../AGENTS.md) and the [lifecycle](orchestration.md#story-delivery-and-durable-state) require affirmative final-head review and passing CI before merge. The earlier user-directed independent-review substitution applied during GitHub Codex unavailability. GitHub `@codex review` was available for all four F08 implementation PRs.
 
 ## Standing user permissions and rules
 
@@ -80,7 +78,9 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 ## Verification and resources
 
-- **Application:** app 0.12.1 on verified main, app 0.13.0 in the F08-S05 candidate. The candidate passed 614 tests and built an 18-asset precache locally on Node 26.13.1 and npm 11.20.0. CI uses Node 24.
+- **Application:** app 0.13.0 on verified main. Final head `83d17fe` passed 614 tests and built an 18-asset precache locally on Node 26.13.1 and npm 11.20.0 (worker `d0e04c9a85a03ad8`). CI uses Node 24.
+- **F08-S05 evidence:** the [meter contract](iem-meter-contract.md#native-ui-and-passive-packet-evidence) records the native source and passive capture. The [story verification](stories/F08-S05.md#delivery-verification) records the screenshot diagnosis, the earlier Chromium pass on the desk, the later connection failure and the final fake-socket checks. The raw vendor asset and capture files stayed outside the repository.
+- **Cleanup:** the batch made no physical desk changes. Root closed its browser and preview, and the story agents closed their services.
 - **Historical desk snapshot evidence:** during F07-S02 acceptance root recalled MixMate1 and MixMate2 and saved MixMate1 from the live state (2026-11-21), so MixMate1 now holds those contents. Full INIT dumps were identical before and after, and no other snapshot was touched. Live records: [PR #58](https://github.com/johnsherlock/mixmate/pull/58#issuecomment-7052427422), [PR #60](https://github.com/johnsherlock/mixmate/pull/60#issuecomment-7060808085), [PR #61](https://github.com/johnsherlock/mixmate/pull/61#issuecomment-7060957809).
 - **Prototype:** `mockups/iem.html` unchanged, SHA256 `d004af78c3ae59491dca09f4202d1697e95d1411c07334e6e292da0ec3a266a9`.
 - `.claude/launch.json` is a local, untracked root convenience file; do not commit it.
@@ -89,7 +89,9 @@ These supersede older wording; AGENTS, the story and [settings](settings-reposit
 
 - **Physical qualification:** [F08-S01](stories/F08-S01.md) owns Android/iOS, installation/offline, sleep/recovery and real touch, including real-device wake, visibility and `online` auto-connect behaviour and the v2 settings upgrade. **Signed off by the user on 2026-11-24** from their own real-device testing; per-row results were not recorded and the exceptions below stay open.
 - **Accepted P3s** for F02-S05, F09-S11, F07-S01 and F07-S02 and earlier ones live in [follow-ups](user-follow-up.md).
-- **F08-S05 remaining meter acceptance:** physical phone layout and naturally near-ceiling signal. See [meter follow-ups](user-follow-up.md#2026-11-25-f08-s05-meter-follow-up).
+- **F08-S07:** physical phone and Ui24R typed Nudge controls and companion readbacks. See the [parked acceptance](stories/F08-S07.md#physical-acceptance-parked).
+- **F08-S04:** physical phone layout and selected AUX master access with an expanded group on a connected desk. See the [device follow-up](user-follow-up.md#2026-11-24-f08-s04-expanded-group-device-follow-up).
+- **F08-S05:** physical phone layout, naturally near-ceiling signal comparison and a passive repeat on the final build when the desk is reachable. See the [meter follow-up](user-follow-up.md#2026-11-25-f08-s05-meter-follow-up).
 - **F08-S02** release/recovery documentation is unblocked by the sign-off but **not authorized**.
 - **Other F08-S01 carried exceptions:** F07-S03 live recording start/stop untested (USB drive needed); iOS/iPadOS coverage not recorded; shared-origin StackIt cache-deletion risk; F09-S12 group readout / Edit Group with an expanded group not observed by the orchestrator.
 - **Open finding:** the Pixel install issue (Chrome refuses to install the PWA, Brave installs it) remains open; F07-S06 added a menu-instructions fallback only.
