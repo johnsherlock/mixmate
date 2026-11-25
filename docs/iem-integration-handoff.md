@@ -2,12 +2,12 @@
 
 This replaces the earlier, untracked 2026-11-08 file that described the pre-integration baseline (PR #6). It is the current product and state handoff for a new human or agent. It links to contracts rather than duplicating them. **For the wire allowlist, the [AGENTS transport table](../AGENTS.md#active-transport-boundary) is authoritative**; for orchestration state see the [orchestrator handoff](orchestrator-handoff.md).
 
-Verified main baseline: `93ed34f` (F08-S04 merge, [PR #75](https://github.com/johnsherlock/mixmate/pull/75)), app **0.12.1**. The F08-S05 candidate is **0.13.0**, pending final review and CI. Verify on remote main before relying on this text.
+The last verified implementation baseline on main is `ae59c4b07bc0b6cc8599d02da6559c64046cc8b7` (F08-S05, [PR #76](https://github.com/johnsherlock/mixmate/pull/76)), app **0.13.0**. The [authorized F08 batch](orchestrator-handoff.md#completed-f08-batch) is complete. Verify remote main before starting new work.
 
 ## Product and deployment
 
 - A phone/tablet in-ear-monitor controller for a **Soundcraft Ui24R used only as an IEM mixer**. Topology: desk -> router -> Android/iOS devices on the same LAN. There is **no internet at gigs**, so the app is installed while online and is offline-first (vanilla JavaScript ES modules, Vite; no framework migration is agreed).
-- Deployed to GitHub Pages: https://johnsherlock.github.io/mixmate/ (manifest and service-worker scope `/mixmate/`; keep relative paths).
+- GitHub Pages serves the [MixMate app](https://johnsherlock.github.io/mixmate/) under the `/mixmate/` manifest and service-worker scope. Keep relative paths. The production deployment of `ae59c4b` succeeded. [Deployment run](https://github.com/johnsherlock/mixmate/actions/runs/45518336703).
 - Entries: `index.html` and `iem.html` are the same live IEM app; `demo.html` is the isolated simulation; `connection-test.html` (`src/main.js`) is the separate input-fader experiment (never import its writers into AUX control); `mockups/iem.html` is the accepted design reference only, not protocol evidence.
 - Two rigs historically (desk addresses 192.168.0.60 and 192.168.1.60). **Rig identity is now the desk's received current snapshot name** ([F02-S05](stories/F02-S05.md)), never the IP address; the IP only feeds the known-address list used for automatic connection.
 - Versioning ([F07-S05](stories/F07-S05.md), [policy](orchestration.md#versioning-policy-f07-s05)): every PR changing shipped files bumps `package.json` (patch fix, minor feature) and adds a [CHANGELOG](../CHANGELOG.md) entry; CI runs `scripts/check-version.js` (docs-only and test-only PRs pass unchanged). The live entry checks for a new service worker on open, `online` and return to visible, and applies it (one reload) only when no desk session is past socket open, nothing is mid-gesture/send/snapshot and no dialog is open; otherwise it defers. See [distribution audit](distribution-audit.md).
@@ -22,7 +22,7 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - **Level faders:** dB-linear display scale, +10...-70 dB with a short segment to -inf ([level safety](iem-aux-level-safety.md), [runtime](iem-aux-level-controls.md)). **Nudge buttons** on every fader are configured in `src/iem/nudge-config.js` (`NUDGE_UP_DB = 3`, `NUDGE_DOWN_DB = 1.5`).
 - **Nudge view:** open Nudge from All Groups or an expanded group. It lists the AUX master and all group masters, then the expanded group’s channels in saved order. Each deliberate step uses the existing level owner, configured nudge amounts and current target qualification. **Faders** restores scroll and focus in the originating view. See [F08-S07](stories/F08-S07.md).
 - **Expanded group faders:** F08-S04 keeps the selected AUX master beside the group and members. It stays in reach as the member bank scrolls vertically in portrait or horizontally in landscape. See [F08-S04](stories/F08-S04.md).
-- **Source meters:** the F08-S05 candidate shows blue pre-main-fader and segmented post-main-fader source signal alongside channel faders in All Channels and expanded groups. FX retains both sides and amber peaks indicate fresh meter-ceiling samples. AUX master meters keep their own post-fader tap. See the [meter contract](iem-meter-contract.md#f08-s05-current-source-display--2026-11-25).
+- **Source meters:** F08-S05 shows blue pre-main-fader and segmented post-main-fader source signal alongside channel faders in All Channels and expanded groups. FX retains both sides and amber peaks indicate fresh meter-ceiling samples. AUX master meters keep their own post-fader tap. See the [meter contract](iem-meter-contract.md#f08-s05-current-source-display--2026-11-25).
 - **Pan:** per-send pan with display-only L / CENTRE / R labels (wire 0 = `L 100`, 0.5 = `CENTRE`, 1 = `R 100`) ([pan safety](iem-aux-pan-safety.md), [controls](iem-pan-controls.md)).
 - **Mix EQ:** AUX graphic EQ with draggable points/draw curve, scoped reset, and high-pass/low-pass filters ("Low cut"/"High cut", [F06-S05](stories/F06-S05.md)) ([EQ contract](iem-aux-eq-contract.md), [ADR-0006](adr/0006-aux-geq-curve-contract.md)).
 - **Snapshots:** header Snapshot (recall) and Save dialogs, names-only, bounded outcomes ([contract](iem-snapshot-contract.md), [ADR-0009](adr/0009-snapshot-operation-contract.md)).
@@ -39,11 +39,11 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - Live UI: `live-entry.js` (entry), `live-controller.js` (wiring, connect, rigs), `live-provider.js` / `live-view.js` / `live-shell.js` / `shell.js` (projection and rendering), `group-navigation.js`, `group-editor*.js`, `eq-controls.js`, `pan-controls.js`, `snapshot-controls.js`, `recording-controls.js`, `diagnostics.js`, `native-ui.js`, `auto-connect.js`, `updates.js`, `install.js`, `entry-offline.js`, `fader-scale.js`, `fader-law.js`, `gestures.js`, `nudge-config.js`. The Demo uses `demo-*.js` and must stay isolated.
 - `src/settings.js` is the v3 device-local settings repository (rigs `{ id, name, groups, navigation }`, known addresses, preferences); `src/offline.js`, `src/sw-template.js` and `scripts/build-sw.js` produce the precache worker.
 - Tests (`tests/`, Node test runner) use **fake mixer transports only**; no automated test writes to a real desk.
-- Build and checks: Node 24 in CI; `npm ci`, `npm test` (614 passing in the F08-S05 candidate), `npm run build` (emits the four entries and generates the precache). `npm run dev` has no offline worker; use `npm run build` then `npm run preview` for production/offline QA. Do not hand-edit `dist/`.
+- Build and checks: Node 24 in CI; `npm ci`, `npm test` (614 passing at the F08-S05 final head), `npm run build` (emits the four entries and generates the precache). `npm run dev` has no offline worker; use `npm run build` then `npm run preview` for production/offline QA. Do not hand-edit `dist/`.
 
 ## Testing status
 
-- Automated: 614 tests pass using fake mixer transports; the 0.13.0 candidate build passes with an 18-asset precache.
+- Automated: 614 tests pass using fake mixer transports; the final 0.13.0 build passes with an 18-asset precache.
 - **User-reported device evidence (2026-11-24): the user has done extensive testing on real phones and tablets and reports that it is all working very well.** This is a user report, not a recorded checklist.
 - **[F08-S01](stories/F08-S01.md) (the formal release gate) was signed off by the user on 2026-11-24** on the basis of their own real phone/tablet testing of app 0.10.1 (a user sign-off, not a waiver). The individual matrix rows (devices, versions, both rigs, cold offline launch, sleep/lock, update flow, per-control checks) were not recorded in the repo and were not observed by the orchestrator. iOS/iPadOS coverage is not recorded. Carried exceptions are listed under open items and in the [story](stories/F08-S01.md#sign-off--2026-11-24). Future device claims still need evidence; see the [device checklist](device-checks.md).
 
@@ -52,7 +52,8 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 - **Pixel install issue:** Chrome 157 on Android 17 (Pixel) refuses to install the PWA after an uninstall while Brave installs it. The deployed build passes Chrome's CDP installability check; suspected on-device Chrome state or a Chromium bug. Unresolved; F07-S06 only added a menu-instructions fallback.
 - **F07-S03 live recording acceptance parked:** needs a USB drive in the desk (without one the desk refuses with `MSG^$REC_ERRNOSTICK`).
 - **F09-S12 group readout and Edit Group with an expanded group** were not live-tested by the orchestrator (no saved group on the test origin); the user's device testing likely covers it but it is not recorded.
-- **F08-S05 physical phone and near-ceiling signal checks are parked.** See the [meter follow-up](user-follow-up.md#2026-11-25-f08-s05-meter-follow-up).
+- **F08-S05 meter checks are parked** for physical phone layout, naturally near-ceiling signal and a passive retest on the final build. See the [meter follow-up](user-follow-up.md#2026-11-25-f08-s05-meter-follow-up).
+- **F08-S04 expanded-group acceptance is parked** on a connected phone. See the [device follow-up](user-follow-up.md#2026-11-24-f08-s04-expanded-group-device-follow-up).
 - **F08-S07 real phone and desk acceptance is parked.** See the [exact pending checks and dependency exception](user-follow-up.md#2026-11-24-f08-s07-physical-nudge-acceptance).
 - **F01-S05** (side-loaded Android APK with a native-UI overlay) is drafted, not authorized; open user decisions are listed in [the story](stories/F01-S05.md).
 - **F08-S02** release documentation is unblocked by the F08-S01 sign-off but not authorized.
@@ -65,6 +66,6 @@ Details live in [presentation](iem-presentation.md), the control contracts and t
 Details: [orchestration](orchestration.md) and the [orchestrator handoff](orchestrator-handoff.md).
 
 - Opus orchestrator; Sonnet story and review agents (user direction 2026-11-21). One story, one `codex/` branch and one PR at a time, sequentially.
-- While Codex is out of usage, an independent fresh-context agent reviews instead of `@codex review`. Merge only after approval of the exact final head, passing CI, no open P1/P2 and root's live desk acceptance, recorded in a PR comment.
+- GitHub `@codex review` approved every final head in the F08 batch. See [AGENTS](../AGENTS.md) for the review and CI gates and the [orchestrator handoff](orchestrator-handoff.md#review-gate) for the past substitution rule.
 - Standing desk permissions: write tests on the spare AUX 9/10; the only snapshots that may be recalled or saved are the test snapshots **MixMate1** and **MixMate2**, never deleted; never recall, save or delete any other snapshot.
 - **Nothing is authorized beyond what the user explicitly requests.**
